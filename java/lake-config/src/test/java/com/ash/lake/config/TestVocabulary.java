@@ -13,14 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.catalog;
+package com.ash.drishti.lakeconfig;
 
-/** The table does not exist (no metadata at its location, or the catalog does not know it). */
-public final class NoSuchTable extends RuntimeException {
+import com.ash.drishti.kernel.api.vocabulary.DomainVocabulary;
+import java.util.Set;
 
-    private static final long serialVersionUID = 1L;
+/** A module's lake writers for this module's tests, which have no module on the class path. */
+public final class TestVocabulary implements DomainVocabulary {
 
-    public NoSuchTable(String message) {
-        super(message);
+    @Override
+    public Set<String> namedLakeWriters() {
+        return Set.of("var-pv-stream");
     }
 }
