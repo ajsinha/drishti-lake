@@ -13,9 +13,8 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.drishti.common;
 
-import com.ash.drishti.deltalake.write.TableUpkeep;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
@@ -25,18 +24,22 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Function;
 
 /**
- * A memory table's row retention (docs/guides/DATA_LAKE_GUIDE.md, the in-memory lake's table options): {@code retention: {ttl: 8h, on:
- * UPDATED_AT, max-rows: 100000}}. Rows older than {@code ttl} by the field {@code on} (the time the row arrived when {@code on} is absent:
- * the promoted column {@code arrived_at}) are dropped, and at most {@code max-rows}, the newest, are kept. Applied by the compaction's
- * rewrite, the one upkeep: no second mechanism. Absent: no limit, nothing changes.
+ * A table's row retention, the one rule for every store (docs/guides/DATA_LAKE_GUIDE.md, "Row retention"): {@code retention: {ttl: 8h, on:
+ * UPDATED_AT, max-rows: 100000}}. Rows older than {@code ttl} by the field {@code on} (without {@code on}: the time the row arrived, the
+ * promoted column {@code arrived_at}) are dropped, and of the rest at most {@code max-rows}, the newest by the same age, are kept (rows tied at
+ * the cut are all kept). A row with no readable age is never dropped. The memory lake applies it in its compaction's rewrite, a Delta table by
+ * rewriting the business dates that hold dropped rows, an Iceberg table by replacing those dates' files, and a files store by rewriting
+ * those day files; every one asks this class which rows stay, so the stores leave the same rows. Absent: no limit, nothing changes.
  *
- * @param ttl the age limit ({@code 30s}, {@code 15m}, {@code 8h}, {@code 1d}), or null
- * @param on the document field the age is read from (a time, a date, epoch seconds or milliseconds), or null for the arrival time
+ * @param ttl the age limit ({@code 500ms}, {@code 30s}, {@code 15m}, {@code 8h}, {@code 1d}), or null
+ * @param on the document field (or promoted column) the age is read from (a time, a date, epoch seconds or milliseconds), or null for the
+ *     arrival time
  * @param maxRows the newest rows kept, or null
  */
 public record RowRetention(String ttl, String on, Integer maxRows) {
@@ -54,6 +57,11 @@ public record RowRetention(String ttl, String on, Integer maxRows) {
         }
     }
 
+    /** Whether any limit is set. */
+    public boolean active() {
+        return (ttl != null && !ttl.isBlank()) || maxRows != null;
+    }
+
     /** Whether the age is the arrival time (the table then carries {@link #ARRIVED}). */
     public boolean byArrival() {
         return on == null || on.isBlank();
@@ -61,56 +69,136 @@ public record RowRetention(String ttl, String on, Integer maxRows) {
 
     /** The age limit, or null. */
     public Duration limit() {
-        return ttl == null || ttl.isBlank() ? null : MemoryLake.duration(ttl.trim());
+        if (ttl == null || ttl.isBlank()) {
+            return null;
+        }
+        String t = ttl.trim().toLowerCase(Locale.ROOT);
+        long n = Long.parseLong(t.replaceAll("[^0-9]", ""));
+        return switch (t.replaceAll("[0-9]", "")) {
+            case "ms" -> Duration.ofMillis(n);
+            case "s" -> Duration.ofSeconds(n);
+            case "m" -> Duration.ofMinutes(n);
+            case "h" -> Duration.ofHours(n);
+            default -> Duration.ofDays(n);
+        };
     }
 
-    /** The rows kept at {@code now}: within the age limit, then the newest {@code max-rows}. */
-    public List<TableUpkeep.Staged> keep(List<TableUpkeep.Staged> rows, Instant now) {
-        Duration d = limit();
-        Instant cut = d == null ? null : now.minus(d);
-        List<Object[]> aged = new ArrayList<>();
-        for (TableUpkeep.Staged s : rows) {
-            Instant at = age(s.line());
-            if (cut == null || at == null || !at.isBefore(cut)) {
-                aged.add(new Object[] {at == null ? Instant.MAX : at, s});
+    /** The rows kept at {@code now}: within the age limit, then the newest {@code max-rows} ({@code age} gives each row's age, null: unknown). */
+    public <T> List<T> keep(List<T> rows, Function<T, Instant> age, Instant now) {
+        Judge j = judge(rows.stream().map(age).toList(), now);
+        List<T> out = new ArrayList<>(rows.size());
+        for (T r : rows) {
+            if (j.keeps(age.apply(r))) {
+                out.add(r);
             }
         }
-        if (maxRows != null && aged.size() > maxRows) {
-            aged.sort(Comparator.comparing(a -> (Instant) a[0]));
-            aged = new ArrayList<>(aged.subList(aged.size() - maxRows, aged.size()));
-        }
-        List<TableUpkeep.Staged> out = new ArrayList<>(aged.size());
-        aged.forEach(a -> out.add((TableUpkeep.Staged) a[1]));
         return out;
     }
 
     /** How many of {@code rows} {@link #keep} would drop. */
-    public int expired(List<TableUpkeep.Staged> rows, Instant now) {
-        return rows.size() - keep(rows, now).size();
+    public <T> int expired(List<T> rows, Function<T, Instant> age, Instant now) {
+        return rows.size() - keep(rows, age, now).size();
     }
 
-    /** A staged line's age: its field {@code on} in the document, else its {@code arrived_at} column; null when it has none. */
-    Instant age(String line) {
+    /** The verdict over a whole table's row ages at {@code now}: ask {@link Judge#keeps} for each row (a store that streams its rows asks twice: ages, then rows). */
+    public Judge judge(Collection<Instant> ages, Instant now) {
+        Duration d = limit();
+        Instant ttlCut = d == null ? null : now.minus(d);
+        Instant maxCut = null;
+        if (maxRows != null) {
+            List<Instant> alive = new ArrayList<>();
+            for (Instant at : ages) {
+                if (ttlCut == null || at == null || !at.isBefore(ttlCut)) {
+                    alive.add(at == null ? Instant.MAX : at);
+                }
+            }
+            if (alive.size() > maxRows) {
+                alive.sort(null);
+                maxCut = alive.get(alive.size() - maxRows);
+            }
+        }
+        return new Judge(ttlCut, maxCut);
+    }
+
+    /** Which ages stay: not before the ttl cut, not before the max-rows cut; no age: stays. */
+    public record Judge(Instant ttlCut, Instant maxCut) {
+        public boolean keeps(Instant at) {
+            return at == null || ((ttlCut == null || !at.isBefore(ttlCut)) && (maxCut == null || !at.isBefore(maxCut)));
+        }
+    }
+
+    /**
+     * A staged line's age ({@code {"id", "doc", "columns"}}): the field {@code on} (a promoted column of that name, else the document's field),
+     * or without {@code on} the {@code arrived_at} column, else {@code fallback} (a durable table's business date when it records no arrival);
+     * null when none.
+     */
+    public Instant ageOfLine(String line, Instant fallback) {
         try {
             JsonNode n = JSON.readTree(line);
             if (byArrival()) {
-                return instant(n.path("columns").path(ARRIVED));
+                Instant at = instant(n.path("columns").path(ARRIVED));
+                return at != null ? at : fallback;
             }
-            return instant(JSON.readTree(n.path("doc").asText("{}")).path(on));
+            Instant at = instant(n.path("columns").path(on));
+            if (at != null) {
+                return at;
+            }
+            JsonNode doc = n.path("doc");
+            return instant(path(doc.isTextual() ? JSON.readTree(doc.asText("{}")) : doc, on));
         } catch (java.io.IOException e) {
             return null;
         }
     }
 
-    static Instant instant(JsonNode v) {
-        if (v == null || v.isMissingNode() || v.isNull()) {
+    /** A row's age from its document text and its promoted values (a lookup by column name, null when absent), as {@link #ageOfLine}. */
+    public Instant ageOfRow(String doc, Function<String, Object> column, Instant fallback) {
+        try {
+            if (byArrival()) {
+                Instant at = instant(column.apply(ARRIVED));
+                return at != null ? at : fallback;
+            }
+            Instant at = instant(column.apply(on));
+            if (at != null) {
+                return at;
+            }
+            return doc == null ? null : instant(path(JSON.readTree(doc), on));
+        } catch (java.io.IOException e) {
             return null;
         }
-        if (v.isNumber()) {
-            long x = v.asLong();
+    }
+
+    private static JsonNode path(JsonNode doc, String path) {
+        JsonNode n = doc;
+        for (String p : path.split("\\.")) {
+            n = n.path(p);
+        }
+        return n;
+    }
+
+    /** The midnight (UTC) that starts a business date, the age a durable row has when it records no arrival. */
+    public static Instant dayStart(String businessDate) {
+        try {
+            return LocalDate.parse(businessDate).atStartOfDay().toInstant(ZoneOffset.UTC);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static Instant instant(Object v) {
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof JsonNode j) {
+            if (j.isMissingNode() || j.isNull()) {
+                return null;
+            }
+            return j.isNumber() ? instant((Object) j.asLong()) : instant((Object) j.asText());
+        }
+        if (v instanceof Number num) {
+            long x = num.longValue();
             return x > 100_000_000_000L ? Instant.ofEpochMilli(x) : Instant.ofEpochSecond(x);
         }
-        String s = v.asText().trim();
+        String s = v.toString().trim();
         for (java.util.function.Function<String, Instant> f : List.<java.util.function.Function<String, Instant>>of(Instant::parse,
                 t -> OffsetDateTime.parse(t).toInstant(), t -> LocalDateTime.parse(t).toInstant(ZoneOffset.UTC),
                 t -> LocalDate.parse(t.length() >= 10 ? t.substring(0, 10) : t).atStartOfDay().toInstant(ZoneOffset.UTC))) {
