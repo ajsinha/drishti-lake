@@ -86,7 +86,9 @@ final class IcebergTarget implements TableTarget {
         }
         for (int i = 0; i < c.promoted().size(); i++) {
             // a number column when every value seen is a number; a column never seen with a value is text (as the Iceberg loader types it)
-            want.put(c.promoted().get(i), c.numeric()[i] && c.seen()[i] ? Type.Primitive.DOUBLE : Type.Primitive.STRING);
+            // a list attribute (every value a list of simple values) is list<string>, its ids assigned when the table is made or grown
+            want.put(c.promoted().get(i), c.list()[i] ? new Type.ListType(0, false, Type.Primitive.STRING)
+                    : c.numeric()[i] && c.seen()[i] ? Type.Primitive.DOUBLE : Type.Primitive.STRING);
         }
         if (RowPlan.loadColumns) {
             want.put(RowPlan.LOAD_ID, Type.Primitive.STRING);           // every row: the load that wrote it, and its file
@@ -101,7 +103,9 @@ final class IcebergTarget implements TableTarget {
             fields.add(NestedField.required(3, "business_date", Type.Primitive.DATE));
             int next = 4;
             for (Map.Entry<String, Type> e : want.entrySet()) {
-                fields.add(NestedField.optional(next++, e.getKey(), e.getValue()));
+                int id = next++;
+                fields.add(NestedField.optional(id, e.getKey(), e.getValue() instanceof Type.ListType
+                        ? new Type.ListType(next++, false, Type.Primitive.STRING) : e.getValue()));
             }
             for (String v : vectors) {
                 int id = next++;
@@ -181,7 +185,7 @@ final class IcebergTarget implements TableTarget {
                 // every file's partition tuple must hold each field's value (the Iceberg spec); only the date's is known here
                 throw new IllegalStateException(t.name() + " is not in the layout: its partition spec " + spec.specId() + " has the field '" + f.name()
                         + "' (" + f.transform() + ") beside the identity partition on business_date; this writer writes only tables partitioned by "
-                        + "business_date alone (write this table with engine: library, or restore its spec)");
+                        + "business_date alone (write this table again partitioned by business_date alone, or restore its spec)");
             }
         }
         if (found < 0) {
@@ -238,10 +242,31 @@ final class IcebergTarget implements TableTarget {
             }
             s = Operations.append(table, add, summary).orElseThrow(() -> new IllegalStateException("the commit of " + date + " made no snapshot"));
         } else {
-            s = Operations.replacePartitions(table, f -> date.equals(dateOf(f)), add, summary)
+            Map<String, String> slice = cfg.source().slice();      // a shared table: only this load's slice of the date
+            s = Operations.replacePartitions(table, f -> date.equals(dateOf(f)) && inSlice(f, slice), add, summary)
                     .orElseThrow(() -> new IllegalStateException("the commit of " + date + " made no snapshot"));
         }
         return s.snapshotId();
+    }
+
+    /**
+     * Whether a data file holds only rows of the load's slice (TableTarget.slice; an Iceberg table is partitioned by date alone, so the slice
+     * is read from the file's column bounds: lower and upper both the slice's value). A file with no bounds for the column is another's.
+     */
+    private boolean inSlice(DataFile f, Map<String, String> slice) {
+        for (Map.Entry<String, String> e : slice.entrySet()) {
+            NestedField c = table.metadata().schema().field(e.getKey());
+            if (c == null || !(c.type() instanceof Type.Primitive p)) {
+                return false;
+            }
+            byte[] lo = f.lowerBounds() == null ? null : f.lowerBounds().get(c.id());
+            byte[] hi = f.upperBounds() == null ? null : f.upperBounds().get(c.id());
+            if (lo == null || hi == null || !e.getValue().equals(String.valueOf(com.ash.drishti.iceberg.types.Values.fromBytes(p, lo)))
+                    || !e.getValue().equals(String.valueOf(com.ash.drishti.iceberg.types.Values.fromBytes(p, hi)))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** The snapshot summary key that names an append's batch and date. */
@@ -264,7 +289,8 @@ final class IcebergTarget implements TableTarget {
     public Map<String, String> columnTypes() {
         Map<String, String> out = new LinkedHashMap<>();
         for (NestedField f : schema.columns()) {
-            out.put(f.name(), f.type() instanceof Type.ListType ? "vector" : f.type().toString().toLowerCase(java.util.Locale.ROOT));
+            out.put(f.name(), f.type() instanceof Type.ListType l ? (Type.Primitive.STRING.equals(l.element()) ? "list" : "vector")
+                    : f.type().toString().toLowerCase(java.util.Locale.ROOT));
         }
         return out;
     }

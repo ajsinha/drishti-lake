@@ -98,7 +98,11 @@ final class ParseWorker implements Callable<Void> {
     /** Per file (its label): {its business date (epoch day), rows whose own date field said another, its source (0 folder, 1 given, 2 name,
      *  3 today), documents}. */
     final Map<String, long[]> fileDates = new HashMap<>();
-    static final String[] SOURCES = {"folder", "given", "name", "today", "ready"};
+    static final String[] SOURCES = {"folder", "given", "name", "today", "ready", "rows"};
+    /** Per file: its accepted rows by their own date field (days since the epoch; {@link RowParser#NO_FILE_DAY}: none). */
+    final Map<String, Map<Integer, Long>> rowDays = new HashMap<>();
+    private Map<Integer, Long> lastRowDays;
+    private boolean lastRowsOrToday;
     private final RowPlan plan;
     private final java.time.LocalDate today = FileDates.today();
     private Inputs.InputFile lastFile;
@@ -141,6 +145,15 @@ final class ParseWorker implements Callable<Void> {
 
     boolean[] seen() {
         return parser.seen;
+    }
+
+    /** Per promoted column: a list of simple values seen, and a value that is not one seen (RowParser). */
+    boolean[] listSeen() {
+        return parser.listSeen;
+    }
+
+    boolean[] notList() {
+        return parser.notList;
     }
 
     @Override
@@ -189,8 +202,13 @@ final class ParseWorker implements Callable<Void> {
             FileDates.Decided d = decide(plan, f, today);
             lastFileDate = d.date() == null ? null : fileDates.computeIfAbsent(f.name(), k -> new long[] {d.date().toEpochDay(), 0,
                     java.util.Arrays.asList(SOURCES).indexOf(d.source()), 0});
+            lastRowDays = rowDays.computeIfAbsent(f.name(), k -> new HashMap<>());
+            lastRowsOrToday = "today".equals(d.source());
         }
-        parser.fileDay = lastFileDate == null ? RowParser.NO_FILE_DAY : (int) lastFileDate[0];
+        // no date given and none in the name: each row its own date field's, else today; the load checks they agree (Loader.checkRowDates)
+        parser.rowsOrToday = lastRowsOrToday && lastFileDate != null;
+        parser.todayDay = lastFileDate == null ? 0 : (int) lastFileDate[0];
+        parser.fileDay = lastFileDate == null || parser.rowsOrToday ? RowParser.NO_FILE_DAY : (int) lastFileDate[0];
     }
 
     private void chunk(Chunk c) throws IOException {
@@ -228,6 +246,9 @@ final class ParseWorker implements Callable<Void> {
                     if (parser.otherDate) {
                         lastFileDate[1]++;
                     }
+                    if (lastRowDays != null) {
+                        lastRowDays.merge(parser.ownDay, 1L, Long::sum);
+                    }
                     accept(c, line);
                 } else {
                     reject(c, line, reason, a, s, e - s);
@@ -254,9 +275,9 @@ final class ParseWorker implements Callable<Void> {
         DateRows d = dates.computeIfAbsent(parser.epochDay, k -> new DateRows((int) Math.min(8 << 20, Math.max(64 << 10, budget / 4))));
         long order = Latest.order(c.split().id(), c.seq(), line);
         parser.record.putLong(order);                                  // the record's place in the input, last: the write stage drops duplicates by it
-        long before = d.buffer.bytes;
+        long before = d.buffer.held();
         d.buffer.add(parser.record.a, parser.record.n);
-        buffered += d.buffer.bytes - before;
+        buffered += d.buffer.held() - before;                          // the heap held (whole arenas), not the bytes used: the budget holds
         if (d.nHashes == d.hashes.length) {
             int n = d.nHashes * 2;
             d.hashes = Arrays.copyOf(d.hashes, n);

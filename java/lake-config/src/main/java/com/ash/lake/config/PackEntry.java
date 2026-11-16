@@ -40,10 +40,72 @@ import java.util.Map;
 public record PackEntry(String domain, String table, String key, String date, List<String> promote, List<String> vectors,
         Map<String, String> flatten, List<String> sortBy, String latestBy, LakeTable entry) {
 
+    /**
+     * The pack's {@code pack.yaml} with the templates of each source module that requires the pack ({@link ModuleConnectors}) added to its
+     * connectors where the pack does not declare that name itself: a source system is a module of its own, and its connectors have that one
+     * home.
+     */
+    static JsonNode manifest(Path file) throws IOException {
+        JsonNode m = new YAMLMapper().readTree(Files.readString(file));
+        String pack = m.path("pack").asText("");
+        if (pack.isEmpty() || !(m instanceof com.fasterxml.jackson.databind.node.ObjectNode root) || m.path("connectors").isArray()) {
+            return m;
+        }
+        java.util.List<String> kinds = new java.util.ArrayList<>();
+        m.path("kinds").forEach(k -> kinds.add(k.isTextual() ? k.asText() : ""));
+        m.path("kinds").fieldNames().forEachRemaining(kinds::add);
+        com.fasterxml.jackson.databind.node.ObjectNode defs = root.path("connectors").isObject()
+                ? (com.fasterxml.jackson.databind.node.ObjectNode) root.get("connectors") : root.putObject("connectors");
+        com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
+        for (Map.Entry<String, Map<String, Object>> e : ModuleConnectors.forKinds(kinds).entrySet()) {
+            if (!defs.has(e.getKey())) {
+                defs.set(e.getKey(), json.valueToTree(e.getValue()));
+            }
+        }
+        return root;
+    }
+
+    /**
+     * The constants a connector's {@code set:} stamps into the rows it stores (the connector's {@code settings.set}: {@code SOURCE_SYSTEM:
+     * SWAPONE}), as text. The site's own connector file ({@code config/connectors/<name>.yaml}, beside the modules folder) wins over the
+     * module's template, so a site tweak reaches the loader too. Empty without a connector or a {@code set:}.
+     */
+    public static Map<String, String> constants(Path pack, String connector) throws IOException {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (connector == null) {
+            return out;
+        }
+        Path file = Files.isDirectory(pack) ? pack.resolve("pack.yaml") : pack;
+        // the layers (KERNEL_AND_MODULES.md section 18.5): the template's constants, then the site override's key by key (null removes one)
+        Path siteFile = com.ash.drishti.api.Roots.connectors().resolve(connector + ".yaml");
+        JsonNode site = Files.isRegularFile(siteFile) ? new YAMLMapper().readTree(Files.readString(siteFile)) : null;
+        JsonNode template = manifest(file).path("connectors").path(connector);
+        if (!template.isMissingNode() && !(site != null && site.path("settings").size() > 0 && !site.path("plugin").isMissingNode()
+                && template.path("plugin").isMissingNode())) {
+            addConstants(template.path("settings"), out);
+        }
+        if (site != null) {
+            addConstants(site.path("settings"), out);
+        }
+        out.values().removeIf(v -> v == null || v.equals("null"));
+        return out;
+    }
+
+    private static void addConstants(JsonNode st, Map<String, String> out) {
+        if (st.path("set").isObject()) {
+            st.path("set").fields().forEachRemaining(e -> out.put(e.getKey(), e.getValue().isNull() ? null : e.getValue().asText()));
+        }
+        st.fields().forEachRemaining(e -> {
+            if (e.getKey().startsWith("set.") && e.getKey().length() > 4) {
+                out.put(e.getKey().substring(4), e.getValue().isNull() ? null : e.getValue().asText());
+            }
+        });
+    }
+
     /** The pack's entry for {@code kind}. */
     public static PackEntry read(Path pack, String kind, String connector) throws IOException {
         Path file = Files.isDirectory(pack) ? pack.resolve("pack.yaml") : pack;
-        JsonNode m = new YAMLMapper().readTree(Files.readString(file));
+        JsonNode m = manifest(file);
         String name = m.path("pack").asText(file.getParent().getFileName().toString());
         JsonNode ingest = m.path("ingest").path(kind);
         for (var it = m.path("lake").path("tables").fields(); it.hasNext(); ) {
@@ -54,7 +116,7 @@ public record PackEntry(String domain, String table, String key, String date, Li
             // several tables of one kind (trade_endur, trade_calypso): the connector's table picks; else the first of the kind
             String wanted = connector == null ? null : tableOf(m, connector, kind);
             if (entryKind.equals(kind) && (wanted == null || wanted.equals(folder) || e.getValue().path("path").asText("").endsWith("/" + wanted))) {
-                LakeTable t = Lakes.table(new Lakes.Values(file.toString(), System::getenv), file.toString(), "delta", e.getKey(), e.getValue(),
+                LakeTable t = Lakes.table(new Lakes.Values(file.toString(), com.ash.drishti.settingsfile.Placeholders::process), file.toString(), "delta", e.getKey(), e.getValue(),
                         JsonNodeFactory.instance.objectNode());
                 Map<String, String> flat = t.flatten();
                 if (ingest.path("flatten").size() > 0) {        // the ingest block's flatten replaces the entry's, as on the older path
@@ -68,7 +130,7 @@ public record PackEntry(String domain, String table, String key, String date, Li
                         t.latestBy() != null ? t.latestBy() : text(ingest, "latest-by"), t);
             }
         }
-        JsonNode defs = m.path("connectors").isObject() ? m.path("connectors") : m.path("connector-templates");
+        JsonNode defs = m.path("connectors");
         JsonNode chosen = null;
         JsonNode first = null;
         String domain = name;
@@ -125,7 +187,7 @@ public record PackEntry(String domain, String table, String key, String date, Li
         }
         String folder = table == null ? kind : table;
         return new LakeTable(domain, folder, kind, domain + "/" + folder, "delta", List.of(), promote, vectors, flatten, key, date, latestBy,
-                LakeTable.REPLACE, sortBy, Map.of(), null, Map.of(), null, Map.of());
+                LakeTable.REPLACE, sortBy, Map.of(), null, Map.of(), Map.of(), null, Map.of());
     }
 
     /**
@@ -160,8 +222,8 @@ public record PackEntry(String domain, String table, String key, String date, Li
      */
     public static List<PackTable> tables(Path pack) throws IOException {
         Path file = Files.isDirectory(pack) ? pack.resolve("pack.yaml") : pack;
-        JsonNode m = new YAMLMapper().readTree(Files.readString(file));
-        JsonNode defs = m.path("connectors").isObject() ? m.path("connectors") : m.path("connector-templates");
+        JsonNode m = manifest(file);
+        JsonNode defs = m.path("connectors");
         List<PackTable> out = new ArrayList<>();
         for (var it = defs.fields(); it.hasNext(); ) {
             var e = it.next();
@@ -180,7 +242,7 @@ public record PackEntry(String domain, String table, String key, String date, Li
 
     /** The {@code table.<kind>} folder a pack's connector template names (null: none, the kind's own name). */
     private static String tableOf(JsonNode pack, String connector, String kind) {
-        JsonNode defs = pack.path("connectors").isObject() ? pack.path("connectors") : pack.path("connector-templates");
+        JsonNode defs = pack.path("connectors");
         JsonNode st = defs.path(connector).path("settings");
         if (st.path(ConnectorLake.TABLES).isTextual()) {               // the lake form: lake-tables names the entries
             for (String n : st.path(ConnectorLake.TABLES).asText().split(",")) {

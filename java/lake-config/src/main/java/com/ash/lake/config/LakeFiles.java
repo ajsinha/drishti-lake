@@ -258,12 +258,12 @@ public final class LakeFiles {
     public static Map<String, JsonNode> packTables(List<Path> packFiles, String lake) throws IOException {
         Map<String, JsonNode> out = new LinkedHashMap<>();
         for (Path file : packFiles) {
-            JsonNode m = YAML.readTree(Files.readString(file));
+            JsonNode m = PackEntry.manifest(file);
             if (m == null || !m.isObject()) {
                 continue;
             }
             String packName = m.path("pack").asText(file.toAbsolutePath().getParent().getFileName().toString());
-            JsonNode defs = m.path("connectors").isObject() ? m.path("connectors") : m.path("connector-templates");
+            JsonNode defs = m.path("connectors");
             for (var it = defs.fields(); it.hasNext(); ) {
                 var c = it.next();
                 JsonNode st = c.getValue().path("settings");
@@ -304,7 +304,12 @@ public final class LakeFiles {
             if (!Files.isDirectory(root)) {
                 continue;
             }
-            com.ash.drishti.api.PackFolders.list(root).stream().map(d -> d.resolve("pack.yaml")).forEach(out::add);   // and its domain folders
+            com.ash.drishti.api.resolution.ConfigResolution r = com.ash.drishti.api.resolution.ConfigResolution.currentOrOffline();
+            if (root.toAbsolutePath().normalize().equals(r.settings().siteDir())) {   // the site's packs folder: every pack the resolution finds
+                r.packs().packs().values().forEach(l -> out.add(l.dir().resolve("pack.yaml")));
+                continue;
+            }
+            com.ash.drishti.api.PackFolders.list(root).stream().map(d -> d.resolve("pack.yaml")).forEach(out::add);   // a given folder and its domain folders
         }
         return out;
     }
@@ -374,7 +379,19 @@ public final class LakeFiles {
                 e.put(k, v);
             }
         });
-        put(e, "retention", t.retention());
+        if (t.rowRetention().isEmpty()) {
+            put(e, "retention", t.retention());
+        } else {
+            ObjectNode rr = e.putObject("retention");
+            t.rowRetention().forEach((k, x) -> {
+                if (k.equals("max-rows") && x.matches("\\d+")) {
+                    rr.put(k, Integer.parseInt(x));
+                } else {
+                    rr.put(k, x);
+                }
+            });
+            put(rr, "dates", t.retention());
+        }
         put(e, "time-travel", t.timeTravel());
         if (!t.properties().isEmpty()) {
             ObjectNode p = e.putObject("properties");
@@ -545,9 +562,8 @@ public final class LakeFiles {
     }
 
     /**
-     * {@link #adoptDemo(Path, Path, boolean)}, each rewritten file's text passed through {@code restamp(before, after)} first: the server
-     * gives the pack templates' stamp ({@code TemplateStamp.keepPristine}), so a stamped file nobody edited is stamped again over its new
-     * text and still counts as unedited (it keeps following its pack's template at upgrades); an edited one stays edited.
+     * {@link #adoptDemo(Path, Path, boolean)}, each rewritten file's text passed through {@code restamp(before, after)} first (a tool's
+     * hook; the server writes no connector file).
      */
     public static Migration adoptDemo(Path connectorsDir, Path lakesDir, boolean write, java.util.function.BinaryOperator<String> restamp) throws IOException {
         Map<Path, String> lakeFiles = new LinkedHashMap<>();

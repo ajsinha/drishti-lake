@@ -55,6 +55,8 @@ final class RowParser {
         double num;
         int start;
         int end;
+        /** A container's shape: 0 an object, 1 a list of simple values, 2 a list holding an object or a list. */
+        byte list;
     }
 
     /** A step of the wanted paths. */
@@ -81,6 +83,11 @@ final class RowParser {
     private final int[] partitionSlots;
     private final int[] flattenSlots;
     private final String[] flattenNames;
+    private final String[] setNames;
+    private final String[] setValues;
+    private final int[] setSlots;
+    /** Per set: constant, whether it is a partition column (a slice of a shared table: a load replaces only its own slice). */
+    private final boolean[] setSlice;
     private final Set<String> topNames;
     private final DoubleList[] vectors;
     private final boolean[] vectorPresent;
@@ -98,6 +105,14 @@ final class RowParser {
     int fileDay = NO_FILE_DAY;
     static final int NO_FILE_DAY = Integer.MIN_VALUE;
     boolean otherDate;
+    /**
+     * A file whose business date is neither given nor in its name ({@code FileDates.decide}'s {@code today}): each row goes under its own
+     * date field when it has one, else under {@link #todayDay}; the load then checks that the file's rows agree on one date ({@code Loader}).
+     */
+    boolean rowsOrToday;
+    int todayDay;
+    /** The row's own date field (days since the epoch), {@link #NO_FILE_DAY} when it has none: counted per file ({@code ParseWorker}). */
+    int ownDay = NO_FILE_DAY;
     String id;
     long idHash;
     /** A second, independent hash of the id: two ids are one record's copies only when both hashes agree. */
@@ -107,6 +122,13 @@ final class RowParser {
     /** Per promoted column: a value that is not a number was seen (or it is an id field); a value was seen at all. */
     final boolean[] notNumeric;
     final boolean[] seen;
+    /**
+     * Per promoted column: a list of simple values was seen ({@code listSeen}); a value that is not one was seen ({@code notList}: a
+     * scalar, an object, a list holding containers). A column whose every value is a list of simple values is an {@code array<string>}
+     * column (DATA_LAKE_GUIDE.md section 2.4).
+     */
+    final boolean[] listSeen;
+    final boolean[] notList;
 
     RowParser(RowPlan plan) {
         this.plan = plan;
@@ -127,6 +149,17 @@ final class RowParser {
         for (int i = 0; i < flattenNames.length; i++) {
             flattenSlots[i] = slot(slots, plan.flatten.get(flattenNames[i]), true);
         }
+        setNames = plan.set.keySet().toArray(new String[0]);
+        setValues = plan.set.values().toArray(new String[0]);
+        setSlots = new int[setNames.length];
+        for (int i = 0; i < setNames.length; i++) {
+            setSlots[i] = slot(slots, setNames[i], false);
+        }
+        setSlice = new boolean[setNames.length];
+        for (int i = 0; i < setNames.length; i++) {
+            String n = setNames[i];
+            setSlice[i] = plan.slice.containsKey(RowPlan.column(n));
+        }
         vectors = new DoubleList[plan.vectors.size()];
         vectorPresent = new boolean[vectors.length];
         for (int i = 0; i < vectors.length; i++) {
@@ -140,9 +173,11 @@ final class RowParser {
         for (int i = 0; i < caps.length; i++) {
             caps[i] = new Cap();
         }
-        topNames = flattenNames.length > 0 ? new HashSet<>() : null;
+        topNames = flattenNames.length > 0 || setNames.length > 0 ? new HashSet<>() : null;
         notNumeric = new boolean[plan.promoted.size()];
         seen = new boolean[plan.promoted.size()];
+        listSeen = new boolean[plan.promoted.size()];
+        notList = new boolean[plan.promoted.size()];
         for (int i = 0; i < notNumeric.length; i++) {
             notNumeric[i] = plan.promoted.get(i).idField();
         }
@@ -265,6 +300,22 @@ final class RowParser {
         if (t != JsonToken.END_OBJECT) {
             throw new IOException("an object ends early");
         }
+        if (depth == 0 && setNames.length > 0) {
+            for (int i = 0; i < setNames.length; i++) {
+                if (!topNames.contains(setNames[i])) {          // a row that lacks the field takes the constant (stored: a shared table splits by it)
+                    if (!first) {
+                        doc.put(',');
+                    }
+                    first = false;
+                    PyJson.string(doc, setNames[i]);
+                    doc.put(':');
+                    PyJson.string(doc, setValues[i]);
+                    Cap c = caps[setSlots[i]];
+                    c.kind = Cap.STRING;
+                    c.text = setValues[i];
+                }
+            }
+        }
         if (depth == 0 && flattenNames.length > 0) {
             for (int i = 0; i < flattenNames.length; i++) {
                 Cap c = caps[flattenSlots[i]];
@@ -285,6 +336,7 @@ final class RowParser {
             c.kind = Cap.CONTAINER;
             c.start = start;
             c.end = doc.n;
+            c.list = 0;
         }
     }
 
@@ -350,12 +402,16 @@ final class RowParser {
         }
         int i = 0;
         JsonToken t;
+        byte shape = 1;
         while ((t = p.nextToken()) != JsonToken.END_ARRAY) {
             if (t == null) {
                 throw new IOException("an array ends early");
             }
             if (i > 0) {
                 doc.put(',');
+            }
+            if (t == JsonToken.START_OBJECT || t == JsonToken.START_ARRAY) {
+                shape = 2;
             }
             Node child = node == null || node.items == null ? null : node.items.get(i);
             if (vec != null) {
@@ -376,6 +432,7 @@ final class RowParser {
             c.kind = Cap.CONTAINER;
             c.start = start;
             c.end = doc.n;
+            c.list = shape;
         }
     }
 
@@ -451,11 +508,24 @@ final class RowParser {
             case Cap.FLOAT -> PyJson.idOfFloat(k.num);
             default -> k.text;
         };
+        for (int i = 0; i < setNames.length; i++) {
+            String own = setSlice[i] ? scalarText(caps[setSlots[i]]) : null;
+            if (own != null && !own.equals(setValues[i])) {    // another slice's row: this load replaces only its own (DATA_LAKE_GUIDE.md section 5)
+                return setNames[i] + " is " + own + ", not this load's " + setValues[i] + " (a load into a shared table writes and replaces only its own "
+                        + setNames[i] + " slice)";
+            }
+        }
         otherDate = false;
+        ownDay = NO_FILE_DAY;
         if (fileDay != NO_FILE_DAY) {                      // the file's business date (FileDates.decide): the row's own date is only counted
             epochDay = fileDay;
             LocalDate own = dateSlot < 0 ? null : day(caps[dateSlot]);
             otherDate = own != null && own.toEpochDay() != fileDay;
+            ownDay = own == null ? NO_FILE_DAY : (int) own.toEpochDay();
+        } else if (rowsOrToday) {                          // no date given or named: the row's own, else today (checked per file after the read)
+            LocalDate own = dateSlot < 0 ? null : day(caps[dateSlot]);
+            ownDay = own == null ? NO_FILE_DAY : (int) own.toEpochDay();
+            epochDay = own == null ? todayDay : ownDay;
         } else if (plan.asOf != null) {
             epochDay = (int) plan.asOf.toEpochDay();
         } else if (dateSlot < 0) {
@@ -519,6 +589,11 @@ final class RowParser {
                 continue;
             }
             seen[i] = true;
+            if (c.kind == Cap.CONTAINER && c.list == 1) {
+                listSeen[i] = true;
+            } else {
+                notList[i] = true;
+            }
             if (pr.idField() && (c.kind == Cap.INT || c.kind == Cap.FLOAT)) {
                 putText(rec, RowPlan.STR, c.kind == Cap.INT ? c.text : PyJson.idOfFloat(c.num));     // an id is text: 1000008, never 1000008.0
                 continue;

@@ -18,7 +18,6 @@ package com.ash.drishti.dataload;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.drishti.common.FileDates;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,7 +51,7 @@ class RoutesTest {
         assertThat(r.by()).isEqualTo("the rule trades-*");
         assertThat(r.mode()).as("the inbox's default-mode: append").isEqualTo("append");
         Routes.Route today = routes(f).route("trades-endur.jsonl.gz", ReadyNote.EMPTY);
-        assertThat(today.dateBy()).isEqualTo(FileDates.businessToday() + " (today: no date in the name)");
+        assertThat(today.dateBy()).isEqualTo("the rows' own business date (no date given or in the name: a replace refuses rows with none or several)");
         assertThat(today.group()).as("dated and undated names go to one load: the loader dates each file").isEqualTo(r.group());
     }
 
@@ -70,6 +69,23 @@ class RoutesTest {
         assertThat(Files.readString(load)).containsPattern("as-of: \"?2026-10-29\"?").containsPattern("mode: \"?append\"?");
         assertThatThrownBy(() -> Routes.read(writeRule(f, "date-from: field"), "lake", f.packs())).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("auto (the .ready file's business-date");
+    }
+
+    @Test
+    void datePatternTakesTheDateFromADashedNameAndTheReadyFileStillWins() throws Exception {
+        Fixture f = new Fixture(tmp);
+        Path rules = writeRule(f, "date-from: name\n      date-pattern: '-(\\d{4}-\\d{2}-\\d{2})\\.'");
+        Routes.Route r = Routes.read(rules, "lake", f.packs()).route("x-swap-2026-10-30.jsonl.gz", ReadyNote.EMPTY);
+        assertThat(List.of(String.valueOf(r.asOf()), r.dateBy())).containsExactly("2026-10-30", "2026-10-30 from the name (date-pattern)");
+        assertThatThrownBy(() -> Routes.read(rules, "lake", f.packs()).route("x-swap-latest.jsonl.gz", ReadyNote.EMPTY)).isInstanceOf(Routes.Unrouted.class)
+                .hasMessageContaining("carries none");
+        assertThatThrownBy(() -> Routes.read(rules, "lake", f.packs()).route("x-swap-2026-13-45.jsonl.gz", ReadyNote.EMPTY)).isInstanceOf(Routes.Unrouted.class);
+        Routes.Route ready = Routes.read(rules, "lake", f.packs()).route("x-swap-2026-10-30.jsonl.gz", ReadyNote.of(null, null, null, null, LocalDate.parse("2026-10-29")));
+        assertThat(List.of(String.valueOf(ready.asOf()), ready.dateBy())).containsExactly("2026-10-29", "2026-10-29 from the .ready file");
+        Path compact = writeRule(f, "date-from: name\n      date-pattern: '_(\\d{8})\\.'\n      date-format: YYYYMMDD");
+        assertThat(Routes.read(compact, "lake", f.packs()).route("x-swap_20261030.jsonl.gz", ReadyNote.EMPTY).asOf()).isEqualTo(LocalDate.parse("2026-10-30"));
+        assertThatThrownBy(() -> Routes.read(writeRule(f, "date-pattern: '(a)(b)'"), "lake", f.packs())).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("exactly one capture group");
     }
 
     private static Path writeRule(Fixture f, String extra) throws IOException {

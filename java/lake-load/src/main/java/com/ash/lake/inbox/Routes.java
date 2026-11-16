@@ -60,7 +60,18 @@ public final class Routes {
         default java.util.Set<String> lakesRead() {
             return null;
         }
+
+        /**
+         * The inbox rules the installed modules that are on bring ({@code dataload:} of each module), read after the site's own: the module
+         * and its rules as YAML ({@code dataload: {rules: [...]}}).
+         */
+        default List<ModuleRules> moduleRules() {
+            return List.of();
+        }
     }
+
+    /** One module's inbox rules: the module's id (the rule's origin in Admin) and its document. */
+    public record ModuleRules(String module, JsonNode document) {}
 
     /**
      * Where a file goes: the pack and kind, the pack's connector (null: the one serving the kind), the table (null: the connector's), the
@@ -102,9 +113,28 @@ public final class Routes {
 
     /** One rule of the file. */
     record Rule(String match, PathMatcher glob, String pack, String kind, String connector, String table, String dateFrom, String dateField, String key,
-            String lake, String format) {}
+            String lake, String format, String origin,
+            java.util.regex.Pattern datePattern, String dateFormat) {
 
-    private static final Set<String> RULE_KEYS = Set.of("match", "pack", "kind", "connector", "table", "date-from", "date-field", "key", "lake", "format");
+        /** The business date the file name carries by this rule's {@code date-pattern} (one capture group), or null. */
+        LocalDate dateOf(String fileName) throws Unrouted {
+            if (datePattern == null) {
+                return null;
+            }
+            java.util.regex.Matcher m = datePattern.matcher(fileName);
+            if (!m.find()) {
+                return null;
+            }
+            String g = m.group(1);
+            try {
+                return LocalDate.parse(g, java.time.format.DateTimeFormatter.ofPattern(dateFormat.equals("YYYYMMDD") ? "yyyyMMdd" : "yyyy-MM-dd"));
+            } catch (java.time.DateTimeException e) {
+                throw new Unrouted("the rule " + match + ": " + fileName + " carries '" + g + "' by date-pattern, which is not a calendar date (" + dateFormat + ")");
+            }
+        }
+    }
+
+    private static final Set<String> RULE_KEYS = Set.of("match", "pack", "kind", "connector", "table", "date-from", "date-field", "key", "lake", "format", "date-pattern", "date-format");
 
     private final List<Rule> rules;
     /** The inbox's {@code default-mode} (append, else replace) and whether it may create a table ({@code new-tables}). */
@@ -126,18 +156,32 @@ public final class Routes {
     /** The rules of {@code file} (an absent file: no rules, every file needs its {@code .ready} to name its pack and kind). */
     public static Routes read(Path file, String defaultLake, Packs packs) throws IOException {
         String where = file.toString();
+        JsonNode d = null;
         if (!Files.isRegularFile(file)) {
-            return new Routes(List.of(), "fail", defaultLake, packs, where + " (not there)");
+            where = where + " (not there)";
+        } else {
+            JsonNode root = new YAMLMapper().readTree(Files.readString(file));
+            d = root == null ? null : root.path("dataload");
+            if (d != null && (d.isMissingNode() || d.isNull())) {
+                d = null;
+            }
         }
-        JsonNode root = new YAMLMapper().readTree(Files.readString(file));
-        JsonNode d = root == null ? null : root.path("dataload");
-        if (d == null || d.isMissingNode() || d.isNull()) {
-            return new Routes(List.of(), "fail", defaultLake, packs, where);
-        }
-        String unmatched = d.path("unmatched").asText("fail").trim().toLowerCase(Locale.ROOT);
+        String unmatched = d == null ? "fail" : d.path("unmatched").asText("fail").trim().toLowerCase(Locale.ROOT);
         if (!unmatched.equals("fail")) {
             throw new IllegalArgumentException(where + ": dataload.unmatched " + unmatched + ": fail is the only choice (a file is never guessed)");
         }
+        List<Rule> out = new ArrayList<>(d == null ? List.of() : parseRules(d, where, null));
+        for (ModuleRules m : packs == null ? List.<ModuleRules>of() : packs.moduleRules()) {      // the modules that are on, after the site's own
+            JsonNode md = m.document() == null ? null : m.document().path("dataload");
+            if (md != null && !md.isMissingNode() && !md.isNull()) {
+                out.addAll(parseRules(md, "module " + m.module() + ": dataload", m.module()));
+            }
+        }
+        return new Routes(List.copyOf(out), unmatched, defaultLake, packs, where);
+    }
+
+    /** The rules of one {@code dataload:} block; {@code origin} is the module they come from (null: the site's own file). */
+    private static List<Rule> parseRules(JsonNode d, String where, String origin) {
         List<Rule> out = new ArrayList<>();
         int i = 0;
         for (JsonNode r : d.path("rules")) {
@@ -168,6 +212,22 @@ public final class Routes {
             if (!format.equals("delta") && !format.equals("iceberg")) {
                 throw new IllegalArgumentException(at + ".format " + format + ": delta or iceberg");
             }
+            String dateFormat = text(r, "date-format");
+            dateFormat = dateFormat == null ? "YYYY-MM-DD" : dateFormat.toUpperCase(Locale.ROOT);
+            if (!dateFormat.equals("YYYY-MM-DD") && !dateFormat.equals("YYYYMMDD")) {
+                throw new IllegalArgumentException(at + ".date-format " + dateFormat + ": YYYY-MM-DD (the default) or YYYYMMDD");
+            }
+            java.util.regex.Pattern datePattern = null;
+            if (text(r, "date-pattern") != null) {
+                try {
+                    datePattern = java.util.regex.Pattern.compile(text(r, "date-pattern"));
+                } catch (java.util.regex.PatternSyntaxException e) {
+                    throw new IllegalArgumentException(at + ".date-pattern is not a regular expression (" + e.getDescription() + ")");
+                }
+                if (datePattern.matcher("").groupCount() != 1) {
+                    throw new IllegalArgumentException(at + ".date-pattern needs exactly one capture group, around the date");
+                }
+            }
             PathMatcher glob;
             try {
                 glob = FileSystems.getDefault().getPathMatcher("glob:" + match);
@@ -175,9 +235,9 @@ public final class Routes {
                 throw new IllegalArgumentException(at + ".match " + match + ": not a glob (" + e.getMessage() + ")");
             }
             out.add(new Rule(match, glob, pack, kind, text(r, "connector"), text(r, "table"), dateFrom, text(r, "date-field"), text(r, "key"),
-                    text(r, "lake"), format));
+                    text(r, "lake"), format, origin, datePattern, dateFormat));
         }
-        return new Routes(List.copyOf(out), unmatched, defaultLake, packs, where);
+        return out;
     }
 
     /** These routes with the inbox's default mode and its new-tables switch (DataLoadSettings). */
@@ -215,6 +275,7 @@ public final class Routes {
             m.put("date", r.dateFrom().equals("name") ? "from the name (required)" : "from the .ready file, else the name, else today");
             m.put("format", r.format());
             m.put("lake", r.lake() == null ? defaultLake : r.lake());
+            m.put("origin", r.origin() == null ? "site" : r.origin());
             out.add(m);
         }
         return out;
@@ -337,9 +398,18 @@ public final class Routes {
         String dateFrom = rule == null ? "auto" : rule.dateFrom();
         LocalDate asOf = n.businessDate();
         LocalDate nameDate = name.error() == null && !name.tar() ? name.date() : null;
+        LocalDate patternDate = rule == null || name.tar() ? null : rule.dateOf(fileName);     // date-pattern: a date inside a free-form name
+        if (patternDate != null && nameDate == null) {
+            nameDate = patternDate;
+            if (asOf == null) {
+                asOf = patternDate;
+            }
+        }
         String dateBy;
         if (name.tar()) {
             dateBy = "each table and date from the archive's folders";
+        } else if (asOf != null && patternDate != null && n.businessDate() == null) {
+            dateBy = asOf + " from the name (date-pattern)";
         } else if (asOf != null) {
             dateBy = asOf + " from the .ready file";
         } else if (nameDate != null) {
@@ -348,7 +418,7 @@ public final class Routes {
             throw new Unrouted("the rule " + rule.match() + " takes the business date from the name (date-from: name), but " + fileName
                     + " carries none (<table>.<YYYY-MM-DD>.jsonl.gz): rename it, or give business-date: in its .ready file");
         } else {
-            dateBy = FileDates.businessToday() + " (today: no date in the name)";
+            dateBy = "the rows' own business date (no date given or in the name: a replace refuses rows with none or several)";
         }
         String mode = n.mode() != null ? n.mode() : defaultMode;
         return new Route(pack, kind, n.connector() != null ? n.connector() : rule != null && rule.connector() != null ? rule.connector() : tableConnector,
@@ -458,6 +528,14 @@ public final class Routes {
                     continue;
                 }
                 for (com.ash.drishti.lakeconfig.PackEntry.PackTable t : tablesOf(info)) {
+                    // a connector's own name (trade_wss: trade-wss), whatever table it writes: every source module that is on brings its
+                    // connector, so its folder in a tar or its file name routes to it (a shared table's slice, LoadConfig.withSlice)
+                    if (info.kinds().contains(t.kind()) && norm(t.connector()).equals(want) && !norm(t.table()).equals(want)
+                            && (givenKind == null || givenKind.equals(t.kind()))) {
+                        known.add(p + "/" + norm(t.connector()).replace('-', '_'));
+                        hits.add(new String[] {p, t.kind(), t.connector()});
+                        continue;
+                    }
                     if (norm(t.table()).equals(norm(t.kind())) || !info.kinds().contains(t.kind())) {
                         continue;                               // a kind's own name: matched above
                     }

@@ -15,6 +15,7 @@
  */
 package com.ash.drishti.lakeconfig;
 
+import com.ash.drishti.testroots.TestRoots;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
@@ -40,8 +41,8 @@ class LakePathsGuardTest {
     private static final Pattern SPLITS = Pattern.compile("LakeTable::parent|\\bt\\.parent\\(\\)");
 
     private static Path repo() {
-        Path p = Path.of("").toAbsolutePath();
-        while (!Files.isDirectory(p.resolve("drishti-lakeconfig"))) {
+        Path p = Path.of(TestRoots.module());
+        while (!Files.isDirectory(p.resolve("lake/drishti-lakeio"))) {
             p = p.getParent();
         }
         return p;
@@ -50,7 +51,7 @@ class LakePathsGuardTest {
     private static List<Path> sources() throws IOException {
         Path root = repo();
         List<Path> out = new ArrayList<>();
-        List<String> tops = new ArrayList<>(List.of(".", "plugins"));
+        List<String> tops = new ArrayList<>(List.of("kernel", "compute", "lake", "net", "packaging", "testing", "plugins"));   // the subject folders
         try (Stream<Path> domains = Files.list(root.resolve("modules"))) {         // modules/<domain>/<part>: the domain modules' sources
             domains.filter(Files::isDirectory).forEach(d -> tops.add(root.relativize(d).toString()));
         }

@@ -15,6 +15,7 @@
  */
 package com.ash.drishti.dataload;
 
+import com.ash.drishti.testroots.TestRoots;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ash.drishti.common.FileDates;
@@ -45,7 +46,7 @@ class DataInboxLoaderTest {
     @TempDir Path tmp;
 
     static Path repo() {
-        Path p = Path.of("").toAbsolutePath();
+        Path p = Path.of(TestRoots.module());
         while (p != null && !Files.isDirectory(p.resolve("tools/lake/testdata/archives"))) {
             p = p.getParent();
         }
@@ -131,8 +132,8 @@ class DataInboxLoaderTest {
 
     /**
      * The business date from outside (docs/guides/DATA_LAKE_GUIDE.md): the name's date for every row of the file, the rows whose own
-     * date differs only counted (the outcome, the report, the board); a .ready business-date over the name; a name without a date under the
-     * business today; the table from the name when no rule matches. Two loader runs (one per route).
+     * date differs only counted (the outcome, the report, the board); a .ready business-date over the name; a name without a date under its rows'
+     * own date (never the business today by guess); the table from the name when no rule matches. Two loader runs (one per route).
      */
     @Test
     void theNamesDateTheReadyFilesDateOrTodayDatesEveryRowOfAFile() throws IOException {
@@ -151,7 +152,9 @@ class DataInboxLoaderTest {
         assertThat(e.versions()).containsOnlyKeys("2026-10-30");
         assertThat(e.dateNote()).isNotNull();
         String today = FileDates.businessToday().toString();
-        assertThat(f.signals).extracting(Signal.Landed::date).contains(LocalDate.parse("2026-11-02"), LocalDate.parse("2026-10-30"), LocalDate.parse(today));
+        // trade.jsonl: no date given or named, its row carries 2026-11-01: loaded under its rows' date, never today by guess
+        assertThat(f.signals).extracting(Signal.Landed::date).contains(LocalDate.parse("2026-11-02"), LocalDate.parse("2026-10-30"), LocalDate.parse("2026-11-01"))
+                .doesNotContain(LocalDate.parse(today));
 
         JsonNode report = Fixture.JSON.readTree(f.root.resolve("outbox/2026-11-03").toFile().listFiles()[0].toPath()
                 .resolve("trades-d.2026-11-02.jsonl.loaded.json").toFile());
@@ -255,5 +258,39 @@ class DataInboxLoaderTest {
             z.closeEntry();
         }
         assertThat(LoaderProcess.launch(boot.toString())).containsExactly("-Dloader.main=com.ash.drishti.lakeload.LakeLoad", "-jar", boot.toString());
+    }
+
+    @Test
+    void aKindThatIsAChildOfAnotherIsSplitOffItsParentOnAnInboxLoad() throws IOException {
+        Fixture f = new Fixture(tmp);
+        Path fixture = Path.of(TestRoots.module(), "src", "test", "resources", "childkinds");
+        Files.copy(fixture.resolve("pack.yaml"), f.pack.resolve("pack.yaml"), StandardCopyOption.REPLACE_EXISTING);   // the pack deals: deal, and deal-leg child-of deal
+        Files.writeString(f.rules, """
+                dataload:
+                  rules:
+                    - match: "deal*"
+                      pack: deals
+                      kind: deal
+                      date-from: name
+                  unmatched: fail
+                """);
+        f.drop("deal.2026-11-03.jsonl", Files.readString(fixture.resolve("deal.2026-11-03.jsonl")), "");
+        Routes.Packs packs = new Routes.Packs() {
+            @Override
+            public Routes.PackInfo find(String name) {
+                return name.equals("deals") ? new Routes.PackInfo(f.pack, List.of("deal", "deal-leg")) : null;
+            }
+
+            @Override
+            public List<String> names() {
+                return List.of("deals");
+            }
+        };
+        DataInbox inbox = new DataInbox(f.settings, "node-a", f.clock, Fixture.ZONE, packs, new LoaderProcess(f.settings), f.signal(), null);
+        Cycle.Report r = inbox.cycle("test");
+        assertThat(r.files()).as(r.toString()).singleElement().satisfies(o -> assertThat(o.outcome()).isEqualTo("loaded"));
+        assertThat(Files.isDirectory(f.lake.resolve("deals/deal"))).isTrue();
+        assertThat(Files.isDirectory(f.lake.resolve("deals/deal_leg")) || Files.isDirectory(f.lake.resolve("deals/deal-leg")))
+                .as("the legs, split off the deals' LEGS arrays, have a table of their own").isTrue();
     }
 }

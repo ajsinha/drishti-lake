@@ -54,7 +54,7 @@ public final class LakeLoad {
     /**
      * Whether the loader reads a file of this name: JSON Lines ({@code .jsonl}, {@code .ndjson}, {@code .json}; plain, {@code .gz} or
      * {@code .zst}) or an archive ({@code .zip}, {@code .tar}, {@code .tar.gz}, {@code .tgz}) by the archive rule. The data inbox
-     * (drishti-dataload) asks before it claims a file, so its names are the loader's own.
+     * (package dataload) asks before it claims a file, so its names are the loader's own.
      */
     public static boolean reads(String fileName) {
         return fileName != null && (Archives.isJsonl(fileName) || Archives.isArchive(fileName));
@@ -188,12 +188,22 @@ public final class LakeLoad {
             return FAILED;
         }
         if (loads == null) {
-            return runOne(cfg, null, out, json, quiet, t0).code();
+            return withChildren(runOne(cfg, null, out, json, quiet, t0).code(), cfg, null, out, json, quiet);
         }
         if (cfg.datasets().isEmpty()) {
-            return runOne(loads.get(0).cfg(), loads.get(0).files(), out, json, quiet, t0).code();
+            return withChildren(runOne(loads.get(0).cfg(), loads.get(0).files(), out, json, quiet, t0).code(), loads.get(0).cfg(), loads.get(0).files(),
+                    out, json, quiet);
         }
         return DatasetLoads.runAll(loads, cfg, out, json, quiet, t0);
+    }
+
+    /** After a table's load: the child kinds its pack declares for it (the arrays of its documents, {@link ChildLoads}); the worse exit code. */
+    private static int withChildren(int code, LoadConfig cfg, List<Inputs.InputFile> files, PrintStream out, boolean json, boolean quiet) {
+        if (code != OK && code != PARTIAL) {
+            return code;
+        }
+        int kids = ChildLoads.run(cfg, files, out, json, quiet);
+        return kids == OK ? code : code == OK || kids == FAILED || kids == LOCKED ? kids : code;
     }
 
     /** One table's load: {@code files} its input when resolved already (an archive's members among it), else {@code source.files}. */
