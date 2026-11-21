@@ -122,6 +122,7 @@ final class Loader {
             read(io, splits, readers, spillDir, workers, read, decompress, parse, spill, lines);
             report.readSeconds = (System.nanoTime() - t0) / 1e9;
             checkRowDates(workers);
+            checkFutureDates(workers, FileDates.today());
             report.collect(workers, splits, lines);
             progress.phase("read");
             if (report.documents > 0 && report.rejected * 100.0 / report.documents > cfg.rejects().maxPct()) {
@@ -214,6 +215,22 @@ final class Loader {
         }
         if (!refused.isEmpty()) {
             throw new LoadException(String.join("; ", refused) + " (nothing was written)");
+        }
+    }
+
+    /**
+     * No business date in the future, whatever gave it (the name, a folder, {@code as-of}, a {@code .ready} file, the rows' own date, a
+     * loader row's date) and whatever the store: a load that would write a date after {@code today} is refused before anything is written.
+     */
+    private static void checkFutureDates(List<ParseWorker> workers, LocalDate today) {
+        java.util.TreeSet<Integer> future = new java.util.TreeSet<>();
+        for (ParseWorker w : workers) {
+            w.dates.keySet().stream().filter(day -> day > today.toEpochDay()).forEach(future::add);
+        }
+        if (!future.isEmpty()) {
+            throw new LoadException(FileDates.futureError(LocalDate.ofEpochDay(future.last()), today, null)
+                    + (future.size() > 1 ? " (and " + (future.size() - 1) + " other future date" + (future.size() > 2 ? "s" : "") + ")" : "")
+                    + " (nothing was written)");
         }
     }
 

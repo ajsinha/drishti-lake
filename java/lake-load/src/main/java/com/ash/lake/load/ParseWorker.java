@@ -191,7 +191,7 @@ final class ParseWorker implements Callable<Void> {
         java.time.LocalDate named = FileDates.of(dated);
         java.time.LocalDate given = plan.asOf != null ? plan.asOf : FileDates.readyDate(f.member() != null ? f.member().archive() : f.path());
         FileDates.Decided d = FileDates.decide(given, named, plan.dateFrom, today, dated);
-        return plan.asOf == null && given != null ? new FileDates.Decided(d.date(), "ready", null) : d;
+        return d.error() == null && plan.asOf == null && given != null ? new FileDates.Decided(d.date(), "ready", null) : d;
     }
 
     /** Every row of the chunk's file goes under the file's business date. */

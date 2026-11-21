@@ -143,4 +143,9 @@ Entries are written per release; unreleased work is listed first.
   `IcebergMaintenance.undoLake` is gone), and the Iceberg undo of a replace committed a REPLACE, which iceberg-core refuses once rows are
   restored (now an overwrite, `Operations.overwriteFiles`, with the undo's snapshot summary; its version is the table's commit number
   from 0, as Delta's). Known differences from the reference: the two undo cases of Iceberg (local and memory row), each with its reason.
+- **No business date in the future, for every store.** The check `IcebergLoader` had (its `LoadGuard`) is kept by the one loader for
+  Delta, Iceberg, files and the memory row: a date given (`--as-of`, a `.ready` file's `business-date`) or taken from the rows (also a
+  loader row's own date) that is after today is refused with the same words as a name's or a folder's, before anything is written
+  (`FileDates.futureError`, one rule for every source). Parity case `load/future-date-refused`; shared case in
+  `tck/fixtures/file-dates/names.json`.
 - Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).

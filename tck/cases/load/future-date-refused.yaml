@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# from: IcebergLoader's LoadGuard (no business date in the future), kept by the one loader for every store: a date given (--as-of) or
+# taken from the rows that is after today is refused, nothing written; the loaded date stays as it was
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 12, scenarios: 2, seed: 1}}
+  later/pv.jsonl: {pv: {n: 8, scenarios: 2, seed: 2, start: '2999-01-04'}}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  rows: |
+    source: {files: '${in}/later/pv.jsonl', id: POSITION_ID, date: BUSINESS_DATE, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+steps:
+  - load: []
+  - load: {config: main, args: [--as-of, '2999-01-04']}
+  - load: {config: rows}

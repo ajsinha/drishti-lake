@@ -45,6 +45,7 @@
     {"name": ".jsonl", "error": "'' is not a table name"}
   ],
   "decide": [
+    {"given": "2026-11-05", "name": null, "dateFrom": "auto", "error": "business date 2026-11-05 given (--as-of, the .ready file's business-date) is in the future"},
     {"given": "2026-11-01", "name": "2026-11-03", "dateFrom": "auto", "date": "2026-11-01", "source": "given", "words": "2026-11-01 from the command line"},
     {"given": null, "name": "2026-11-03", "dateFrom": "auto", "date": "2026-11-03", "source": "name", "words": "2026-11-03 from the file name"},
     {"given": null, "name": null, "dateFrom": "auto", "date": "2026-11-04", "source": "today", "words": "2026-11-04 (today: no date in the name)"},

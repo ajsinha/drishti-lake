@@ -222,7 +222,8 @@ public final class FileDates {
             return new Decided(null, "name", why);
         }
         if (given != null) {
-            return new Decided(given, "given", null);
+            return given.isAfter(today) ? new Decided(null, "given", futureError(given, today, "given (--as-of, the .ready file's business-date)"))
+                    : new Decided(given, "given", null);
         }
         if (nameDate != null) {
             return new Decided(nameDate, "name", null);
@@ -231,6 +232,15 @@ public final class FileDates {
             return new Decided(null, "name", baseName(name) + ": date-from name, but the name carries no date (YYYY-MM-DD)");
         }
         return new Decided(businessToday(today), "today", null);
+    }
+
+    /**
+     * Why a load for {@code day} is refused: a business date after {@code today} (the same rule for every source of the date: the
+     * name, a tar's folder, {@code as-of}, the {@code .ready} file, the rows' own date; any store), null when it is not in the future.
+     */
+    public static String futureError(LocalDate day, LocalDate today, String from) {
+        return day.isAfter(today) ? "business date " + day + (from == null ? "" : " " + from) + " is in the future: a load for a future date is "
+                + "refused" : null;
     }
 
     /** Where a file's date comes from, in words ({@code filedate.words}). */
