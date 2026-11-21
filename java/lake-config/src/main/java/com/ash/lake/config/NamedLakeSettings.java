@@ -15,7 +15,7 @@
  */
 package com.ash.lake.config;
 
-import com.ash.lake.Placeholders;
+import com.ash.tools.settings.Placeholders;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;

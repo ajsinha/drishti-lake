@@ -17,7 +17,7 @@ package com.ash.lake.load;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ash.lake.SettingsFile;
+import com.ash.tools.settings.SettingsFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -36,15 +36,15 @@ class LoadConfigSettingsFileTest {
     @AfterEach
     void clear() {
         set.forEach(System::clearProperty);
-        System.clearProperty(SettingsFile.PROPERTY);
+        System.clearProperty(com.ash.lake.LakeOptions.SETTINGS_FILE);
     }
 
     @Test
     void aLoadFilesPlaceholderResolvesASettingsFileKey() throws Exception {
         Path ini = dir.resolve("site.ini");
         Files.writeString(ini, "[load.inbox]\nfiles=/srv/inbox/pv.jsonl\n[site]\nsite.cold-lake=/lakes/cold\n");
-        System.setProperty(SettingsFile.PROPERTY, ini.toString());
-        set.addAll(SettingsFile.applyFromSystemProperty());
+        System.setProperty(com.ash.lake.LakeOptions.SETTINGS_FILE, ini.toString());
+        set.addAll(SettingsFile.applyFrom(com.ash.lake.LakeOptions.SETTINGS_FILE, com.ash.lake.LakeOptions.HOME));
         Path file = dir.resolve("load.yaml");
         Files.writeString(file, """
                 source:

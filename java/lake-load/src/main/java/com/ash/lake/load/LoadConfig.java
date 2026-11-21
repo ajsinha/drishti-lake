@@ -608,7 +608,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         JsonNode a = s.path("archive");
         Archives.Limits d;
         try {
-            d = Archives.Limits.defaults(k -> com.ash.lake.Placeholders.lookup(k, r.env()));
+            d = Archives.Limits.defaults(k -> com.ash.tools.settings.Placeholders.lookup(k, r.env()));
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("lake.archive.max-mb, max-ratio and max-members (LAKE_ARCHIVE_MAX_MB, ...) are numbers");
         }
@@ -733,9 +733,9 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
             return runtime.settings();
         }
 
-        /** Every {@code ${key}} / {@code ${key:-default}} through the one resolver (com.ash.lake.Placeholders), this reader's view. */
+        /** Every {@code ${key}} / {@code ${key:-default}} through the one resolver (com.ash.tools.settings.Placeholders), this reader's view. */
         String expand(String s) {
-            return com.ash.lake.Placeholders.require(s, env());
+            return com.ash.tools.settings.Placeholders.require(s, env());
         }
 
         String text(JsonNode n, String key, String dflt) {

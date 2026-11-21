@@ -15,8 +15,8 @@
  */
 package com.ash.lake.iceberg.table;
 
-import com.ash.lake.io.net.ProxySettings;
-import com.ash.lake.io.net.TlsMaterial;
+import com.ash.tools.net.ProxySettings;
+import com.ash.tools.net.TlsMaterial;
 import com.ash.lake.iceberg.catalog.Catalog;
 import com.ash.lake.iceberg.catalog.Catalogs;
 import com.ash.lake.iceberg.catalog.RestCatalog;

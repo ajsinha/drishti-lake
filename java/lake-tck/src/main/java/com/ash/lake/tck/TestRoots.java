@@ -15,7 +15,7 @@
  */
 package com.ash.lake.tck;
 
-import com.ash.lake.SettingsFile;
+import com.ash.tools.settings.SettingsFile;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,7 +51,7 @@ public final class TestRoots {
 
     /** An explicit -D property, else the settings file named by -Dlake.settings.file, else null (then the code location decides). */
     private static String explicit(String key) {
-        SettingsFile.applyFromSystemProperty();
+        SettingsFile.applyFrom(com.ash.lake.LakeOptions.SETTINGS_FILE, com.ash.lake.LakeOptions.HOME);
         String v = System.getProperty(key);
         return v == null || v.isBlank() ? null : v;
     }

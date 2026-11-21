@@ -56,12 +56,12 @@ public final class NativeFileIO implements FileIO {
     private final NativeCodecs codecs;
 
     /** The outbound proxy of the S3 endpoint. */
-    public com.ash.lake.io.net.ProxySettings proxy() {
+    public com.ash.tools.net.ProxySettings proxy() {
         return s3Settings.proxy();
     }
 
     /** The TLS material of the S3 endpoint, or null. */
-    public com.ash.lake.io.net.TlsMaterial tls() {
+    public com.ash.tools.net.TlsMaterial tls() {
         return s3Settings.tls();
     }
 

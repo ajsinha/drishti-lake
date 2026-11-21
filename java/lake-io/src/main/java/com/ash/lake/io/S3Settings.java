@@ -15,11 +15,11 @@
  */
 package com.ash.lake.io;
 
-import com.ash.lake.io.net.ProxySettings;
-import com.ash.lake.io.net.TlsContexts;
-import com.ash.lake.io.net.TlsException;
-import com.ash.lake.io.net.TlsMaterial;
-import com.ash.lake.io.net.TlsSettings;
+import com.ash.tools.net.ProxySettings;
+import com.ash.tools.net.TlsContexts;
+import com.ash.tools.net.TlsException;
+import com.ash.tools.net.TlsMaterial;
+import com.ash.tools.net.TlsSettings;
 import java.util.Map;
 
 /**
@@ -117,7 +117,8 @@ public record S3Settings(String endpoint, String accessKey, String secretKey, St
             }
             return null;
         }
-        return TlsContexts.build(ts);
+        return TlsContexts.build(ts, com.ash.tools.settings.Placeholders::process, java.time.Clock.systemUTC(),
+                com.ash.lake.LakeOptions.ALLOW_INSECURE_TLS);
     }
 
     @Override

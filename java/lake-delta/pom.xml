@@ -25,6 +25,7 @@
   <name>Drishti Lake: Delta tables on delta-kernel (native engine), the table layer</name>
 
   <dependencies>
+    <dependency><groupId>com.ash.tools</groupId><artifactId>tools-net</artifactId></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-io</artifactId></dependency>
     <dependency><groupId>io.delta</groupId><artifactId>delta-kernel-api</artifactId><version>${delta-kernel.version}</version></dependency>
     <dependency>

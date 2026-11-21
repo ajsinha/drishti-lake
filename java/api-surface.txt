@@ -33,8 +33,6 @@ class public final class com.ash.lake.LakeOptions
 class public final class com.ash.lake.LakeRoots
 class public final class com.ash.lake.LakeRuntime
 class public final class com.ash.lake.PersistedNames
-class public final class com.ash.lake.Placeholders
-class public final class com.ash.lake.SettingsFile
 class public final class com.ash.lake.config.ConnectorLake
 class public final class com.ash.lake.config.LakeFiles
 class public final class com.ash.lake.config.Lakes
@@ -170,6 +168,7 @@ com.ash.lake.LakeOptions :: public long com.ash.lake.LakeOptions.rowGroupBytes()
 com.ash.lake.LakeOptions :: public static boolean com.ash.lake.LakeOptions.isOption(java.lang.String)
 com.ash.lake.LakeOptions :: public static com.ash.lake.LakeOptions com.ash.lake.LakeOptions.fromProcess()
 com.ash.lake.LakeOptions :: public static com.ash.lake.LakeOptions$Builder com.ash.lake.LakeOptions.builder()
+com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.ALLOW_INSECURE_TLS
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.ARCHIVE_MAX_MB
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.ARCHIVE_MAX_MEMBERS
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.ARCHIVE_MAX_RATIO
@@ -192,6 +191,7 @@ com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.La
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.S3_PATH_STYLE
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.S3_READ_BLOCK_KB
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.S3_REGION
+com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.SETTINGS_FILE
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.TMP_DIR
 com.ash.lake.LakeOptions$Builder :: public com.ash.lake.LakeOptions com.ash.lake.LakeOptions$Builder.build()
 com.ash.lake.LakeOptions$Builder :: public com.ash.lake.LakeOptions$Builder com.ash.lake.LakeOptions$Builder.configDir(java.nio.file.Path)
@@ -208,11 +208,9 @@ com.ash.lake.LakeRoots :: public java.lang.String com.ash.lake.LakeRoots.under(j
 com.ash.lake.LakeRoots :: public java.nio.file.Path com.ash.lake.LakeRoots.anchored(java.lang.String)
 com.ash.lake.LakeRoots :: public java.nio.file.Path com.ash.lake.LakeRoots.connectors()
 com.ash.lake.LakeRoots :: public java.nio.file.Path com.ash.lake.LakeRoots.home()
-com.ash.lake.LakeRoots :: public static boolean com.ash.lake.LakeRoots.isAbsolute(java.lang.String)
 com.ash.lake.LakeRoots :: public static com.ash.lake.LakeRoots com.ash.lake.LakeRoots.of(com.ash.lake.LakeOptions)
 com.ash.lake.LakeRoots :: public static final java.lang.String com.ash.lake.LakeRoots.HOME
 com.ash.lake.LakeRoots :: public static final java.lang.String com.ash.lake.LakeRoots.HOME_ENV
-com.ash.lake.LakeRoots :: public static java.lang.String com.ash.lake.LakeRoots.anchorValue(java.lang.String,java.lang.String,java.nio.file.Path,java.util.List<java.lang.String>)
 com.ash.lake.LakeRuntime :: public <T> T com.ash.lake.LakeRuntime.part(java.lang.Class<T>,java.util.function.Supplier<? extends T>)
 com.ash.lake.LakeRuntime :: public boolean com.ash.lake.LakeRuntime.memoryOnly(java.lang.String)
 com.ash.lake.LakeRuntime :: public boolean com.ash.lake.LakeRuntime.supports(java.lang.String)
@@ -241,24 +239,6 @@ com.ash.lake.PersistedNames :: public static java.lang.String com.ash.lake.Persi
 com.ash.lake.PersistedNames :: public static java.lang.String com.ash.lake.PersistedNames.get(java.util.Map<java.lang.String, java.lang.String>,java.lang.String)
 com.ash.lake.PersistedNames :: public static java.lang.String com.ash.lake.PersistedNames.get(java.util.Map<java.lang.String, java.lang.String>,java.lang.String,java.lang.String)
 com.ash.lake.PersistedNames :: public static java.lang.String com.ash.lake.PersistedNames.key(java.lang.String)
-com.ash.lake.Placeholders :: public static boolean com.ash.lake.Placeholders.has(java.lang.String)
-com.ash.lake.Placeholders :: public static java.lang.String com.ash.lake.Placeholders.lookup(java.lang.String,java.util.function.Function<java.lang.String, java.lang.String>)
-com.ash.lake.Placeholders :: public static java.lang.String com.ash.lake.Placeholders.process(java.lang.String)
-com.ash.lake.Placeholders :: public static java.lang.String com.ash.lake.Placeholders.require(java.lang.String,java.util.function.Function<java.lang.String, java.lang.String>)
-com.ash.lake.Placeholders :: public static java.lang.String com.ash.lake.Placeholders.resolve(java.lang.String)
-com.ash.lake.Placeholders :: public static java.lang.String com.ash.lake.Placeholders.resolve(java.lang.String,java.util.function.Function<java.lang.String, java.lang.String>)
-com.ash.lake.Placeholders :: public static java.lang.String com.ash.lake.Placeholders.resolveOr(java.lang.String,java.util.function.Function<java.lang.String, java.lang.String>,java.lang.String)
-com.ash.lake.SettingsFile :: public static boolean com.ash.lake.SettingsFile.isSecret(java.lang.String)
-com.ash.lake.SettingsFile :: public static final java.lang.String com.ash.lake.SettingsFile.MASK
-com.ash.lake.SettingsFile :: public static final java.lang.String com.ash.lake.SettingsFile.PROPERTY
-com.ash.lake.SettingsFile :: public static java.lang.String com.ash.lake.SettingsFile.envName(java.lang.String)
-com.ash.lake.SettingsFile :: public static java.lang.String com.ash.lake.SettingsFile.shown(java.lang.String,java.lang.String)
-com.ash.lake.SettingsFile :: public static java.lang.String com.ash.lake.SettingsFile.sourceOf(java.lang.String)
-com.ash.lake.SettingsFile :: public static java.util.List<java.lang.String> com.ash.lake.SettingsFile.files(java.lang.String)
-com.ash.lake.SettingsFile :: public static java.util.List<java.lang.String> com.ash.lake.SettingsFile.filesRead()
-com.ash.lake.SettingsFile :: public static java.util.Map<java.lang.String, java.lang.String> com.ash.lake.SettingsFile.read(java.lang.String)
-com.ash.lake.SettingsFile :: public static java.util.Map<java.lang.String, java.lang.String> com.ash.lake.SettingsFile.sources()
-com.ash.lake.SettingsFile :: public static synchronized java.util.List<java.lang.String> com.ash.lake.SettingsFile.applyFromSystemProperty()
 com.ash.lake.config.ConnectorLake :: public static boolean com.ash.lake.config.ConnectorLake.lakeKey(java.lang.String)
 com.ash.lake.config.ConnectorLake :: public static boolean com.ash.lake.config.ConnectorLake.legacy(java.util.Map<java.lang.String, java.lang.String>)
 com.ash.lake.config.ConnectorLake :: public static final java.lang.String com.ash.lake.config.ConnectorLake.LAKE

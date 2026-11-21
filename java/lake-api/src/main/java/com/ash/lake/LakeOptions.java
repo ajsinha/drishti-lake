@@ -15,6 +15,7 @@
  */
 package com.ash.lake;
 
+import com.ash.tools.settings.SettingsFile;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -82,11 +83,18 @@ public final class LakeOptions {
     public static final String BUSINESS_ZONE = "lake.business.zone";
     /** The business zone when nothing names one. */
     public static final String DEFAULT_BUSINESS_ZONE = "America/New_York";
+    /**
+     * The settings files ({@code -Dlake.settings.file=/abs/base.ini[,/abs/secrets.ini]}): their entries become system properties
+     * ({@code SettingsFile.applyFrom(SETTINGS_FILE, HOME)}; a {@code -D} still wins).
+     */
+    public static final String SETTINGS_FILE = "lake.settings.file";
+    /** The environment variable that must be {@code true} before a connector's {@code tls.insecure-trust-all} is accepted. */
+    public static final String ALLOW_INSECURE_TLS = "LAKE_ALLOW_INSECURE_TLS";
 
     /** Every key above (a named lake's settings, {@code lake.<name>.*}, are not options). */
     private static final java.util.Set<String> KEYS = java.util.Set.of(HOME, CONFIG_DIR, DATA_DIR, CONNECTORS_DIR, LAKES_DIR, TMP_DIR,
             ROW_GROUP_KB, ROW_GROUP_MB, PAGE_KB, PAGE_INDEX, FOOTER_CACHE_MB, DELETE_CACHE_ROWS, MANIFEST_CACHE_BYTES, LOADER_TRACE,
-            ARCHIVE_MAX_MB, ARCHIVE_MAX_RATIO, ARCHIVE_MAX_MEMBERS, S3_ENDPOINT, S3_REGION, S3_PATH_STYLE, S3_READ_BLOCK_KB, BUSINESS_ZONE, "lake.settings.file", "lake.repo.root", "lake.module.root");
+            ARCHIVE_MAX_MB, ARCHIVE_MAX_RATIO, ARCHIVE_MAX_MEMBERS, S3_ENDPOINT, S3_REGION, S3_PATH_STYLE, S3_READ_BLOCK_KB, BUSINESS_ZONE, SETTINGS_FILE, "lake.repo.root", "lake.module.root");
 
     /** Whether a key is one of the product's options (not a named lake's setting). */
     public static boolean isOption(String key) {

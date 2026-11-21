@@ -57,13 +57,13 @@ public interface LakeStore extends AutoCloseable {
     default void close() {}
 
     /** The TLS material of the object store's endpoint ({@code tls.*}), or null: its certificates' expiry is shown in health. */
-    default com.ash.lake.io.net.TlsMaterial tls() {
+    default com.ash.tools.net.TlsMaterial tls() {
         return null;
     }
 
     /** The outbound proxy of the object store's endpoint ({@code proxy.*} or the site default); {@code none} for local disk. */
-    default com.ash.lake.io.net.ProxySettings proxy() {
-        return com.ash.lake.io.net.ProxySettings.none();
+    default com.ash.tools.net.ProxySettings proxy() {
+        return com.ash.tools.net.ProxySettings.none();
     }
 
     /**

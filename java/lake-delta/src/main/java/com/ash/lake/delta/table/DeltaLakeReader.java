@@ -102,7 +102,7 @@ public final class DeltaLakeReader implements LakeReader {
     @Override
     public LakeHealth health(Instant now) {
         List<String> notes = new ArrayList<>();
-        com.ash.lake.io.net.TlsMaterial tls = lake.tls();
+        com.ash.tools.net.TlsMaterial tls = lake.tls();
         if (tls != null && !tls.expiryNote(now).isEmpty()) {
             notes.add(tls.expiryNote(now));
         }

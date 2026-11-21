@@ -25,6 +25,10 @@
   <name>Drishti Lake: Iceberg tables on iceberg-core (native reader and writer), the table layer</name>
 
   <dependencies>
+    <dependency><groupId>com.ash.tools</groupId><artifactId>tools-net</artifactId></dependency>
+    <dependency><groupId>com.ash.tools</groupId><artifactId>tools-concurrent</artifactId></dependency>
+    <dependency><groupId>com.ash.tools</groupId><artifactId>tools-time</artifactId></dependency>
+    <dependency><groupId>com.ash.tools</groupId><artifactId>tools-testkit</artifactId><scope>test</scope></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-io</artifactId></dependency>
     <dependency><groupId>org.apache.iceberg</groupId><artifactId>iceberg-core</artifactId><version>${iceberg.version}</version></dependency>
     <dependency><groupId>org.apache.iceberg</groupId><artifactId>iceberg-aws</artifactId><version>${iceberg.version}</version></dependency>

@@ -18,8 +18,8 @@ package com.ash.lake.io;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.lake.io.net.TlsException;
-import com.ash.lake.tck.TlsFixture;
+import com.ash.tools.net.TlsException;
+import com.ash.tools.testkit.TlsFixture;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsParameters;
 import com.sun.net.httpserver.HttpsServer;
@@ -87,7 +87,7 @@ class S3StorageTlsTest {
     void aPrivateCaAndAClientCertificateReachTheEndpoint() throws Exception {
         assertThat(length(settings("localhost", pki.clientSettings()))).isEqualTo(11);
         assertThat(S3Settings.from(settings("localhost", pki.clientSettings())).tls().expiryNote(java.time.Instant.now()))
-                .contains("TLS certificate CN=drishti (tls.cert-file) expires in");
+                .contains("TLS certificate CN=client (tls.cert-file) expires in");
     }
 
     @Test

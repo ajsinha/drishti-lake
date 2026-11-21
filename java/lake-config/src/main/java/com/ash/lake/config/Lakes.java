@@ -522,8 +522,8 @@ public final class Lakes {
             if (raw == null) {
                 return null;
             }
-            try {   // the one resolver (com.ash.lake.Placeholders), through this reader's view
-                return com.ash.lake.Placeholders.require(raw, this::lookup);
+            try {   // the one resolver (com.ash.tools.settings.Placeholders), through this reader's view
+                return com.ash.tools.settings.Placeholders.require(raw, this::lookup);
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException(where + ": " + key + ": " + e.getMessage() + " (or give the reference a default: ${name:default})", e);
             }

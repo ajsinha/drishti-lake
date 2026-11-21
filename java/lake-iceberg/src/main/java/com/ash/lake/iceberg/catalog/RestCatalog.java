@@ -15,7 +15,7 @@
  */
 package com.ash.lake.iceberg.catalog;
 
-import com.ash.lake.io.net.ProxySettings;
+import com.ash.tools.net.ProxySettings;
 import com.ash.lake.iceberg.Table;
 import com.ash.lake.iceberg.io.DrishtiFileIO;
 import com.ash.lake.iceberg.io.FileAccess;

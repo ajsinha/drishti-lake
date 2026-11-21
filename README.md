@@ -55,6 +55,11 @@ Planned (design section 6): `lake-api` (the facade `LakeRuntime`, `Lake`, `LakeT
 cd java && ./mvnw clean verify      # JDK 21 or later; about two minutes, four test JVMs
 ```
 
+Drishti Tools (`com.ash.tools`: settings, TLS and proxy, single-flight, the load guard, test fixtures) comes in through `lake-bom`,
+version `drishti.tools.version`. Until its `v1.0.0` tag is installed, build it into a folder of your own
+(`./mvnw install -Dmaven.repo.local=DIR` in its `java/`) and point this build at it:
+`export MAVEN_ARGS="-Dmaven.repo.local=DIR -Dmaven.repo.local.tail=$HOME/.m2/repository"` (every `mvnw` the tools here start reads it).
+
 Every path a test writes is under the module's `target/`; Maven's own temporary files go to `java/build-tmp/` (ignored).
 
 ## Build and run in the IDE

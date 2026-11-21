@@ -81,12 +81,12 @@ record NamedTables(LakeStore lake, Map<String, String> names) implements LakeSto
     }
 
     @Override
-    public com.ash.lake.io.net.TlsMaterial tls() {
+    public com.ash.tools.net.TlsMaterial tls() {
         return lake.tls();
     }
 
     @Override
-    public com.ash.lake.io.net.ProxySettings proxy() {
+    public com.ash.tools.net.ProxySettings proxy() {
         return lake.proxy();
     }
 }

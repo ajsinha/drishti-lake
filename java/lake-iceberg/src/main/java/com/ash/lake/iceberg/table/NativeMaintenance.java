@@ -15,7 +15,7 @@
  */
 package com.ash.lake.iceberg.table;
 
-import com.ash.lake.common.LoadGuard;
+import com.ash.tools.time.LoadGuard;
 import com.ash.lake.common.RowRetention;
 import com.ash.lake.iceberg.Table;
 import com.ash.lake.iceberg.manifest.DataFile;

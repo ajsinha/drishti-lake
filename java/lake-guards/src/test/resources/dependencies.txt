@@ -61,3 +61,13 @@ lake-tck com.fasterxml.jackson.core:jackson-databind
 lake-tck org.junit.jupiter:junit-jupiter-api
 lake-tck software.amazon.awssdk:s3
 lake-tck com.adobe.testing:s3mock                   (optional: test support only; the S3 simulator, decided at L9)
+lake-config com.ash.tools:tools-settings
+lake-delta com.ash.tools:tools-net
+lake-iceberg com.ash.tools:tools-net
+lake-iceberg com.ash.tools:tools-concurrent
+lake-iceberg com.ash.tools:tools-time
+lake-io com.ash.tools:tools-settings
+lake-io com.ash.tools:tools-net
+lake-load com.ash.tools:tools-settings
+lake-tck com.ash.tools:tools-settings
+lake-api com.ash.tools:tools-settings

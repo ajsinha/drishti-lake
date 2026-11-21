@@ -5,6 +5,13 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **Drishti Tools adopted (G3)**: Lake's copies of the shared utilities are deleted (21 files: the 13 TLS and proxy classes of
+  `com.ash.lake.io.net`, `Placeholders`, `SettingsFile`, `SingleFlight`, `LoadGuard`, `FakeProxy`, `TlsFixture`, `TestPki`) and
+  `com.ash.tools.{settings,net,concurrent,time,testkit}` used instead, at one version through `lake-bom` (`drishti.tools.version`,
+  `tools-bom` imported). Public API changed on purpose before the tag: `com.ash.lake.Placeholders`/`SettingsFile` and
+  `LakeRoots.isAbsolute`/`anchorValue` are gone (`com.ash.tools.settings.PathAnchors` is the one path rule); `LakeOptions.SETTINGS_FILE`
+  (`lake.settings.file`, passed to `SettingsFile.applyFrom`) and `LakeOptions.ALLOW_INSECURE_TLS` (`LAKE_ALLOW_INSECURE_TLS`, passed
+  to `TlsContexts.build`) name Lake's own words. The test client certificate is `CN=client`.
 - **Read API: I2 and part of RA-S9**: Iceberg vector reads cut a date's files into row-group pieces for their decoding threads, as
   Delta's do (`ParquetRowReader`/`TaskReader` read a row-group range; positions stay the file's, so position deletes apply). Kit
   verbs `read-at`, `read-keep`, `read-vectors-of` and cases `read/as-of-version-and-time`, `keep-prunes-files`, `mapped-equals-heap`,

@@ -22,6 +22,10 @@
     <version>0.9.0-SNAPSHOT</version>
   </parent>
   <artifactId>lake-api</artifactId>
-  <name>Drishti Lake: the public options and settings (the JDK only)</name>
+  <name>Drishti Lake: the public options and settings (the JDK and Drishti Tools settings only)</name>
+
+  <dependencies>
+    <dependency><groupId>com.ash.tools</groupId><artifactId>tools-settings</artifactId></dependency>
+  </dependencies>
 
 </project>

@@ -84,12 +84,12 @@ record NativeLake(String base, NativeEngine engine, Storage storage) implements 
     }
 
     @Override
-    public com.ash.lake.io.net.TlsMaterial tls() {
+    public com.ash.tools.net.TlsMaterial tls() {
         return engine.tls();
     }
 
     @Override
-    public com.ash.lake.io.net.ProxySettings proxy() {
+    public com.ash.tools.net.ProxySettings proxy() {
         return engine.proxy();
     }
 }

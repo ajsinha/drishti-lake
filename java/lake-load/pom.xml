@@ -25,6 +25,7 @@
   <name>Drishti Lake: the loader, archives, retention, undo, relocate, and the inbox (.ready hand-over)</name>
 
   <dependencies>
+    <dependency><groupId>com.ash.tools</groupId><artifactId>tools-settings</artifactId></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-io</artifactId></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-files</artifactId></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-config</artifactId></dependency>
