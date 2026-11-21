@@ -15,8 +15,9 @@
  */
 package com.ash.lake.load;
 
-import com.ash.lake.load.TableTarget.FileOut;
-import com.ash.lake.load.TableTarget.WrittenFile;
+import com.ash.lake.spi.TableWriter;
+import com.ash.lake.spi.TableWriter.FileOut;
+import com.ash.lake.spi.TableWriter.WrittenFile;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -41,13 +42,13 @@ final class DateWriter {
     static volatile int failAfterFiles;
     private static final AtomicInteger FINISHED = new AtomicInteger();
 
-    private final TableTarget target;
+    private final TableWriter target;
     private final RowPlan plan;
     private final LoadConfig.Layout layout;
     private final int writers;
     private final Meter meter;
 
-    DateWriter(TableTarget target, RowPlan plan, LoadConfig.Layout layout, int writers, Meter meter) {
+    DateWriter(TableWriter target, RowPlan plan, LoadConfig.Layout layout, int writers, Meter meter) {
         this.target = target;
         this.plan = plan;
         this.layout = layout;

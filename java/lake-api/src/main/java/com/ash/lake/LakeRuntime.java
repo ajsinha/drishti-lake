@@ -18,6 +18,7 @@ package com.ash.lake;
 import com.ash.lake.spi.LakeCatalog;
 import com.ash.lake.spi.Storage;
 import com.ash.lake.spi.StorageProvider;
+import com.ash.lake.spi.TableStore;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -49,6 +50,7 @@ public final class LakeRuntime {
     private final Function<String, String> settings;
     private final Supplier<Collection<String>> settingNames;
     private final Map<String, StorageProvider> providers;
+    private final Map<String, TableStore> stores;
     private final LakeRoots roots;
     private final Map<Class<?>, Object> parts = new ConcurrentHashMap<>();
 
@@ -58,6 +60,7 @@ public final class LakeRuntime {
         this.settings = b.settings;
         this.settingNames = b.settingNames;
         this.providers = Map.copyOf(b.providers);
+        this.stores = Map.copyOf(b.stores);
         this.roots = new LakeRoots(options);
     }
 
@@ -107,6 +110,16 @@ public final class LakeRuntime {
     /** The registered storage providers, by scheme. */
     public Map<String, StorageProvider> providers() {
         return providers;
+    }
+
+    /** The registered table stores, by format. */
+    public Map<String, TableStore> stores() {
+        return stores;
+    }
+
+    /** The store registered here for {@code format} (lower case), if any. */
+    public Optional<TableStore> store(String format) {
+        return format == null ? Optional.empty() : Optional.ofNullable(stores.get(format.toLowerCase(Locale.ROOT)));
     }
 
     /** The provider of {@code path}'s scheme, if one is registered here. */
@@ -183,6 +196,7 @@ public final class LakeRuntime {
         private Function<String, String> settings = k -> null;
         private Supplier<Collection<String>> settingNames = List::of;
         private final Map<String, StorageProvider> providers = new TreeMap<>();
+        private final Map<String, TableStore> stores = new TreeMap<>();
 
         private Builder() {
         }
@@ -227,6 +241,19 @@ public final class LakeRuntime {
                 if (before != null) {
                     throw new IllegalArgumentException("two storage providers claim scheme " + scheme + "://: " + before.getClass().getName()
                             + " and " + p.getClass().getName());
+                }
+            }
+            return this;
+        }
+
+        /** Table stores for more formats, or a store of its own for a built-in one; one store per format. */
+        public Builder store(TableStore... more) {
+            for (TableStore t : more) {
+                String format = Objects.requireNonNull(t.format(), "format").toLowerCase(Locale.ROOT);
+                TableStore before = stores.putIfAbsent(format, t);
+                if (before != null) {
+                    throw new IllegalArgumentException("two table stores claim format " + format + ": " + before.getClass().getName() + " and "
+                            + t.getClass().getName());
                 }
             }
             return this;

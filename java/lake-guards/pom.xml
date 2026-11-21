@@ -22,7 +22,18 @@
     <version>0.9.0-SNAPSHOT</version>
   </parent>
   <artifactId>lake-guards</artifactId>
-  <name>Drishti Lake: the repository's guards (names no host, exemptions only shrink, header, file cap)</name>
+  <name>Drishti Lake: the repository's guards (names no host, exemptions only shrink, header, file cap, API surface)</name>
+
+  <properties>
+    <lake.api.surface.write>false</lake.api.surface.write>
+  </properties>
+
+  <dependencies>
+    <!-- test scope: the API surface guard loads the public packages' compiled classes -->
+    <dependency><groupId>com.ash.lake</groupId><artifactId>lake-api</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>com.ash.lake</groupId><artifactId>lake-config</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>com.ash.lake</groupId><artifactId>lake-load</artifactId><scope>test</scope></dependency>
+  </dependencies>
 
   <build>
     <plugins>
@@ -31,6 +42,7 @@
         <configuration>
           <systemPropertyVariables>
             <lake.repo.root>${maven.multiModuleProjectDirectory}/..</lake.repo.root>
+            <lake.api.surface.write>${lake.api.surface.write}</lake.api.surface.write>
           </systemPropertyVariables>
         </configuration>
       </plugin>

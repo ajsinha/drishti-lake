@@ -1,0 +1,214 @@
+/*
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
+ *
+ * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
+ * All rights reserved.
+ *
+ * PROPRIETARY AND CONFIDENTIAL.
+ *
+ * This file is the confidential and proprietary property of Ashutosh Sinha.
+ * Unauthorised copying, use, modification, distribution or disclosure of this
+ * file, via any medium, is strictly prohibited except with the express prior
+ * written permission of the copyright holder.
+ *
+ * See the LICENSE file in the root of this repository for the full terms.
+ */
+package com.ash.lake.load;
+
+import com.ash.lake.LakeRuntime;
+import com.ash.lake.iceberg.catalog.Catalog;
+import com.ash.lake.iceberg.catalog.Catalogs;
+import com.ash.lake.iceberg.expr.Expr;
+import com.ash.lake.iceberg.read.TaskReader;
+import com.ash.lake.iceberg.scan.FileTask;
+import com.ash.lake.iceberg.table.IcebergMaintenance;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Schema;
+import com.ash.lake.iceberg.types.Type;
+import com.ash.lake.spi.Capabilities;
+import com.ash.lake.spi.Column;
+import com.ash.lake.spi.ColumnType;
+import com.ash.lake.spi.Columns;
+import com.ash.lake.spi.DateChange;
+import com.ash.lake.spi.RowScan;
+import com.ash.lake.spi.ScanRequest;
+import com.ash.lake.spi.TableRef;
+import com.ash.lake.spi.TableStore;
+import com.ash.lake.spi.TableWriter;
+import com.ash.lake.spi.WriteSpec;
+import java.io.IOException;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * The Iceberg store: tables in the lake's layout ({@code <root>/<domain>/<table>}, partitioned by {@code business_date}), written by the
+ * loader through {@link IcebergTarget} and read through the product's Iceberg reader. Its types stay inside: the columns and rows are the
+ * product's.
+ */
+public final class IcebergStore implements TableStore {
+
+    public static final String FORMAT = "iceberg";
+
+    private IcebergStore() {
+    }
+
+    public static IcebergStore create() {
+        return new IcebergStore();
+    }
+
+    @Override
+    public String format() {
+        return FORMAT;
+    }
+
+    @Override
+    public Capabilities capabilities() {
+        return Capabilities.all();
+    }
+
+    private static Catalog catalog(LakeRuntime runtime, TableRef t) {
+        Map<String, String> s = new HashMap<>();
+        s.put("root", t.root());
+        s.put("domain", t.domain());
+        return Catalogs.open(runtime, s);
+    }
+
+    @Override
+    public boolean exists(LakeRuntime runtime, TableRef table) throws IOException {
+        try (Catalog c = catalog(runtime, table)) {
+            return c.load(table.table()).isPresent();
+        }
+    }
+
+    @Override
+    public Columns columns(LakeRuntime runtime, TableRef table) throws IOException {
+        try (Catalog c = catalog(runtime, table)) {
+            com.ash.lake.iceberg.Table t = c.load(table.table()).orElseThrow(() -> new IOException("no Iceberg table at " + table.location()));
+            return columns(t.metadata().schema());
+        }
+    }
+
+    static Columns columns(Schema schema) {
+        List<Column> out = new ArrayList<>();
+        for (NestedField f : schema.columns()) {
+            out.add(new Column(f.name(), type(f.type())));
+        }
+        return Columns.of(out);
+    }
+
+    static ColumnType type(Type t) {
+        return switch (t.id()) {
+            case STRING, UUID -> ColumnType.STRING;
+            case DOUBLE, FLOAT -> ColumnType.DOUBLE;
+            case LONG -> ColumnType.LONG;
+            case INT -> ColumnType.INT;
+            case BOOLEAN -> ColumnType.BOOLEAN;
+            case DATE -> ColumnType.DATE;
+            case TIMESTAMP, TIMESTAMPTZ -> ColumnType.TIMESTAMP;
+            case BINARY, FIXED -> ColumnType.BINARY;
+            case LIST -> {
+                Type e = ((Type.ListType) t).element();
+                yield e.id() == Type.Id.STRING ? ColumnType.STRING_LIST : e.id() == Type.Id.DOUBLE || e.id() == Type.Id.FLOAT ? ColumnType.DOUBLE_LIST
+                        : ColumnType.OTHER;
+            }
+            default -> ColumnType.OTHER;
+        };
+    }
+
+    @Override
+    public SortedMap<LocalDate, Long> dates(LakeRuntime runtime, TableRef table) throws IOException {
+        return StoreScans.dates(runtime, FORMAT, table);
+    }
+
+    @Override
+    public RowScan scan(LakeRuntime runtime, TableRef table, ScanRequest request) throws IOException {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try (Catalog c = catalog(runtime, table)) {
+            Optional<com.ash.lake.iceberg.Table> found = c.load(table.table());
+            if (found.isEmpty()) {
+                return RowScan.of(Columns.of(List.of()), List.of());
+            }
+            com.ash.lake.iceberg.Table t = found.get();
+            Schema schema = t.metadata().schema();
+            Columns cols = columns(schema);
+            StoreScans rows = new StoreScans(cols, request);
+            if (t.currentSnapshot().isEmpty()) {
+                return RowScan.of(rows.columns(), List.of());
+            }
+            List<Integer> ids = schema.columns().stream().map(NestedField::id).toList();
+            for (FileTask task : t.plan(t.currentSnapshot().orElseThrow(), Expr.TRUE, pool)) {
+                try (TaskReader r = t.rows(task, schema, ids, Expr.TRUE, false)) {
+                    while (r.hasNext()) {
+                        Object[] v = r.next();
+                        Object[] out = new Object[v.length];
+                        for (int i = 0; i < v.length; i++) {
+                            out[i] = cols.get(i).type() == ColumnType.DATE && v[i] instanceof Number n ? LocalDate.ofEpochDay(n.longValue()) : plain(v[i]);
+                        }
+                        rows.add(out);
+                    }
+                }
+            }
+            return RowScan.of(rows.columns(), rows.rows());
+        } catch (IOException | RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException(table.location() + ": " + e.getMessage(), e);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private static Object plain(Object v) {
+        if (v instanceof List<?> l) {
+            List<Object> out = new ArrayList<>(l.size());
+            l.forEach(x -> out.add(plain(x)));
+            return out;
+        }
+        if (v instanceof CharSequence cs) {
+            return cs.toString();
+        }
+        if (v instanceof java.nio.ByteBuffer b) {
+            byte[] out = new byte[b.remaining()];
+            b.duplicate().get(out);
+            return out;
+        }
+        return v;
+    }
+
+    @Override
+    public TableWriter writer(WriteSpec spec) {
+        return new IcebergTarget(spec);
+    }
+
+    @Override
+    public List<DateChange> deleteDates(LakeRuntime runtime, TableRef table, Set<LocalDate> dates, boolean dryRun) throws IOException {
+        return StoreScans.delete(runtime, FORMAT, table, dates, dryRun);
+    }
+
+    @Override
+    public List<DateChange> undo(LakeRuntime runtime, TableRef table, String loadId, boolean dryRun) throws IOException {
+        List<Map<String, Object>> lines;
+        try {
+            lines = IcebergMaintenance.undoTable(runtime, table.root(), table.domain(), table.table(), loadId, dryRun,
+                    com.ash.lake.common.TempFiles.of(runtime).subDir("iceberg-undo"));
+        } catch (IOException | RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException(table.location() + ": " + e.getMessage(), e);
+        }
+        List<DateChange> out = new ArrayList<>();
+        for (Map<String, Object> l : lines) {
+            out.add(new DateChange(LocalDate.parse(String.valueOf(l.get("date"))), ((Number) l.get("removed")).longValue(),
+                    ((Number) l.get("restored")).longValue(), -1));
+        }
+        return out;
+    }
+}

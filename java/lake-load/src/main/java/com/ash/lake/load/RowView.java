@@ -22,7 +22,7 @@ import java.util.Arrays;
  * One row record ({@link RowPlan}) read in place: the offsets of its fields are found once, the values are copied out only as a writer
  * asks for them. Reused row after row by one writer thread.
  */
-final class RowView {
+final class RowView implements com.ash.lake.spi.LoadRow {
 
     private final RowPlan plan;
     private byte[] a;
@@ -101,7 +101,8 @@ final class RowView {
         return keyLen;
     }
 
-    byte[] id() {
+    @Override
+    public byte[] id() {
         return Arrays.copyOfRange(a, idOff, idOff + idLen);
     }
 
@@ -109,32 +110,38 @@ final class RowView {
         return new String(a, idOff, idLen, StandardCharsets.UTF_8);
     }
 
-    byte[] doc() {
+    @Override
+    public byte[] doc() {
         return Arrays.copyOfRange(a, docOff, docOff + docLen);
     }
 
-    byte tag(int i) {
+    @Override
+    public byte tag(int i) {
         return a[prom[i]];
     }
 
-    double num(int i) {
+    @Override
+    public double num(int i) {
         return Bytes.getDouble(a, prom[i] + 1);
     }
 
     /** A number's text as Python writes it (lake build's text for a number in a text column). */
-    byte[] numText(int i) {
+    @Override
+    public byte[] numText(int i) {
         int len = Bytes.getInt(a, prom[i] + 9);
         return Arrays.copyOfRange(a, prom[i] + 13, prom[i] + 13 + len);
     }
 
     /** A text or JSON value's UTF-8 bytes. */
-    byte[] text(int i) {
+    @Override
+    public byte[] text(int i) {
         int len = Bytes.getInt(a, prom[i] + 1);
         return Arrays.copyOfRange(a, prom[i] + 5, prom[i] + 5 + len);
     }
 
     /** Partition value {@code j}, or null. */
-    String partition(int j) {
+    @Override
+    public String partition(int j) {
         int p = part[j];
         if (a[p] == RowPlan.NULL) {
             return null;
@@ -143,7 +150,8 @@ final class RowView {
     }
 
     /** Vector {@code k} (a null element is NaN), or null when the row has none. */
-    double[] vector(int k) {
+    @Override
+    public double[] vector(int k) {
         int p = vec[k];
         int n = Bytes.getInt(a, p);
         if (n < 0) {
@@ -154,6 +162,25 @@ final class RowView {
             out[i] = Bytes.getDouble(a, p + 4 + i * 8);
         }
         return out;
+    }
+
+    @Override
+    public byte[] key() {
+        return Arrays.copyOfRange(a, keyOff, keyOff + keyLen);
+    }
+
+    @Override
+    public byte[] loadId() {
+        return at(plan.loadIds, split());
+    }
+
+    @Override
+    public byte[] sourceFile() {
+        return at(plan.sourceFiles, split());
+    }
+
+    private static byte[] at(byte[][] values, int split) {
+        return split >= 0 && split < values.length ? values[split] : null;
     }
 
     int partitions() {

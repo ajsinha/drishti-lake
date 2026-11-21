@@ -91,7 +91,7 @@ public final class IcebergMaintenance {
             try (LayoutLake view = LayoutLake.of(runtime, ns)) {
                 for (String kind : view.kinds()) {
                     com.ash.lake.iceberg.Table t = ((LayoutLake.Native.Kind) view.load(kind).orElseThrow()).t();
-                    for (Map<String, Object> line : NativeMaintenance.undo(t, id, spillDir, 256L << 20, dryRun)) {
+                    for (Map<String, Object> line : undoOne(t, id, dryRun, spillDir)) {
                         Map<String, Object> m = new java.util.LinkedHashMap<>();
                         m.put("table", d.getFileName() + "/" + kind);
                         m.putAll(line);
@@ -101,6 +101,25 @@ public final class IcebergMaintenance {
             }
         }
         return out;
+    }
+
+    /**
+     * Undoes load {@code id} in the one Iceberg table {@code domain/kind} of the lake at {@code root}: a line per date undone ({@code date},
+     * {@code removed}, {@code restored}, {@code replaced}); none when the table is absent.
+     */
+    public static List<Map<String, Object>> undoTable(com.ash.lake.LakeRuntime runtime, String root, String domain, String kind, String id,
+            boolean dryRun, Path spillDir) throws Exception {
+        try (LayoutLake view = LayoutLake.of(runtime, new HashMap<>(Map.of("root", root, "domain", domain, "engine", "native")))) {
+            var table = view.load(kind);
+            if (table.isEmpty()) {
+                return List.of();
+            }
+            return undoOne(((LayoutLake.Native.Kind) table.get()).t(), id, dryRun, spillDir);
+        }
+    }
+
+    private static List<Map<String, Object>> undoOne(com.ash.lake.iceberg.Table t, String id, boolean dryRun, Path spillDir) {
+        return NativeMaintenance.undo(t, id, spillDir, 256L << 20, dryRun);
     }
 
     /**

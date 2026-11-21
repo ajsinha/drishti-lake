@@ -19,6 +19,10 @@ import com.ash.lake.iceberg.types.NestedField;
 import com.ash.lake.iceberg.types.Schema;
 import com.ash.lake.iceberg.types.Type;
 import com.ash.lake.iceberg.write.ParquetDataWriter;
+import com.ash.lake.spi.LoadRow;
+import com.ash.lake.spi.TableWriter;
+import com.ash.lake.spi.TableWriter.WrittenFile;
+import com.ash.lake.spi.WriteSpec;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -29,23 +33,12 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Where a load's rows go: a Delta table ({@link DeltaTarget}) or an Iceberg table ({@link IcebergTarget}), in the layout the connectors
- * read. Files are written by many threads at once ({@link #newFile}); {@link #commit} makes one date's files that date's data in ONE
- * commit that also takes the date's earlier files out, so a reader sees the old date or the new one, never a mix, and a load that stops
- * before its commit leaves the table as it was.
+ * The rules the loader's built-in writers share ({@link DeltaTarget}, {@link IcebergTarget}): a shared table's slice, the value a file
+ * column takes from a {@link LoadRow}, the Parquet writer's options, and a {@link TableWriter.FileOut} over the Parquet writer.
  */
-interface TableTarget extends AutoCloseable {
+final class TargetRules {
 
-    /**
-     * The columns a load has: per promoted column whether every value was a number, whether any value was seen, and whether every value
-     * was a list of simple values ({@code list}: an {@code array<string>} column, DATA_LAKE_GUIDE.md section 2.4).
-     */
-    record Columns(List<String> promoted, boolean[] numeric, boolean[] seen, boolean[] list) {
-
-        /** Columns without list columns. */
-        Columns(List<String> promoted, boolean[] numeric, boolean[] seen) {
-            this(promoted, numeric, seen, new boolean[promoted.size()]);
-        }
+    private TargetRules() {
     }
 
     /**
@@ -77,51 +70,6 @@ interface TableTarget extends AutoCloseable {
         return true;
     }
 
-    /** Creates the table or checks it, and adds the columns it lacks (Iceberg) or reports them left out (Delta). */
-    void open(Columns columns) throws IOException;
-
-    /** Starts a business date (Delta: its transaction). */
-    void begin(LocalDate date) throws IOException;
-
-    /** A new data file for rows of {@code date} with the given partition values (Delta partitions; none for Iceberg). */
-    FileOut newFile(LocalDate date, String[] partitionValues, String name) throws IOException;
-
-    /**
-     * Commits the date in one commit: with load-mode replace (the default) its files replace the date's earlier files; with append they
-     * are added, and the load's batch id is recorded in the commit (Delta: a transaction id per batch and date; Iceberg: the snapshot's
-     * summary). Returns the table's version (or snapshot id).
-     */
-    long commit(LocalDate date, List<WrittenFile> files) throws IOException;
-
-    /**
-     * Whether an append of this load's batch was committed for {@code date} already (a repeated file, a crash and retry): the loader
-     * then skips the date, so a batch is never appended twice. Always false for a replace load, which is repeatable as it is.
-     */
-    boolean appended(LocalDate date) throws IOException;
-
-    /** The table's columns as written ({@code name: string|double|date|vector}). */
-    Map<String, String> columnTypes();
-
-    /** Columns of the load the existing table does not have (Delta keeps its schema: they are not written). */
-    List<String> leftOut();
-
-    @Override
-    void close();
-
-    /** A file being written by one thread. */
-    interface FileOut {
-        void write(RowView row) throws IOException;
-
-        /** The bytes written so far and buffered (to cut files by size). */
-        long length();
-
-        /** Finishes the file (uploads its last part on S3). */
-        WrittenFile finish() throws IOException;
-    }
-
-    /** A finished data file: where, its rows and bytes, the target's own description of it, its partition and its first and last keys. */
-    record WrittenFile(String path, long rows, long bytes, Object handle, String[] partition, List<Object> first, List<Object> last) {}
-
     // ------------------------------------------------------------------------------------------------ the shared column rules
 
     /** Where a file column's value comes from: the id, the document, the date, a promoted value, a partition value or a vector. */
@@ -132,7 +80,7 @@ interface TableTarget extends AutoCloseable {
      * ({@code icebergRules}: the Iceberg loader's, where a whole number reads {@code 42}); into a number column, a number (text that
      * reads as one, else null).
      */
-    static Object value(RowView r, Source src, int epochDay, boolean icebergRules) {
+    static Object value(LoadRow r, Source src, int epochDay, boolean icebergRules) {
         return switch (src.kind()) {
             case 'i' -> r.id();
             case 'd' -> r.doc();
@@ -146,23 +94,20 @@ interface TableTarget extends AutoCloseable {
             }
             case 'v' -> r.vector(src.index());
             case 'c' -> promoted(r, src.index(), src.type(), icebergRules);
-            case 'l' -> at(r.plan().loadIds, r.split());
-            case 's' -> at(r.plan().sourceFiles, r.split());
+            case 'l' -> r.loadId();
+            case 's' -> r.sourceFile();
             default -> null;
         };
     }
 
-    private static byte[] at(byte[][] values, int split) {
-        return split >= 0 && split < values.length ? values[split] : null;
-    }
 
-    private static Object promoted(RowView r, int i, Type type, boolean icebergRules) {
+    private static Object promoted(LoadRow r, int i, Type type, boolean icebergRules) {
         byte tag = r.tag(i);
-        if (tag == RowPlan.NULL) {
+        if (tag == LoadRow.NULL) {
             return null;
         }
         if (type.id() == Type.Id.DOUBLE) {
-            if (tag == RowPlan.NUM) {
+            if (tag == LoadRow.NUM) {
                 return r.num(i);
             }
             try {
@@ -174,7 +119,7 @@ interface TableTarget extends AutoCloseable {
         if (type.id() == Type.Id.LIST) {
             return listValue(r, i, tag, (Type.ListType) type);
         }
-        if (tag == RowPlan.NUM) {
+        if (tag == LoadRow.NUM) {
             if (icebergRules) {
                 double d = r.num(i);
                 return (d == Math.rint(d) && !Double.isInfinite(d) && Math.abs(d) < 1e15 ? String.valueOf((long) d) : String.valueOf(d))
@@ -190,15 +135,15 @@ interface TableTarget extends AutoCloseable {
      * plain text), a single value as a list of one. A list of numbers into a vector column ({@code list<double>}) the load keeps as a
      * promoted field: none, as before.
      */
-    private static Object listValue(RowView r, int i, byte tag, Type.ListType type) {
+    private static Object listValue(LoadRow r, int i, byte tag, Type.ListType type) {
         if (!(type.element() instanceof Type.Primitive p) || p.id() != Type.Id.STRING) {
             return null;
         }
-        if (tag == RowPlan.NUM) {
+        if (tag == LoadRow.NUM) {
             return List.of(r.numText(i));
         }
         String text = new String(r.text(i), StandardCharsets.UTF_8);
-        if (tag == RowPlan.STR) {
+        if (tag == LoadRow.STR) {
             return List.of(r.text(i));
         }
         List<String> values = com.ash.lake.rows.ListValues.of(text);
@@ -213,7 +158,7 @@ interface TableTarget extends AutoCloseable {
     }
 
     /** The Parquet writer's options for a load: the codec, row groups, and the vector columns' encoding. */
-    static Map<String, String> writerOptions(Map<String, String> base, LoadConfig.Layout layout, String defaultCodec, List<String> vectorColumns) {
+    static Map<String, String> writerOptions(Map<String, String> base, WriteSpec.FileLayout layout, String defaultCodec, List<String> vectorColumns) {
         Map<String, String> p = new LinkedHashMap<>(base);
         String codec = layout.compression().equals("auto") ? defaultCodec : layout.compression();
         p.put("write.parquet.compression-codec", codec.toLowerCase(Locale.ROOT));
@@ -237,8 +182,8 @@ interface TableTarget extends AutoCloseable {
         return p;
     }
 
-    /** A {@link FileOut} over a {@link ParquetDataWriter} whose columns come from {@code sources}. */
-    final class ParquetOut implements FileOut {
+    /** A {@link TableWriter.FileOut} over a {@link ParquetDataWriter} whose columns come from {@code sources}. */
+    static final class ParquetOut implements TableWriter.FileOut {
         private final ParquetDataWriter w;
         private final Source[] sources;
         private final int epochDay;
@@ -264,12 +209,12 @@ interface TableTarget extends AutoCloseable {
         }
 
         @Override
-        public void write(RowView r) throws IOException {
+        public void write(LoadRow r) throws IOException {
             for (int i = 0; i < sources.length; i++) {
                 row[i] = sources[i] == null ? null : value(r, sources[i], epochDay, icebergRules);
             }
             w.write(row);
-            byte[] k = java.util.Arrays.copyOfRange(r.buf(), r.keyOff(), r.keyOff() + r.keyLen());
+            byte[] k = r.key();
             if (firstKey == null) {
                 firstKey = k;
             }
@@ -292,17 +237,17 @@ interface TableTarget extends AutoCloseable {
     }
 
     /** The file-column sources for {@code schema}'s columns by name. */
-    static Source[] sources(Schema schema, RowPlan plan) {
+    static Source[] sources(Schema schema, WriteSpec spec) {
         List<NestedField> cols = schema.columns();
         Source[] out = new Source[cols.size()];
         for (int i = 0; i < cols.size(); i++) {
             NestedField f = cols.get(i);
-            out[i] = source(f.name(), f.type(), plan);
+            out[i] = source(f.name(), f.type(), spec);
         }
         return out;
     }
 
-    private static Source source(String name, Type type, RowPlan plan) {
+    private static Source source(String name, Type type, WriteSpec spec) {
         switch (name) {
             case "id":
                 return new Source('i', 0, type);
@@ -317,18 +262,18 @@ interface TableTarget extends AutoCloseable {
             default:
                 break;
         }
-        for (int k = 0; k < plan.vectors.size(); k++) {
-            if (plan.vectors.get(k).column().equals(name) && type.id() == Type.Id.LIST) {
+        for (int k = 0; k < spec.vectors().size(); k++) {
+            if (spec.vectors().get(k).equals(name) && type.id() == Type.Id.LIST) {
                 return new Source('v', k, type);
             }
         }
-        for (int j = 0; j < plan.partition.size(); j++) {
-            if (RowPlan.column(plan.partition.get(j)).equals(name)) {
+        for (int j = 0; j < spec.partition().size(); j++) {
+            if (spec.partition().get(j).equals(name)) {
                 return new Source('p', j, type);
             }
         }
-        for (int c = 0; c < plan.promoted.size(); c++) {
-            if (plan.promoted.get(c).column().equals(name)) {
+        for (int c = 0; c < spec.promoted().size(); c++) {
+            if (spec.promoted().get(c).equals(name)) {
                 return new Source('c', c, type);
             }
         }

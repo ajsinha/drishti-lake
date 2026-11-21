@@ -34,10 +34,10 @@ import java.util.regex.Pattern;
  */
 final class RowPlan {
 
-    static final byte NULL = 0;
-    static final byte NUM = 1;
-    static final byte STR = 2;
-    static final byte JSON = 3;
+    static final byte NULL = com.ash.lake.spi.LoadRow.NULL;
+    static final byte NUM = com.ash.lake.spi.LoadRow.NUM;
+    static final byte STR = com.ash.lake.spi.LoadRow.STR;
+    static final byte JSON = com.ash.lake.spi.LoadRow.JSON;
 
     /** A promoted field: its document path, its column name ({@code counterparty.id} is {@code counterparty__id}), whether it is an id field. */
     record Promoted(String path, String column, boolean idField) {}

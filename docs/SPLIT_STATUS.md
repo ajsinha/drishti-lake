@@ -15,7 +15,7 @@ retired from Drishti in G4, so `LakeStore` comes here with the native path only 
 | L4 | own settings and errors | **done** | part 1: `LakeException`/`LK-` codes, TLS and proxy records in `com.ash.lake.io.net`; part 2: `ChannelIo`, `SingleFlight`, `LoadGuard` in `com.ash.lake.common`; part 3: `LakeOptions` (`lake-api`), `LakeRoots`, `Placeholders`, `SettingsFile`, `RowFeed` own, `StartOnFewCoresTest` moved (one carrier, eight loads) (hostcompat 41 → 18, host-word files 79 → 73); kit 30/30 equal each time |
 | L5 | configuration divided | **done** | `LakeCatalog` SPI (`com.ash.lake.spi`, in `lake-api`); named lake settings the product's own (`NamedLakeSettings`); the 12 pack and module types of hostcompat gone (41 → 6), `lake-config` no longer needs hostcompat; one parked check returned (2 → 1); every lake file of the host's `config/lakes` and `config/lakes.examples` reads to the same model as the reference (`tools/split/lake_models.py`: 15 of 15, the host's shipped lakes now its catalog's); kit 30/30 |
 | L6 | per-instance runtime | **done** | `LakeRuntime` replaces `LakeOptions.current()`, `LakeCatalog.current()`, `StorageProviders` (`ServiceLoader`), `Lakes.useProperties`, `NamedLakeSettings.useView` and the static caches; no static registry, `ServiceLoader` or hidden system-property read left in main code; `TwoRuntimesTest`; `StartOnFewCoresTest` green; kit 30/30 |
-| L7 | table layer | **parts 1 and 2 done** | `LakeCheck` (now `lake-load`) and `LakeUndo` read Delta through the Kernel (snapshot, commit range) and Iceberg through iceberg-core: official-libraries list empty; hostcompat 6 → 0 (`com.ash.lake.rows`, module gone); persisted names written `lake.*`, read both; TCK 15 → 16 cases, kit 32/32. part 2: `LakeStore`, `NativeLake`, `NamedTables`, `NewTables` moved with history, native path only (`engine: hadoop` refused, LK-9), `LakeStoreTest`; Hadoop on the class path reviewed (until L12). Part 3 open: the `TableStore` SPI over `TableTarget` and the readers, no library type in a public signature, the API surface dump reviewed |
+| L7 | table layer | **done** | `LakeCheck` (now `lake-load`) and `LakeUndo` read Delta through the Kernel (snapshot, commit range) and Iceberg through iceberg-core: official-libraries list empty; hostcompat 6 → 0 (`com.ash.lake.rows`, module gone); persisted names written `lake.*`, read both; TCK 15 → 16 cases, kit 32/32. part 2: `LakeStore`, `NativeLake`, `NamedTables`, `NewTables` moved with history, native path only (`engine: hadoop` refused, LK-9), `LakeStoreTest`; Hadoop on the class path reviewed (until L12). part 3: the `TableStore` SPI (`com.ash.lake.spi`, product types only), the loader writes through `Stores.of(runtime, format)`; `java/api-surface.txt` + `ApiSurfaceTest` (no library type in a public signature; any API change rewrites the file in the same commit) |
 | L8 to L14 | stores, TCK, Python, contracts, API, docs, release | not started | |
 
 ## What the move left for later (each listed with its step)
@@ -43,9 +43,7 @@ runtime to every call (`LakeLoad.run(runtime, ..)`, `DataLoadSettings`, `Catalog
 
 ## Next steps
 
-1. **L7 part 3, then L8** as the design orders them (the `TableStore` SPI over `TableTarget` and the readers, no Kernel or Iceberg
-   type in a public signature, the API surface dump reviewed; then files store and memory lake with their own allow-lists); then L9
-   to L14.
+1. **L8**: the files store as a `TableStore` (`lake-files`) and the memory lake (`lake-memory`, `RowSource`); then L9 to L14.
 2. The parity kit grows toward the 60% harvest as each step goes (child tables, list columns, promoted columns, flatten, latest-by,
    `.ready`, relocate, maintenance).
 3. The owner names when `v0.9.0` may be tagged.

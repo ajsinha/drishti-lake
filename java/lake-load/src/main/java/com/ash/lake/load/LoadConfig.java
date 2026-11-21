@@ -322,7 +322,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
             return src;
         }
         List<String> columns = (format.equals("iceberg") ? src.promote() : src.partitionBy()).stream().map(RowPlan::column).toList();
-        Map<String, String> slice = TableTarget.slice(src.set(), columns);
+        Map<String, String> slice = TargetRules.slice(src.set(), columns);
         if (slice.isEmpty() && !LakeTable.APPEND.equals(loadMode)) {
             throw new IllegalArgumentException("the table of connector " + connector + " is shared by " + String.join(", ", sharing.stream().sorted().toList())
                     + ": a replace would take out the other connectors' rows of the date; split it by the connector's set: column "

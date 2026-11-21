@@ -121,7 +121,7 @@ class ModuleRulesTest {
         assertTrue(stale.isEmpty(), "listed in official-libraries.txt but clean now (remove the line): " + stale);
     }
 
-    /** Report mode until L12: public types per package and library types in public signatures. */
+    /** Report mode until L12: public types per package and library types named in public lines (the public packages: ApiSurfaceTest). */
     @Test
     void reportThePublicSurface() throws IOException {
         Pattern type = Pattern.compile("(?m)^public (?:final |abstract |sealed |non-sealed )*(class|interface|record|enum|@interface) (\\w+)");
@@ -147,7 +147,7 @@ class ModuleRulesTest {
                 leaks++;
             }
         }
-        out.add(0, "# public types: " + types + "; library types in public signatures (fails from L7): " + leaks);
+        out.add(0, "# public types: " + types + "; library types named in public lines of the internal packages (the public packages: ApiSurfaceTest fails on one; the module boundary closes the rest at L12): " + leaks);
         write("public-surface.txt", out);
     }
 

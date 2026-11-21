@@ -18,7 +18,7 @@ package com.ash.lake.load;
 import com.ash.lake.common.FileDates;
 import com.ash.lake.load.Inputs.InputFile;
 import com.ash.lake.load.Inputs.Split;
-import com.ash.lake.load.TableTarget.WrittenFile;
+import com.ash.lake.spi.TableWriter.WrittenFile;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;

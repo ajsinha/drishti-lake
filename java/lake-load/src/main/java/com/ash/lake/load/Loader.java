@@ -22,7 +22,9 @@ import com.ash.lake.io.S3Settings;
 import com.ash.lake.load.Inputs.InputFile;
 import com.ash.lake.load.Inputs.Split;
 import com.ash.lake.load.SourceReader.Chunk;
-import com.ash.lake.load.TableTarget.WrittenFile;
+import com.ash.lake.spi.TableWriter;
+import com.ash.lake.spi.TableWriter.WrittenFile;
+import com.ash.lake.spi.WriteSpec;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,7 +56,7 @@ import java.util.stream.Stream;
  *       runs when their share of {@code sort-buffer-mb} is full ({@link ParseWorker}, {@link Runs});</li>
  *   <li><b>write</b>: per business date, {@code writers} threads each merge one key range of the runs and write Parquet files
  *       ({@link DateWriter});</li>
- *   <li><b>commit</b>: ONE commit per business date, by this thread alone ({@link TableTarget#commit}): the date's new files in, its
+ *   <li><b>commit</b>: ONE commit per business date, by this thread alone ({@link TableWriter#commit}): the date's new files in, its
  *       earlier files out. A load that fails or is stopped before a date's commit leaves that date as it was.</li>
  * </ol>
  *
@@ -371,8 +373,8 @@ final class Loader {
         List<String> promoted = plan.promoted.stream().map(RowPlan.Promoted::column).toList();
         Meter write = meter("write", cfg.parallel().writers());
         Meter commit = meter("commit", 1);
-        try (TableTarget target = cfg.target().isIceberg() ? new IcebergTarget(cfg, plan) : new DeltaTarget(cfg, plan)) {
-            target.open(new TableTarget.Columns(promoted, numeric, seen, list));
+        try (TableWriter target = Stores.of(cfg.runtime(), cfg.target().format()).writer(writeSpec(cfg, plan))) {
+            target.open(new TableWriter.LoadColumns(promoted, numeric, seen, list));
             report.columns(target.columnTypes(), target.leftOut());
             DateWriter dw = new DateWriter(target, plan, cfg.target().layout(), cfg.parallel().writers(), write);
             ExecutorService pool = Executors.newFixedThreadPool(cfg.parallel().writers(), named("lakeload-write"));
@@ -455,6 +457,22 @@ final class Loader {
         String d = cfg.memory().spillDir();
         Path base = d != null ? Path.of(d) : Path.of(System.getProperty("java.io.tmpdir"));
         return base.resolve("drishti-lakeload-" + ProcessHandle.current().pid() + "-" + System.nanoTime());
+    }
+
+    /** What the table's store needs to write this load: the target, its layout and the row plan's columns, in the product's terms. */
+    static WriteSpec writeSpec(LoadConfig cfg, RowPlan plan) {
+        LoadConfig.Target t = cfg.target();
+        String[] dt = cfg.domainAndTable();
+        List<String> ids = new ArrayList<>();
+        for (byte[] b : plan.loadIds) {
+            ids.add(new String(b, java.nio.charset.StandardCharsets.UTF_8));
+        }
+        LoadConfig.Layout l = t.layout();
+        return new WriteSpec(cfg.runtime(), t.format(), cfg.tablePath(), cfg.lakeRoot(), dt[0], dt[1], t.storage(), t.iceberg(), t.properties(),
+                t.appends(), t.batchId(), cfg.source().slice(), plan.partition.stream().map(RowPlan::column).toList(),
+                plan.promoted.stream().map(RowPlan.Promoted::column).toList(), plan.vectors.stream().map(RowPlan.Vector::column).toList(),
+                plan.sortNames, plan.sortedById(), RowPlan.loadColumns, ids,
+                new WriteSpec.FileLayout(l.compression(), l.rowGroupBytes(), l.vectorCompression(), l.byteStreamSplit()));
     }
 
     /**

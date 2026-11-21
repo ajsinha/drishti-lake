@@ -25,6 +25,10 @@ import com.ash.lake.iceberg.types.Values;
 import com.ash.lake.iceberg.write.ParquetDataWriter;
 import com.ash.lake.io.LocalPaths;
 import com.ash.lake.io.S3Settings;
+import com.ash.lake.load.TargetRules.ParquetOut;
+import com.ash.lake.load.TargetRules.Source;
+import com.ash.lake.spi.TableWriter;
+import com.ash.lake.spi.WriteSpec;
 import io.delta.kernel.DataWriteContext;
 import io.delta.kernel.Operation;
 import io.delta.kernel.Snapshot;
@@ -80,7 +84,7 @@ import java.util.Optional;
  * columns added at the end in one metadata commit ({@link #withLoadColumns}); its files are not rewritten, their rows read them as null
  * (the oldest load).
  */
-final class DeltaTarget implements TableTarget {
+final class DeltaTarget implements TableWriter {
 
     static final String ENGINE_INFO = "Drishti Lake parallel loader";   // the commits' engineInfo (lake undo's too)
     /** The writer's row groups and pages: as {@link LakeWriter} (lake.parquet.row-group-kb, 256; lake.parquet.page-kb, 64), the runtime's. */
@@ -88,8 +92,7 @@ final class DeltaTarget implements TableTarget {
     private final long page;
 
     private final String path;
-    private final LoadConfig cfg;
-    private final RowPlan plan;
+    private final WriteSpec spec;
     private final Engine engine;
     private final FileAccess io;
     private final Table table;
@@ -104,15 +107,14 @@ final class DeltaTarget implements TableTarget {
     private Row state;
     private final Map<List<String>, DataWriteContext> contexts = new HashMap<>();
 
-    DeltaTarget(LoadConfig cfg, RowPlan plan) throws IOException {
-        this.cfg = cfg;
-        this.plan = plan;
-        this.path = cfg.tablePath();
-        Map<String, String> s3 = cfg.target().storage();
-        this.rowGroup = cfg.runtime().options().rowGroupBytes();
-        this.page = cfg.runtime().options().pageBytes();
-        this.engine = LakeWriter.engineFor(cfg.runtime(), path, s3);
-        this.io = new FileAccess(cfg.runtime(), S3Settings.from(s3), com.ash.lake.iceberg.io.Relocation.none(), null);
+    DeltaTarget(WriteSpec spec) throws IOException {
+        this.spec = spec;
+        this.path = spec.path();
+        Map<String, String> s3 = spec.storage();
+        this.rowGroup = spec.runtime().options().rowGroupBytes();
+        this.page = spec.runtime().options().pageBytes();
+        this.engine = LakeWriter.engineFor(spec.runtime(), path, s3);
+        this.io = new FileAccess(spec.runtime(), S3Settings.from(s3), com.ash.lake.iceberg.io.Relocation.none(), null);
         if (LocalPaths.isLocal(path)) {
             Files.createDirectories(Path.of(LocalPaths.toLocal(path, LocalPaths.WINDOWS)));
         }
@@ -120,23 +122,23 @@ final class DeltaTarget implements TableTarget {
     }
 
     @Override
-    public void open(Columns c) throws IOException {
+    public void open(LoadColumns c) throws IOException {
         List<String> parts = new ArrayList<>();
         parts.add("business_date");
-        plan.partition.forEach(p -> parts.add(RowPlan.column(p)));
+        parts.addAll(spec.partition());
         before = snapshot();
         StructType wanted = new StructType().add("id", StringType.STRING, true).add("doc", StringType.STRING, true).add("business_date", DateType.DATE, true);
-        for (String p : plan.partition) {
-            wanted = wanted.add(RowPlan.column(p), StringType.STRING, true);
+        for (String p : spec.partition()) {
+            wanted = wanted.add(p, StringType.STRING, true);
         }
         for (int i = 0; i < c.promoted().size(); i++) {
             wanted = wanted.add(c.promoted().get(i), c.list()[i] ? new ArrayType(StringType.STRING, true)
                     : c.numeric()[i] ? DoubleType.DOUBLE : StringType.STRING, true);
         }
-        for (RowPlan.Vector v : plan.vectors) {
-            wanted = wanted.add(v.column(), new ArrayType(DoubleType.DOUBLE, true), true);
+        for (String v : spec.vectors()) {
+            wanted = wanted.add(v, new ArrayType(DoubleType.DOUBLE, true), true);
         }
-        if (RowPlan.loadColumns) {
+        if (spec.loadColumns()) {
             wanted = wanted.add(RowPlan.LOAD_ID, StringType.STRING, true).add(RowPlan.SOURCE_FILE, StringType.STRING, true);
         }
         if (before == null) {
@@ -147,7 +149,7 @@ final class DeltaTarget implements TableTarget {
                 throw new IllegalStateException(path + " is partitioned by " + before.getPartitionColumnNames() + ", this load by " + parts
                         + " (give the table's partition-by, or write a new table)");
             }
-            if (RowPlan.loadColumns) {
+            if (spec.loadColumns()) {
                 before = withLoadColumns(before);
             }
             schema = before.getSchema();
@@ -172,13 +174,13 @@ final class DeltaTarget implements TableTarget {
             fields.add(NestedField.optional(id++, f.getName(), t));
         }
         fileSchema = new Schema(0, fields);
-        sources = TableTarget.sources(fileSchema, plan);
+        sources = TargetRules.sources(fileSchema, spec);
         Map<String, String> base = new LinkedHashMap<>();
         base.put("write.parquet.row-group-size-bytes", String.valueOf(rowGroup));
         base.put("write.parquet.page-size-bytes", String.valueOf(page));
         base.put("write.metadata.metrics.default", "full");             // Delta statistics: exact minimum and maximum
         base.put("write.metadata.metrics.column.doc", "none");
-        options = TableTarget.writerOptions(base, cfg.target().layout(), "snappy", vectors);
+        options = TargetRules.writerOptions(base, spec.layout(), "snappy", vectors);
     }
 
     /**
@@ -261,13 +263,13 @@ final class DeltaTarget implements TableTarget {
         if (before == null) {
             tb = table.createTransactionBuilder(engine, ENGINE_INFO, Operation.CREATE_TABLE).withSchema(engine, schema)
                     .withPartitionColumns(engine, partitionColumns);
-            if (!cfg.target().properties().isEmpty()) {
-                tb = tb.withTableProperties(engine, cfg.target().properties());
+            if (!spec.properties().isEmpty()) {
+                tb = tb.withTableProperties(engine, spec.properties());
             }
         } else {
             tb = table.createTransactionBuilder(engine, ENGINE_INFO, Operation.WRITE);
         }
-        if (cfg.target().appends() && cfg.target().batchId() != null) {   // the batch's id in the commit: Delta's guard against a second commit
+        if (spec.appends() && spec.batchId() != null) {   // the batch's id in the commit: Delta's guard against a second commit
             tb = tb.withTransactionId(engine, appId(date), 1);
         }
         txn = tb.build(engine);
@@ -312,10 +314,10 @@ final class DeltaTarget implements TableTarget {
     @Override
     public long commit(LocalDate date, List<WrittenFile> files) throws IOException {
         List<Row> actions = new ArrayList<>();
-        if (before != null && !cfg.target().appends()) {   // replace: the date's earlier files go in the same commit; append keeps them
+        if (before != null && !spec.appends()) {   // replace: the date's earlier files go in the same commit; append keeps them
             String day = date.toString();
-            Map<String, String> slice = cfg.source().slice();      // a shared table: only this load's slice of the date
-            actions.addAll(LakeWriter.removals(engine, before, pv -> day.equals(pv.get("business_date")) && TableTarget.inSlice(pv, slice)));
+            Map<String, String> slice = spec.slice();      // a shared table: only this load's slice of the date
+            actions.addAll(LakeWriter.removals(engine, before, pv -> day.equals(pv.get("business_date")) && TargetRules.inSlice(pv, slice)));
         }
         Map<List<String>, List<DataFileStatus>> byPartition = new LinkedHashMap<>();
         for (WrittenFile f : files) {
@@ -343,13 +345,13 @@ final class DeltaTarget implements TableTarget {
 
     @Override
     public boolean appended(LocalDate date) {
-        return cfg.target().appends() && cfg.target().batchId() != null && before != null
+        return spec.appends() && spec.batchId() != null && before != null
                 && before.getLatestTransactionVersion(engine, appId(date)).isPresent();
     }
 
     /** The application id of a batch's append of a date ({@code drishti-batch:<batch>:<date>}), version 1 once committed. */
     private String appId(LocalDate date) {
-        return "drishti-batch:" + cfg.target().batchId() + ":" + date;
+        return "drishti-batch:" + spec.batchId() + ":" + date;
     }
 
     /** A written file as Kernel takes it: path, size, and statistics (row count, null counts, minimum and maximum of the scalar columns). */

@@ -28,6 +28,10 @@ import com.ash.lake.iceberg.types.Schema;
 import com.ash.lake.iceberg.types.Type;
 import com.ash.lake.iceberg.write.Operations;
 import com.ash.lake.iceberg.write.ParquetDataWriter;
+import com.ash.lake.load.TargetRules.ParquetOut;
+import com.ash.lake.load.TargetRules.Source;
+import com.ash.lake.spi.TableWriter;
+import com.ash.lake.spi.WriteSpec;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -47,15 +51,14 @@ import java.util.Map;
  * <p>Sorted by other columns than the id ({@code sort-by}), the files say so: they carry no sort order id, and the table gets the property
  * {@code drishti.layout.sort-by}, which lake maintain reads so that it does not re-sort such a day by id.
  */
-final class IcebergTarget implements TableTarget {
+final class IcebergTarget implements TableWriter {
 
     /** The table property naming a layout sorted by more than the id (lake maintain leaves such days in their order). */
     static final String SORT_BY = "layout.sort-by";   // a persisted name (com.ash.lake.PersistedNames)
     private static final int DEFAULT_FILE_ROWS = 250_000;
     private static final long DEFAULT_ROW_GROUP = 1024L * 1024;
 
-    private final LoadConfig cfg;
-    private final RowPlan plan;
+    private final WriteSpec spec;
     private final Catalog catalog;
     private final String name;
     private Table table;
@@ -66,23 +69,21 @@ final class IcebergTarget implements TableTarget {
     private Integer sortOrderId;
     private final List<String> leftOut = new ArrayList<>();
 
-    IcebergTarget(LoadConfig cfg, RowPlan plan) {
-        this.cfg = cfg;
-        this.plan = plan;
-        String[] dt = cfg.domainAndTable();
-        Map<String, String> settings = new HashMap<>(cfg.target().storage());
-        settings.putAll(cfg.target().iceberg());
-        settings.putIfAbsent("root", cfg.lakeRoot());
-        settings.put("domain", dt[0]);
-        this.catalog = Catalogs.open(cfg.runtime(), settings);
-        this.name = dt[1];
+    IcebergTarget(WriteSpec spec) {
+        this.spec = spec;
+        Map<String, String> settings = new HashMap<>(spec.storage());
+        settings.putAll(spec.formatOptions());
+        settings.putIfAbsent("root", spec.root());
+        settings.put("domain", spec.domain());
+        this.catalog = Catalogs.open(spec.runtime(), settings);
+        this.name = spec.table();
     }
 
     @Override
-    public void open(Columns c) throws IOException {
+    public void open(LoadColumns c) throws IOException {
         Map<String, Type> want = new LinkedHashMap<>();
-        for (String p : plan.partition) {
-            want.put(RowPlan.column(p), Type.Primitive.STRING);
+        for (String p : spec.partition()) {
+            want.put(p, Type.Primitive.STRING);
         }
         for (int i = 0; i < c.promoted().size(); i++) {
             // a number column when every value seen is a number; a column never seen with a value is text (as the Iceberg loader types it)
@@ -90,11 +91,11 @@ final class IcebergTarget implements TableTarget {
             want.put(c.promoted().get(i), c.list()[i] ? new Type.ListType(0, false, Type.Primitive.STRING)
                     : c.numeric()[i] && c.seen()[i] ? Type.Primitive.DOUBLE : Type.Primitive.STRING);
         }
-        if (RowPlan.loadColumns) {
+        if (spec.loadColumns()) {
             want.put(RowPlan.LOAD_ID, Type.Primitive.STRING);           // every row: the load that wrote it, and its file
             want.put(RowPlan.SOURCE_FILE, Type.Primitive.STRING);
         }
-        List<String> vectors = plan.vectors.stream().map(RowPlan.Vector::column).toList();
+        List<String> vectors = spec.vectors();
         table = catalog.load(name).orElse(null);
         if (table == null) {
             List<NestedField> fields = new ArrayList<>();
@@ -134,27 +135,27 @@ final class IcebergTarget implements TableTarget {
             Operations.addColumns(table, missing);
             table.refresh();
         }
-        if (!plan.sortedById() && !String.join(",", plan.sortNames).equals(com.ash.lake.PersistedNames.get(table.metadata().properties(), SORT_BY, ""))) {
-            Operations.setProperties(table, Map.of(com.ash.lake.PersistedNames.key(SORT_BY), String.join(",", plan.sortNames)));
+        if (!spec.sortedById() && !String.join(",", spec.sortBy()).equals(com.ash.lake.PersistedNames.get(table.metadata().properties(), SORT_BY, ""))) {
+            Operations.setProperties(table, Map.of(com.ash.lake.PersistedNames.key(SORT_BY), String.join(",", spec.sortBy())));
             table.refresh();
         }
         schema = table.metadata().schema();
-        sources = TableTarget.sources(schema, plan);
+        sources = TargetRules.sources(schema, spec);
         dateIndex = dateIndex(table);
-        sortOrderId = plan.sortedById() ? table.metadata().sortOrder().orderId() : 0;
+        sortOrderId = spec.sortedById() ? table.metadata().sortOrder().orderId() : 0;
         List<String> listCols = new ArrayList<>();
         for (NestedField f : schema.columns()) {
             if (f.type() instanceof Type.ListType) {
                 listCols.add(f.name());
             }
         }
-        options = TableTarget.writerOptions(table.metadata().properties(), cfg.target().layout(),
+        options = TargetRules.writerOptions(table.metadata().properties(), spec.layout(),
                 table.metadata().property("write.parquet.compression-codec", "zstd"), listCols);
     }
 
     /** The layout's table properties (as the Iceberg loader creates a table), with the sort columns when they are more than the id. */
     private Map<String, String> properties() {
-        long rowGroup = cfg.target().layout().rowGroupBytes() > 0 ? cfg.target().layout().rowGroupBytes() : DEFAULT_ROW_GROUP;
+        long rowGroup = spec.layout().rowGroupBytes() > 0 ? spec.layout().rowGroupBytes() : DEFAULT_ROW_GROUP;
         Map<String, String> p = new LinkedHashMap<>();
         p.put("format-version", "2");
         p.put("write.parquet.row-group-size-bytes", String.valueOf(rowGroup));
@@ -167,8 +168,8 @@ final class IcebergTarget implements TableTarget {
         p.put("write.metadata.previous-versions-max", "50");
         p.put("commit.retry.num-retries", "10");
         p.put(com.ash.lake.PersistedNames.key("layout.file-rows"), String.valueOf(DEFAULT_FILE_ROWS));
-        if (!plan.sortedById()) {
-            p.put(com.ash.lake.PersistedNames.key(SORT_BY), String.join(",", plan.sortNames));
+        if (!spec.sortedById()) {
+            p.put(com.ash.lake.PersistedNames.key(SORT_BY), String.join(",", spec.sortBy()));
         }
         return p;
     }
@@ -230,19 +231,17 @@ final class IcebergTarget implements TableTarget {
         List<DataFile> add = new ArrayList<>();
         files.forEach(f -> add.add((DataFile) f.handle()));
         java.util.TreeSet<String> ids = new java.util.TreeSet<>();
-        for (byte[] b : plan.loadIds) {
-            ids.add(new String(b, java.nio.charset.StandardCharsets.UTF_8));
-        }
+        ids.addAll(spec.loadIds());
         Map<String, String> summary = new LinkedHashMap<>(Map.of(com.ash.lake.PersistedNames.key("business-dates"), date.toString(), com.ash.lake.PersistedNames.key("loader"), "parallel",
                 com.ash.lake.PersistedNames.key("load-ids"), String.join(",", ids)));    // an undo finds the commit of a load (and whether it replaced the date)
         Snapshot s;
-        if (cfg.target().appends()) {                     // append: the date's earlier files stay; the batch (when named) in the snapshot
-            if (cfg.target().batchId() != null) {
+        if (spec.appends()) {                     // append: the date's earlier files stay; the batch (when named) in the snapshot
+            if (spec.batchId() != null) {
                 summary.put(com.ash.lake.PersistedNames.key(BATCH), batchKey(date));
             }
             s = Operations.append(table, add, summary).orElseThrow(() -> new IllegalStateException("the commit of " + date + " made no snapshot"));
         } else {
-            Map<String, String> slice = cfg.source().slice();      // a shared table: only this load's slice of the date
+            Map<String, String> slice = spec.slice();      // a shared table: only this load's slice of the date
             s = Operations.replacePartitions(table, f -> date.equals(dateOf(f)) && inSlice(f, slice), add, summary)
                     .orElseThrow(() -> new IllegalStateException("the commit of " + date + " made no snapshot"));
         }
@@ -250,7 +249,7 @@ final class IcebergTarget implements TableTarget {
     }
 
     /**
-     * Whether a data file holds only rows of the load's slice (TableTarget.slice; an Iceberg table is partitioned by date alone, so the slice
+     * Whether a data file holds only rows of the load's slice (TargetRules.slice; an Iceberg table is partitioned by date alone, so the slice
      * is read from the file's column bounds: lower and upper both the slice's value). A file with no bounds for the column is another's.
      */
     private boolean inSlice(DataFile f, Map<String, String> slice) {
@@ -274,7 +273,7 @@ final class IcebergTarget implements TableTarget {
 
     @Override
     public boolean appended(LocalDate date) {
-        if (!cfg.target().appends() || cfg.target().batchId() == null || table == null) {
+        if (!spec.appends() || spec.batchId() == null || table == null) {
             return false;                                  // no batch named: an append is not guarded (its rows carry their _load_id)
         }
         String key = batchKey(date);
@@ -282,7 +281,7 @@ final class IcebergTarget implements TableTarget {
     }
 
     private String batchKey(LocalDate date) {
-        return cfg.target().batchId() + ":" + date;
+        return spec.batchId() + ":" + date;
     }
 
     @Override
