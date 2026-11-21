@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.hostcompat;
+package com.ash.lake.io.net;
 
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
@@ -72,7 +72,7 @@ public record TlsMaterial(
 
     /**
      * A short sentence for a health page: empty when nothing configured expires within {@link #WARN_DAYS} days, otherwise
-     * e.g. {@code TLS certificate CN=drishti (tls.cert-file) expires in 12 days (2026-10-22)}.
+     * e.g. {@code TLS certificate CN=lake (tls.cert-file) expires in 12 days (2026-10-22)}.
      */
     public String expiryNote(Instant now) {
         return soonestExpiry().map(c -> {
@@ -88,7 +88,7 @@ public record TlsMaterial(
 
     /**
      * A health text with the expiry note added when a certificate expires within {@link #WARN_DAYS} days (or has expired):
-     * {@code UP (TLS certificate CN=drishti (tls.cert-file) expires in 12 days (2026-10-22))}. A health text that is not up
+     * {@code UP (TLS certificate CN=lake (tls.cert-file) expires in 12 days (2026-10-22))}. A health text that is not up
      * is returned as it is.
      */
     public String annotate(String health, Instant now) {

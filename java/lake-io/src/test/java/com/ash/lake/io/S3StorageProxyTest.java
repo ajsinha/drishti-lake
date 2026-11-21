@@ -17,7 +17,7 @@ package com.ash.lake.io;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ash.lake.hostcompat.SiteProxy;
+import com.ash.lake.io.net.SiteProxy;
 import com.ash.lake.tck.FakeProxy;
 import com.ash.lake.tck.TlsFixture;
 import com.sun.net.httpserver.HttpServer;

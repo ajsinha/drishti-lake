@@ -15,8 +15,8 @@
  */
 package com.ash.lake.inbox;
 
-import com.ash.lake.hostcompat.DrishtiException;
-import com.ash.lake.hostcompat.ErrorCode;
+import com.ash.lake.common.LakeException;
+import com.ash.lake.common.LakeError;
 import com.ash.lake.common.FileDates;
 import com.ash.lake.load.FileRows;
 import com.ash.lake.load.LakeLoad;
@@ -307,20 +307,20 @@ public final class ReadyDesk {
     static String checkName(String raw) {
         String name = raw == null ? "" : raw.trim();
         if (name.isEmpty() || name.contains("/") || name.contains("\\") || name.contains("..") || !NAME.matcher(name).matches()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "'" + name + "' cannot name a data file: one name, no folder, no .. and no leading dot");
+            throw new LakeException(LakeError.BAD_REQUEST, "'" + name + "' cannot name a data file: one name, no folder, no .. and no leading dot");
         }
         if (!accepted(name)) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, name + " is not taken: send " + String.join(", ", ACCEPTED));
+            throw new LakeException(LakeError.BAD_REQUEST, name + " is not taken: send " + String.join(", ", ACCEPTED));
         }
         if (!LakeLoad.reads(name)) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "the loader does not read " + name + ": JSON Lines (.jsonl, plain or .gz) or an archive of them");
+            throw new LakeException(LakeError.BAD_REQUEST, "the loader does not read " + name + ": JSON Lines (.jsonl, plain or .gz) or an archive of them");
         }
         return name;
     }
 
     private void requireOwner() {
         if (!settings.owner()) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, "this node does not own the data inbox (drishti.dataload.owner is false): use the node that does");
+            throw new LakeException(LakeError.BAD_REQUEST, "this node does not own the data inbox (drishti.dataload.owner is false): use the node that does");
         }
     }
 
@@ -338,7 +338,7 @@ public final class ReadyDesk {
         long free = Files.getFileStore(dir).getUsableSpace();
         if (free - Math.max(0, declared) < upload.floorBytes()) {
             Files.deleteIfExists(dir);
-            throw new DrishtiException(ErrorCode.PAYLOAD_TOO_LARGE, "not enough free space on the staging folder's disk: " + (free >> 20) + " MB free and "
+            throw new LakeException(LakeError.TOO_LARGE, "not enough free space on the staging folder's disk: " + (free >> 20) + " MB free and "
                     + upload.floorGb() + " GB must stay free (drishti.dataload.upload.floor-gb)");
         }
         Item it = new Item(id, user, n, false, dir.resolve(n), clock.instant());
@@ -346,8 +346,8 @@ public final class ReadyDesk {
         return it;
     }
 
-    private DrishtiException tooLarge() {
-        return new DrishtiException(ErrorCode.PAYLOAD_TOO_LARGE, "the file is over " + upload.maxGb() + " GB (drishti.dataload.upload.max-gb): copy it straight "
+    private LakeException tooLarge() {
+        return new LakeException(LakeError.TOO_LARGE, "the file is over " + upload.maxGb() + " GB (drishti.dataload.upload.max-gb): copy it straight "
                 + "into the inbox folder and pick it from there");
     }
 
@@ -403,17 +403,17 @@ public final class ReadyDesk {
         requireOwner();
         String n = checkName(name);
         if (waiting().stream().noneMatch(m -> n.equals(m.get("file")))) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, n + " is not in the inbox folder without a .ready");
+            throw new LakeException(LakeError.NOT_FOUND, n + " is not in the inbox folder without a .ready");
         }
         Path f = inboxDir().resolve(n).normalize();
         if (!f.getParent().equals(inboxDir()) || !Files.isRegularFile(f, LinkOption.NOFOLLOW_LINKS)) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, n + " is not a plain file of the inbox folder");
+            throw new LakeException(LakeError.BAD_REQUEST, n + " is not a plain file of the inbox folder");
         }
         Item it = new Item(UUID.randomUUID().toString(), user, n, true, f, clock.instant());
         try {
             it.size = Files.size(f);
         } catch (IOException e) {
-            throw new DrishtiException(ErrorCode.BAD_REQUEST, n + " cannot be read: " + e.getMessage());
+            throw new LakeException(LakeError.BAD_REQUEST, n + " cannot be read: " + e.getMessage());
         }
         items.put(it.id, it);
         inspect(it);
@@ -511,7 +511,7 @@ public final class ReadyDesk {
     public Item item(String id, String user) {
         Item it = id == null ? null : items.get(id);
         if (it == null || !it.user.equals(user)) {
-            throw new DrishtiException(ErrorCode.ENTITY_NOT_FOUND, "no such file on your desk: upload or pick it again");
+            throw new LakeException(LakeError.NOT_FOUND, "no such file on your desk: upload or pick it again");
         }
         return it;
     }
@@ -714,8 +714,8 @@ public final class ReadyDesk {
         }
     }
 
-    private static DrishtiException refused(String why) {
-        return new DrishtiException(ErrorCode.READY_PUSH_REFUSED, why);
+    private static LakeException refused(String why) {
+        return new LakeException(LakeError.READY_REFUSED, why);
     }
 
     private static MessageDigest sha256() {

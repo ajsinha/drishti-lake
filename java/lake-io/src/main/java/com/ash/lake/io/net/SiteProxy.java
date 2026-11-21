@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.hostcompat;
+package com.ash.lake.io.net;
 
 import java.util.Map;
 
 /**
- * The site-wide outbound proxy ({@code drishti.http.proxy.*} in {@code application.yaml}) that every HTTP-based connector, AI
+ * The site-wide outbound proxy (the host's site setting, handed over through {@link #configure}) that every HTTP-based connector, AI
  * provider and MCP client inherits unless it sets its own {@code proxy:} or {@code proxy: none}. The server hands it over once at
  * start (and again if the configuration is refreshed); {@link ProxySettings#resolve} reads it. The keys are the connector's,
  * under {@code proxy.} (url, username, password, no-proxy, enabled).

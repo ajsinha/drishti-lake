@@ -18,7 +18,7 @@ package com.ash.lake.io;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.lake.hostcompat.TlsException;
+import com.ash.lake.io.net.TlsException;
 import com.ash.lake.tck.TlsFixture;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsParameters;

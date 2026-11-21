@@ -15,11 +15,11 @@
  */
 package com.ash.lake.io;
 
-import com.ash.lake.hostcompat.ProxySettings;
-import com.ash.lake.hostcompat.TlsContexts;
-import com.ash.lake.hostcompat.TlsException;
-import com.ash.lake.hostcompat.TlsMaterial;
-import com.ash.lake.hostcompat.TlsSettings;
+import com.ash.lake.io.net.ProxySettings;
+import com.ash.lake.io.net.TlsContexts;
+import com.ash.lake.io.net.TlsException;
+import com.ash.lake.io.net.TlsMaterial;
+import com.ash.lake.io.net.TlsSettings;
 import java.util.Map;
 
 /**

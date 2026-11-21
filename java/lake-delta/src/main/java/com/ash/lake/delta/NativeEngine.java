@@ -93,12 +93,12 @@ public final class NativeEngine implements Engine, AutoCloseable {
     }
 
     /** The TLS material of the S3 endpoint ({@code tls.*}), or null. */
-    public com.ash.lake.hostcompat.TlsMaterial tls() {
+    public com.ash.lake.io.net.TlsMaterial tls() {
         return io.tls();
     }
 
     /** The outbound proxy of the S3 endpoint, {@code none} when it is reached directly. */
-    public com.ash.lake.hostcompat.ProxySettings proxy() {
+    public com.ash.lake.io.net.ProxySettings proxy() {
         return io.proxy();
     }
 

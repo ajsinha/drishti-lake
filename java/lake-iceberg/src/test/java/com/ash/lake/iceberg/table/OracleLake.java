@@ -77,13 +77,13 @@ interface OracleLake extends Closeable {
     }
 
     /** The TLS material of the object store ({@code tls.*}), or null: its certificates' expiry is shown in health. */
-    default com.ash.lake.hostcompat.TlsMaterial tls() {
+    default com.ash.lake.io.net.TlsMaterial tls() {
         return null;
     }
 
     /** The outbound proxy of the catalog and the object store ({@code proxy.*} or the site default); {@code none} when reached directly. */
-    default com.ash.lake.hostcompat.ProxySettings proxy() {
-        return com.ash.lake.hostcompat.ProxySettings.none();
+    default com.ash.lake.io.net.ProxySettings proxy() {
+        return com.ash.lake.io.net.ProxySettings.none();
     }
 
     static OracleLake of(Map<String, String> settings) {
@@ -93,8 +93,8 @@ interface OracleLake extends Closeable {
         }
         Configuration conf = hadoop(settings);
         String catalog = settings.getOrDefault("catalog", "hadoop").trim();
-        if (!catalog.equalsIgnoreCase("rest") && com.ash.lake.hostcompat.TlsSettings.anyGiven(settings, "tls.")) {
-            throw new com.ash.lake.hostcompat.TlsException("tls.* applies to a REST catalog's object store: Hadoop's S3A, which reads path-based "
+        if (!catalog.equalsIgnoreCase("rest") && com.ash.lake.io.net.TlsSettings.anyGiven(settings, "tls.")) {
+            throw new com.ash.lake.io.net.TlsException("tls.* applies to a REST catalog's object store: Hadoop's S3A, which reads path-based "
                     + "tables, has no setting for a private CA. Use catalog: rest, or import the CA into the JVM's truststore "
                     + "(-Djavax.net.ssl.trustStore=...)");
         }
@@ -133,7 +133,7 @@ interface OracleLake extends Closeable {
             conf.set("fs.s3a.path.style.access", s.getOrDefault("s3.path-style", "true"));
             conf.set("fs.s3a.connection.ssl.enabled", String.valueOf(endpoint.startsWith("https")));
         }
-        var proxy = com.ash.lake.hostcompat.ProxySettings.resolve(s, endpoint.isBlank() ? "https://s3.amazonaws.com" : endpoint);
+        var proxy = com.ash.lake.io.net.ProxySettings.resolve(s, endpoint.isBlank() ? "https://s3.amazonaws.com" : endpoint);
         if (proxy.appliesTo(endpoint.isBlank() ? "s3.amazonaws.com" : java.net.URI.create(endpoint).getHost())) {   // S3A's own proxy settings
             conf.set("fs.s3a.proxy.host", proxy.host());
             conf.set("fs.s3a.proxy.port", String.valueOf(proxy.port()));
@@ -222,12 +222,12 @@ interface OracleLake extends Closeable {
         private final Namespace namespace;
         private final String uri;
 
-        private final com.ash.lake.hostcompat.TlsMaterial tls;
+        private final com.ash.lake.io.net.TlsMaterial tls;
         private final String tlsId;
-        private final com.ash.lake.hostcompat.ProxySettings proxy;
+        private final com.ash.lake.io.net.ProxySettings proxy;
 
-        private RestLake(RESTCatalog catalog, Namespace namespace, String uri, com.ash.lake.hostcompat.TlsMaterial tls, String tlsId,
-                com.ash.lake.hostcompat.ProxySettings proxy) {
+        private RestLake(RESTCatalog catalog, Namespace namespace, String uri, com.ash.lake.io.net.TlsMaterial tls, String tlsId,
+                com.ash.lake.io.net.ProxySettings proxy) {
             this.catalog = catalog;
             this.namespace = namespace;
             this.uri = uri;
@@ -237,12 +237,12 @@ interface OracleLake extends Closeable {
         }
 
         @Override
-        public com.ash.lake.hostcompat.ProxySettings proxy() {
+        public com.ash.lake.io.net.ProxySettings proxy() {
             return proxy;
         }
 
         @Override
-        public com.ash.lake.hostcompat.TlsMaterial tls() {
+        public com.ash.lake.io.net.TlsMaterial tls() {
             return tls;
         }
 
@@ -276,8 +276,8 @@ interface OracleLake extends Closeable {
                 }
             });
             String tlsId = null;
-            com.ash.lake.hostcompat.TlsMaterial tls = null;
-            var catalogProxy = com.ash.lake.hostcompat.ProxySettings.none();
+            com.ash.lake.io.net.TlsMaterial tls = null;
+            var catalogProxy = com.ash.lake.io.net.ProxySettings.none();
             RESTCatalog catalog = new RESTCatalog();
             catalog.setConf(conf);
             catalog.initialize(s.getOrDefault("source-name", "drishti"), props);

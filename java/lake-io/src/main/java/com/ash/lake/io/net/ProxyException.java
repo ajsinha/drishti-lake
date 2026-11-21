@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.hostcompat;
+package com.ash.lake.io.net;
 
 /** A proxy setting that cannot be used (a malformed address, a half-given credential, an https proxy); the message names the setting. */
 public final class ProxyException extends RuntimeException {

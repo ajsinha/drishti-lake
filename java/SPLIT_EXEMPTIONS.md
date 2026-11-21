@@ -9,7 +9,7 @@ go down from its value at the move. **This list only shrinks**; at `v1.0.0` it i
 
 ## Counts (read by the guards)
 
-- hostcompat types: 41
+- hostcompat types: 26
 - host-word files: 79
 - parked checks: 2
 
@@ -31,22 +31,7 @@ two edits: `ModuleLoaders` lost the static block that joined the host's `DatesIn
 
 | Type | Host type | Removed by |
 |---|---|---|
-| `CertInfo` | `com.ash.drishti.api.tls.CertInfo` | L4: TLS and proxy settings become the product's own records |
-| `ConnectorSecrets` | `com.ash.drishti.common.ConnectorSecrets` | L4: TLS and proxy settings become the product's own records |
-| `Der` | `com.ash.drishti.api.tls.Der` | L4: TLS and proxy settings become the product's own records |
-| `NoProxy` | `com.ash.drishti.api.proxy.NoProxy` | L4: TLS and proxy settings become the product's own records |
-| `PemReader` | `com.ash.drishti.api.tls.PemReader` | L4: TLS and proxy settings become the product's own records |
-| `ProxyException` | `com.ash.drishti.api.proxy.ProxyException` | L4: TLS and proxy settings become the product's own records |
-| `ProxySettings` | `com.ash.drishti.api.proxy.ProxySettings` | L4: TLS and proxy settings become the product's own records |
-| `Secrets` | `com.ash.drishti.api.tls.Secrets` | L4: TLS and proxy settings become the product's own records |
-| `SettingSpec` | `com.ash.drishti.api.SettingSpec` | L4: TLS and proxy settings become the product's own records |
-| `SiteProxy` | `com.ash.drishti.api.proxy.SiteProxy` | L4: TLS and proxy settings become the product's own records |
-| `TlsContexts` | `com.ash.drishti.api.tls.TlsContexts` | L4: TLS and proxy settings become the product's own records |
-| `TlsException` | `com.ash.drishti.api.tls.TlsException` | L4: TLS and proxy settings become the product's own records |
-| `TlsMaterial` | `com.ash.drishti.api.tls.TlsMaterial` | L4: TLS and proxy settings become the product's own records |
-| `TlsSettings` | `com.ash.drishti.api.tls.TlsSettings` | L4: TLS and proxy settings become the product's own records |
-| `DrishtiException` | `com.ash.drishti.api.error.DrishtiException` | L4: `LakeException` and `LK-` codes |
-| `ErrorCode` | `com.ash.drishti.api.error.ErrorCode` | L4: `LakeException` and `LK-` codes |
+| `ConnectorSecrets` | `com.ash.drishti.common.ConnectorSecrets` | L5: with `NamedResources` (the connector half leaves for the host's `LakeCatalog`) |
 | `ChannelIo` | `com.ash.drishti.api.ChannelIo` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
 | `DataDir` | `com.ash.drishti.api.DataDir` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
 | `Extensions` | `com.ash.drishti.common.Extensions` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |

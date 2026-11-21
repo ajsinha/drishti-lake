@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.hostcompat;
+package com.ash.lake.io.net;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -65,7 +65,7 @@ import javax.net.ssl.X509TrustManager;
  */
 public final class TlsContexts {
 
-    private static final System.Logger LOG = System.getLogger("com.ash.lake.hostcompat.tls");
+    private static final System.Logger LOG = System.getLogger("com.ash.lake.io.net.tls");
 
     private TlsContexts() {}
 
@@ -218,7 +218,7 @@ public final class TlsContexts {
             return;
         }
         try {
-            byte[] challenge = "drishti-tls-check".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            byte[] challenge = "lake-tls-check".getBytes(java.nio.charset.StandardCharsets.UTF_8);
             Signature sig = Signature.getInstance(alg);
             if ("RSASSA-PSS".equals(alg)) {
                 sig.setParameter(new java.security.spec.PSSParameterSpec("SHA-256", "MGF1",

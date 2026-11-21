@@ -18,7 +18,7 @@ package com.ash.lake.inbox;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.lake.hostcompat.DrishtiException;
+import com.ash.lake.common.LakeException;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -162,7 +162,7 @@ class ReadyDeskTest {
     @Test
     void aNameOutsideTheFolderOrOfAnotherTypeIsRefused() {
         for (String bad : List.of("../evil.jsonl", "a/b.jsonl", "..\\x.gz", ".hidden.jsonl", "x..y.jsonl", "notes.txt", "x.exe", "")) {
-            assertThatThrownBy(() -> desk.receive(new ByteArrayInputStream(new byte[1]), bad, 1, ME)).as(bad).isInstanceOf(DrishtiException.class);
+            assertThatThrownBy(() -> desk.receive(new ByteArrayInputStream(new byte[1]), bad, 1, ME)).as(bad).isInstanceOf(LakeException.class);
         }
         assertThat(ReadyDesk.checkName("a.tar.gz")).isEqualTo("a.tar.gz");
         assertThat(ReadyDesk.checkName("a.tgz")).isEqualTo("a.tgz");
@@ -171,7 +171,7 @@ class ReadyDeskTest {
     @Test
     void aFileOverTheLimitIsRefusedAndNothingStays() throws Exception {
         ReadyDesk small = desk(new ReadyDesk.Settings(1.0 / 1024 / 1024 / 1024 * 10, 0.0, 10, 24), List.of());
-        assertThatThrownBy(() -> small.receive(new ByteArrayInputStream(new byte[64]), "a.jsonl", -1, ME)).isInstanceOf(DrishtiException.class)
+        assertThatThrownBy(() -> small.receive(new ByteArrayInputStream(new byte[64]), "a.jsonl", -1, ME)).isInstanceOf(LakeException.class)
                 .hasMessageContaining("max-gb");
         try (var s = Files.list(f.root.resolve("staging"))) {
             assertThat(s).isEmpty();
@@ -181,9 +181,9 @@ class ReadyDeskTest {
     @Test
     void anotherPersonCannotSeeOrPushMyFile() throws Exception {
         String id = upload("trade.2026-11-02.jsonl", row("A1", "X", "ENDUR"));
-        assertThatThrownBy(() -> desk.check(form(id, "append"), "someone-else")).isInstanceOf(DrishtiException.class);
-        assertThatThrownBy(() -> desk.push(form(id, "append"), "someone-else")).isInstanceOf(DrishtiException.class);
-        assertThatThrownBy(() -> desk.discard(id, "someone-else")).isInstanceOf(DrishtiException.class);
+        assertThatThrownBy(() -> desk.check(form(id, "append"), "someone-else")).isInstanceOf(LakeException.class);
+        assertThatThrownBy(() -> desk.push(form(id, "append"), "someone-else")).isInstanceOf(LakeException.class);
+        assertThatThrownBy(() -> desk.discard(id, "someone-else")).isInstanceOf(LakeException.class);
         assertThat(desk.state(desk.item(id, ME))).containsEntry("state", "ready");
     }
 
@@ -203,7 +203,7 @@ class ReadyDeskTest {
         Map<String, Object> out = desk.check(form(missing, "append"), ME);
         assertThat(checks(out)).anyMatch(c -> ReadyCheck.REFUSED.equals(c.status()) && c.text().contains("DESK") && c.fix() != null);
         assertThat(out).containsEntry("blocked", true);
-        assertThatThrownBy(() -> desk.push(form(missing, "append"), ME)).isInstanceOf(DrishtiException.class).hasMessageContaining("DESK");
+        assertThatThrownBy(() -> desk.push(form(missing, "append"), ME)).isInstanceOf(LakeException.class).hasMessageContaining("DESK");
         assertThat(f.inbox().resolve("trade.2026-11-04.jsonl")).doesNotExist();
     }
 
@@ -212,7 +212,7 @@ class ReadyDeskTest {
         desk = desk(new ReadyDesk.Settings(1.0, 0.0, 100, 24), List.of(in -> List.of(ReadyCheck.refused("DRS-5210: ENDUR already sent TRADE grain", "Use replace.").offering("mode", "replace"))));
         String id = upload("trade.2026-11-02.jsonl", row("A1", "X", "ENDUR"));
         assertThat(checks(desk.check(form(id, "append"), ME))).anyMatch(c -> c.text().contains("DRS-5210") && "replace".equals(c.value()));
-        assertThatThrownBy(() -> desk.push(form(id, "append"), ME)).isInstanceOf(DrishtiException.class).hasMessageContaining("DRS-5210");
+        assertThatThrownBy(() -> desk.push(form(id, "append"), ME)).isInstanceOf(LakeException.class).hasMessageContaining("DRS-5210");
     }
 
     // ---- the push
@@ -253,7 +253,7 @@ class ReadyDeskTest {
         f.drop("trade.2026-11-02.jsonl", "old\n", null);
         String id = upload("trade.2026-11-02.jsonl", row("A1", "X", "ENDUR"));
         assertThat(checks(desk.check(form(id, "append"), ME))).anyMatch(c -> ReadyCheck.REFUSED.equals(c.status()) && c.text().contains("already waiting"));
-        assertThatThrownBy(() -> desk.push(form(id, "append"), ME)).isInstanceOf(DrishtiException.class).hasMessageContaining("already waiting");
+        assertThatThrownBy(() -> desk.push(form(id, "append"), ME)).isInstanceOf(LakeException.class).hasMessageContaining("already waiting");
         assertThat(f.inbox().resolve("trade.2026-11-02.jsonl")).hasContent("old");
     }
 
@@ -267,7 +267,7 @@ class ReadyDeskTest {
         desk.push(form(id, "append"), ME);
         assertThat(f.inbox().resolve("trade.2026-11-02.jsonl")).hasContent(body.stripTrailing());
         assertThat(f.inbox().resolve("trade.2026-11-02.jsonl.ready")).exists();
-        assertThatThrownBy(() -> desk.pick("absent.jsonl", ME)).isInstanceOf(DrishtiException.class);
+        assertThatThrownBy(() -> desk.pick("absent.jsonl", ME)).isInstanceOf(LakeException.class);
     }
 
     @Test
@@ -289,7 +289,7 @@ class ReadyDeskTest {
         assertThat(replace.fix()).contains("one tar", "append");
         assertThat(replace.field()).isEqualTo("mode");
         assertThat(replace.value()).isEqualTo("append");
-        assertThatThrownBy(() -> desk.push(form(second, "replace"), ME)).isInstanceOf(DrishtiException.class).hasMessageContaining("tick");
+        assertThatThrownBy(() -> desk.push(form(second, "replace"), ME)).isInstanceOf(LakeException.class).hasMessageContaining("tick");
         assertThat(checks(desk.check(form(second, "append"), ME))).noneMatch(ReadyCheck::tick);
         assertThat(desk.push(ticked(form(second, "replace")), ME).file()).isEqualTo("trade.2026-11-02.part2.jsonl");
     }

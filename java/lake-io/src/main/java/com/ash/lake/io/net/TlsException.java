@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.hostcompat;
+package com.ash.lake.io.net;
 
 /**
  * A TLS setting that cannot be used: a file that is missing or unreadable, a wrong password, a key that does not belong to

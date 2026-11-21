@@ -13,9 +13,8 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.hostcompat;
+package com.ash.lake.io.net;
 
-import com.ash.lake.hostcompat.SettingSpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +36,7 @@ import java.util.function.Function;
  *       (+ {@code keystore-type}, {@code key-alias}, {@code key-password}).
  *   <li>{@code protocols} (default {@code TLSv1.3,TLSv1.2}), {@code cipher-suites} (default: the JVM's),
  *       {@code verify-hostname} (default true), {@code insecure-trust-all} (development only; refused unless the environment
- *       variable {@code DRISHTI_ALLOW_INSECURE_TLS} is {@code true}).
+ *       variable {@code LAKE_ALLOW_INSECURE_TLS} is {@code true}).
  * </ul>
  * A password is never written in a document: use a {@code ${ENV}} placeholder, or the {@code -file} twin of the key
  * ({@code keystore-password-file: /run/secrets/ks}), which reads the first line of the file.
@@ -67,7 +66,7 @@ public record TlsSettings(
     /** The protocols allowed when {@code tls.protocols} is not set: TLS 1.3 and 1.2. */
     public static final List<String> DEFAULT_PROTOCOLS = List.of("TLSv1.3", "TLSv1.2");
     /** The environment variable that must be true for {@code tls.insecure-trust-all} to be accepted. */
-    public static final String ALLOW_INSECURE_ENV = "DRISHTI_ALLOW_INSECURE_TLS";
+    public static final String ALLOW_INSECURE_ENV = "LAKE_ALLOW_INSECURE_TLS";
 
     /** TLS off. */
     public static TlsSettings disabled() {
@@ -144,7 +143,7 @@ public record TlsSettings(
         out.add(new SettingSpec(prefix + "verify-hostname", "boolean", false, "true",
                 "Check the server's name against its certificate (false logs a warning at every start)", false, g));
         out.add(new SettingSpec(prefix + "insecure-trust-all", "boolean", false, "false",
-                "Do not check the server certificate; development only, refused unless DRISHTI_ALLOW_INSECURE_TLS=true", false, g));
+                "Do not check the server certificate; development only, refused unless LAKE_ALLOW_INSECURE_TLS=true", false, g));
         return List.copyOf(out);
     }
 

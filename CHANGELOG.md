@@ -29,5 +29,9 @@ Entries are written per release; unreleased work is listed first.
   runs the same runner, imports mapped back, over Drishti's own jars at `9ce7c3170` (a scratch clone, `./mvnw clean package`); the
   reference results are stored (`tck/results/reference-9ce7c3170.jsonl.gz`), stable over two runs, and this code's results equal them
   (`compare_results.py`: 30 of 30 identical).
+- **L4, part 1: own errors, TLS and proxy.** `LakeException` and `LakeError` (`LK-1001` bad request, `LK-1002` not found, `LK-1003`
+  too large, `LK-1004` ready refused; each with its HTTP status for a host to map) replace the host's `DrishtiException` and
+  `ErrorCode`; the TLS and proxy records (13 types) are the product's own, `com.ash.lake.io.net`; the insecure-TLS switch is
+  `LAKE_ALLOW_INSECURE_TLS`. hostcompat 41 → 26. Parity kit equal to the reference (30/30).
 - Not moved yet, on purpose (each with its step): the memory lake (L8), the Delta lake opener that chooses the Hadoop engine (L7;
   the engine itself stays in Drishti, LK-9), the files store (L8), the Python path (L10), the contracts tool (L11).
