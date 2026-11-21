@@ -463,3 +463,13 @@ RA-1 to RA-12 are **accepted as recommended** (including RA-3 the product applie
   own local repository, and the same shims over this build's table classes): `tck/bench/readbench-before-9ce7c3170.jsonl`. The table
   is 10,000 positions x 509 scenarios in 13 files (the loader's runs), one date. At a machine load of about 15 the same code differs
   between two JVMs by up to 40% on the reads under 20 ms (columns, ids): those rows are compared over repeated runs, not one.
+
+## Built in RA-S6 and RA-S7, and fixed before them (2026-11-21)
+
+- **Delta's newest load** is ordered by every stated `_load_id` maximum (no 32-character cut: the cut is for pruning, and a cut value
+  keeps the run's time); it was the cause of the one-off `ids-and-file-of-id` difference (a 32-character load id sorted first).
+- **The files store's read by id** uses an id index built once per snapshot and date, in memory (`JsonlDay`: sorted ids with each live
+  line's offset and length), not a file beside the table: the content file is immutable at a version, so nothing is stored twice.
+- **P1** as section 5; `relayout` and the other rewrites fan out by the partition tuple through `NativeLayout.writeDay`.
+- **Pushdown** (2.7) is at file level on all three stores (dates, partition values, text bounds; `Pruning`); row groups through the
+  Kernel predicate and iceberg-core's scan filter are not used yet (the per-row test is the last word either way).

@@ -5,6 +5,24 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **Read API, accuracy and speed first, then RA-S6 and RA-S7** ([READ_API](docs/design/READ_API.md)):
+  - *Newest load wins, made deterministic (Delta)*: a date's files were ordered by their largest `_load_id` from the log's statistics,
+    and a value of 32 characters or more was "not stated", so it sorted first (oldest). A load id is `<time>-<pid>-<n>.<file>`: with a
+    7-digit process id the tenth run in one process makes it 32 characters, and the older load's copy won (the kit's one-off
+    `ids-and-file-of-id` difference: the runner is one process). The load order now uses every stated value (a cut value keeps its
+    first characters, the run's time). Case `read/newest-wins-long-load-ids` (31 then 32 characters, every store); `NewestLoadWinsTest`.
+  - *Files store, read by id*: the date's id index (sorted ids, each live line's offset and length; `JsonlDay`, the one index of a
+    JSON-lines day) is built once per snapshot and date; `document` and `vectorsOf` are a binary search and one positioned read each
+    (were a pass over the date per id); `ids` from the same index; released when the reader drops or purges the snapshot.
+  - *RA-S6, Iceberg `partition-by` (P1)*: the spec is the business date then an identity field per partition-by field; the loader
+    and lake maintain write one file run per partition tuple; a table with another partition-by is refused in Delta's words; an
+    empty value is null (tuple and column, as Delta; files store too). Case `layout/partition-by-beside-the-date` (every store);
+    `config:source.partition-by` left the coverage baseline; iceberg-core reads such a table (`IcebergSpecInteropTest`).
+  - *RA-S7, pushdown*: one rule (`com.ash.lake.io.read.Pruning`): a scan's `where` prunes dates, partition values and text bounds
+    before a file is read (Delta's log statistics, Iceberg's manifests, the files store's commit statistics); every row is still
+    tested. `RowScan.stats()` reports files read and skipped, rows read and returned. Case `read/scan-skips-files`.
+  - `tools/bench/bench.py --repeat N`: interleaved rounds (one JVM per side and round, order reversed every other round), a summary
+    of medians, spread and the ratio to the first side.
 - **The read API, built through RA-S5** ([READ_API](docs/design/READ_API.md)): `com.ash.lake.read` (`lake-api`) entered through
   `TableStore.open`, own types only (in `api-surface.txt`), on Delta, Iceberg and files (and the memory rows): snapshots, days and files
   with rows, bounds and one stamp rule, id maps and one mapped id-map format, documents, promoted columns as arrays, vectors into a

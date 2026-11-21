@@ -8,6 +8,8 @@ each side: `ref` (Drishti's jars at the freeze, through the same-package shims o
 One heavy job at a time; not part of check.py; scratch removed on exit unless --keep.
 
     python3 tools/bench/bench.py --ref-cp REFCP.txt [--sides ref,internal,api] [--stores delta,iceberg] [--keep DIR] [--out bench.jsonl]
+        [--repeat 10]       # interleaved A/B: each round runs every side once (order reversed every other round); a summary per
+                            # store, side and read: the median of the rounds' medians, its spread (min..max) and bytes per row
 """
 import argparse, json, os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
@@ -81,6 +83,27 @@ def run(cp, classes, side, root, warm, runs):
     return [json.loads(l) for l in out.splitlines() if l.startswith("{")]
 
 
+def summary(results):
+    """Per store, read and side: the median over the rounds of each round's median, the spread, bytes per row; and each side's
+    median against the first side's (the A/B ratio)."""
+    groups = {}
+    for r in results:
+        if "ms" in r or "p50_us" in r:
+            groups.setdefault((r["store"], r["measure"]), {}).setdefault(r["side"], []).append(r)
+    med = lambda v: sorted(v)[len(v) // 2] if len(v) % 2 else sum(sorted(v)[len(v) // 2 - 1:len(v) // 2 + 1]) / 2
+    for (store, measure), bySide in groups.items():
+        base = None
+        for side, rs in bySide.items():
+            key = "ms" if "ms" in rs[0] else "p50_us"
+            t = [x[key] for x in rs]
+            b = [x.get("bytes_per_row", x.get("bytes_per_doc", 0)) for x in rs]
+            m = med(t)
+            base = base or m
+            out = {"store": store, "measure": measure, "side": side, "rounds": len(t), key: round(m, 3), "min": round(min(t), 3),
+                   "max": round(max(t), 3), "vs_first": round(m / base, 4), "bytes_per_row": round(med(b), 1)}
+            print(json.dumps(out), flush=True)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--ref-cp", help="the reference class path file (Drishti's plugins at the freeze, built in a scratch folder)")
@@ -92,6 +115,7 @@ def main(argv=None):
     ap.add_argument("--runs", type=int, default=7)
     ap.add_argument("--keep", help="a scratch folder kept between runs (the lakes are reused)")
     ap.add_argument("--out", help="append the results here (JSON lines)")
+    ap.add_argument("--repeat", type=int, default=1, help="rounds of every side, interleaved (one JVM per side and round)")
     a = ap.parse_args(argv)
     work = Path(a.keep) if a.keep else Path(tempfile.mkdtemp(prefix="lake-bench-", dir=os.environ.get("LAKE_TCK_TMP")))
     work.mkdir(parents=True, exist_ok=True)
@@ -119,15 +143,19 @@ def main(argv=None):
         results = []
         for store in a.stores.split(","):
             root = root_of(load(lake_cp, work, store, a.n, a.scenarios), store)
-            for side in sides:
-                if store not in SIDES and side != "api":
-                    continue                                     # the files store has only the read API (published, RA-10)
-                cp, classes = compiled[side]
-                cls = API + ":" + store if side == "api" else (HOST_SIDES if side == "ref" else SIDES)[store]
-                for r in run(cp, classes, cls, root, a.warmups, a.runs):
-                    r.update(store=store, side=side)
-                    results.append(r)
-                    print(json.dumps(r), flush=True)
+            for rnd in range(a.repeat):
+                for side in (sides if rnd % 2 == 0 else sides[::-1]):
+                    if store not in SIDES and side != "api":
+                        continue                                 # the files store has only the read API (published, RA-10)
+                    cp, classes = compiled[side]
+                    cls = API + ":" + store if side == "api" else (HOST_SIDES if side == "ref" else SIDES)[store]
+                    for r in run(cp, classes, cls, root, a.warmups, a.runs):
+                        r.update(store=store, side=side, round=rnd)
+                        results.append(r)
+                        if a.repeat == 1:
+                            print(json.dumps(r), flush=True)
+        if a.repeat > 1:
+            summary(results)
         if a.out:
             with open(a.out, "a", encoding="utf-8") as f:
                 for r in results:
