@@ -15,8 +15,8 @@
  */
 package com.ash.lake.hostcompat;
 
-import com.ash.lake.hostcompat.Placeholders;
-import com.ash.lake.hostcompat.SettingsFile;
+import com.ash.lake.Placeholders;
+import com.ash.lake.SettingsFile;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -247,7 +247,7 @@ public final class NamedResources {
     public static Map<String, String> anchored(Map<String, String> settings) {
         Path home;
         try {
-            home = com.ash.lake.hostcompat.Roots.home();
+            home = com.ash.lake.LakeRoots.home();
         } catch (IllegalStateException e) {
             return settings;                                   // a unit test with no install folder: nothing to anchor against
         }
@@ -256,7 +256,7 @@ public final class NamedResources {
         for (Map.Entry<String, String> e : settings.entrySet()) {
             String k = e.getKey();
             if (e.getValue() != null && PATH_KEY.matcher(k).find() && !k.startsWith("client.") && !k.contains(".routes.")) {
-                out.put(k, com.ash.lake.hostcompat.Roots.anchorValue(k, e.getValue(), home, problems));
+                out.put(k, com.ash.lake.LakeRoots.anchorValue(k, e.getValue(), home, problems));
             }
         }
         return out;

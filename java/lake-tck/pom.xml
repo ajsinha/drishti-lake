@@ -25,7 +25,7 @@
   <name>Drishti Lake: test support (S3 mock and simulators, TLS and proxy fixtures, rows); the conformance kit grows here (L2, L9)</name>
 
   <dependencies>
-    <dependency><groupId>com.ash.lake</groupId><artifactId>lake-hostcompat</artifactId></dependency>
+    <dependency><groupId>com.ash.lake</groupId><artifactId>lake-api</artifactId></dependency>
     <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>
     <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter-api</artifactId></dependency>
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>s3</artifactId><version>${awssdk.version}</version></dependency>

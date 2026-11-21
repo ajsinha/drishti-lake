@@ -27,7 +27,7 @@ import java.util.stream.Stream;
 
 /**
  * The one place the server makes temporary files and folders. The server keeps a per-process folder, {@code drishti-<pid>}, under the configured temp base
- * ({@code drishti.tmp-dir} / {@code DRISHTI_TMP_DIR}, default {@code <data dir>/tmp/server}). {@link #start} makes it, lists (never removes) the folders of dead
+ * ({@code lake.tmp.dir} / {@code LAKE_TMP_DIR}, default {@code <data dir>/tmp/server}). {@link #start} makes it, lists (never removes) the folders of dead
  * processes, removes stale native-library copies from the base ({@link JvmTempDir}), sets the {@code java.io.tmpdir} property to the folder and removes the
  * folder on a clean shutdown.
  *
@@ -53,27 +53,21 @@ public final class TempFiles {
     private TempFiles() {}
 
     /**
-     * The configured base: the {@code drishti.tmp-dir} system property, then {@code DRISHTI_TMP_DIR}, then {@code <data dir>/tmp/server}
-     * ({@link com.ash.lake.hostcompat.DataDir}: never the system temp folder, which may be a small in-memory file system).
+     * The configured base: {@code lake.tmp.dir} ({@link com.ash.lake.LakeOptions}), then {@code <data dir>/tmp/server}
+     * ({@link com.ash.lake.LakeRoots}: never the system temp folder, which may be a small in-memory file system).
      */
     /**
      * The base when {@link #start} did not run (unit tests, a library used outside the server): the configured base when one
      * is set, else the JVM's temp folder, so nothing is made under a working directory that is not the server's.
      */
     static String libraryBase() {
-        String p = System.getProperty("drishti.tmp-dir");
-        if (p == null || p.isBlank()) {
-            p = System.getenv("DRISHTI_TMP_DIR");
-        }
-        return p == null || p.isBlank() ? System.getProperty("java.io.tmpdir", "/tmp") : com.ash.lake.hostcompat.Roots.anchored(p.strip()).toString();
+        String p = com.ash.lake.LakeOptions.current().tmpDirSetting();
+        return p == null ? System.getProperty("java.io.tmpdir", "/tmp") : com.ash.lake.LakeRoots.anchored(p).toString();
     }
 
     public static String configuredBase() {
-        String p = System.getProperty("drishti.tmp-dir");
-        if (p == null || p.isBlank()) {
-            p = System.getenv("DRISHTI_TMP_DIR");
-        }
-        return p == null || p.isBlank() ? com.ash.lake.hostcompat.DataDir.under("tmp/server") : com.ash.lake.hostcompat.Roots.anchored(p.strip()).toString();
+        String p = com.ash.lake.LakeOptions.current().tmpDirSetting();
+        return p == null ? com.ash.lake.LakeRoots.under("tmp/server") : com.ash.lake.LakeRoots.anchored(p).toString();
     }
 
     /**

@@ -12,7 +12,7 @@ retired from Drishti in G4, so `LakeStore` comes here with the native path only 
 | L1 | bootstrap: reactor, headers, licence, guards | **done** | guards: names no host, exemptions only shrink, header, file cap, dependency allow-list, official libraries only (failing); public surface, relative paths, configuration writes (report mode); `tools/ci/check.py` (local, no hosted CI); `tools/release/release.py` skeleton |
 | L2 | bridge and first TCK cases | **done** | `make_reference.py` over Drishti's jars at `9ce7c3170`; 15 cases × Delta, Iceberg = 30 results, stable over two runs; this code's results equal the reference (30/30) |
 | L3 | move with history, rename, hostcompat | **done** (untagged: no tag before the owner says) | 283 commits, 587 files; `./mvnw clean verify` green: 348 tests, 0 failures, 1 skipped (parked); the guards green |
-| L4 | own settings and errors | **in progress** | part 1: `LakeException`/`LK-` codes, TLS and proxy records in `com.ash.lake.io.net`; part 2: `ChannelIo`, `SingleFlight`, `LoadGuard` in `com.ash.lake.common` (hostcompat 41 → 23); kit 30/30 equal each time |
+| L4 | own settings and errors | **done** | part 1: `LakeException`/`LK-` codes, TLS and proxy records in `com.ash.lake.io.net`; part 2: `ChannelIo`, `SingleFlight`, `LoadGuard` in `com.ash.lake.common`; part 3: `LakeOptions` (`lake-api`), `LakeRoots`, `Placeholders`, `SettingsFile`, `RowFeed` own, `StartOnFewCoresTest` moved (one carrier, eight loads) (hostcompat 41 → 18, host-word files 79 → 73); kit 30/30 equal each time |
 | L5 to L14 | untangle, TCK, Python, contracts, API, docs, release | not started | |
 
 ## What the move left for later (each listed with its step)
@@ -29,15 +29,9 @@ retired from Drishti in G4, so `LakeStore` comes here with the native path only 
 
 ## Next steps
 
-1. **L1, the rest**: per-module dependency allow-list (design section 6), the public-surface dump in report mode, the
-   official-libraries-only pattern scan, explicit paths and writes-no-configuration guards; a CI entry point and a release script
-   skeleton (no tag).
-2. **L2, the bridge**: a results-file runner over Drishti's own jars at `9ce7c3170` (a scratch worktree, read only, as Rachana's
-   `make_reference.py`), and the first 60% of `tck/cases` harvested from the parity and interop tests (the staying adapter tests
-   included); stable over two runs.
-3. **L3's check, completed**: TCK results over this code equal the bridge's (`compare_results.py`, `known-differences.txt`).
-4. **L4**: `LakeOptions`, TLS and proxy records, `LakeException` and `LK-` codes; the L4 rows of hostcompat leave; the host words
-   and the `drishti.*` settings go down; `StartOnFewCoresTest` moved.
-5. **L5 to L8** as the design orders them (configuration divided behind `LakeCatalog`; per-instance `LakeRuntime`; table layer and
-   `TableStore`, with the delta opener's move; files store and memory lake with their own allow-lists); then L9 to L14.
-6. The owner confirms LK-9 (nobody uses `abfs://`, `gs://` or HDFS through the Hadoop engine) and names when `v0.9.0` may be tagged.
+1. **L5 to L8** as the design orders them (configuration divided behind `LakeCatalog`; per-instance `LakeRuntime`, which replaces
+   `LakeOptions.current()`; table layer and `TableStore`, `LakeStore` with the native path only (LK-9 confirmed), `LakeCheck` and
+   `LakeUndo` onto the official Delta library; files store and memory lake with their own allow-lists); then L9 to L14.
+2. The parity kit grows toward the 60% harvest as each step goes (child tables, list columns, promoted columns, flatten, latest-by,
+   `.ready`, relocate, maintenance).
+3. The owner names when `v0.9.0` may be tagged.

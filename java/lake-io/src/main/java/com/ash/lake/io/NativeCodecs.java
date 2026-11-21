@@ -36,7 +36,7 @@ public final class NativeCodecs implements CompressionCodecFactory {
     public static final NativeCodecs INSTANCE = new NativeCodecs(false, "the native engine", "rewrite the file with Snappy or ZSTD");
 
     /** The connector setting that picks the LZ4 decoder: {@code safe} (the default) or {@code fast}. */
-    public static final String LZ4_DECODER = "drishti.lz4.decoder";
+    public static final String LZ4_DECODER = "lake.lz4.decoder";
 
     /** The ZSTD level pages are written with (Iceberg's {@code write.parquet.compression-level}; 3, zstd's default). */
     public static final int DEFAULT_ZSTD_LEVEL = 3;

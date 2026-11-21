@@ -15,7 +15,7 @@
  */
 package com.ash.lake.iceberg.table;
 
-import com.ash.lake.hostcompat.RowFeed;
+import com.ash.lake.common.RowFeed;
 import com.ash.lake.common.LoadGuard;
 import com.ash.lake.iceberg.table.IcebergLayout.Row;
 import com.fasterxml.jackson.core.JsonFactory;
@@ -89,14 +89,14 @@ public final class IcebergLoader {
     /**
      * Runs a load; a failure ends it with one line on standard error and exit status 1, never a Java stack trace (QA3B-12: a REST
      * catalog whose bucket is missing ended in {@code Exception in thread "main" java.io.UncheckedIOException …} and eight frames).
-     * {@code -Ddrishti.loader.trace=true} prints the stack trace as well.
+     * {@code -Dlake.loader.trace=true} prints the stack trace as well.
      */
     public static void main(String[] args) {
         try {
             load(args);
         } catch (Exception | Error e) {
             System.err.println("iceberg: " + oneLine(e, settingsOf(args)));
-            if (Boolean.getBoolean("drishti.loader.trace")) {
+            if (com.ash.lake.LakeOptions.current().loaderTrace()) {
                 e.printStackTrace();
             }
             System.exit(1);
@@ -160,7 +160,7 @@ public final class IcebergLoader {
             return "cannot reach the object store at " + endpoint + " (" + root.getMessage() + "): check --set s3.endpoint and that the store runs";
         }
         return "the load failed: " + first(all.isEmpty() ? com.ash.lake.iceberg.io.Reasons.of(e) : all, 600) + " (" + root.getClass().getSimpleName()
-                + "; -Ddrishti.loader.trace=true prints the stack trace)";
+                + "; -Dlake.loader.trace=true prints the stack trace)";
     }
 
     private static java.util.Optional<String> bucket(String uri) {
@@ -210,7 +210,7 @@ public final class IcebergLoader {
             i++;
         }
         if (!settings.containsKey("root") && !"rest".equalsIgnoreCase(settings.getOrDefault("catalog", ""))) {
-            settings.put("root", com.ash.lake.hostcompat.DataDir.under("iceberg"));   // a folder catalog with no root given: the data folder's
+            settings.put("root", com.ash.lake.LakeRoots.under("iceberg"));   // a folder catalog with no root given: the data folder's
         }
         IcebergLoader.Run run = new IcebergLoader.Run(settings, fileRows, rowGroupBytes, budget, threads,
                 spill.resolve("drishti-iceberg-" + ProcessHandle.current().pid()), LoadGuard.fromArgs(args));

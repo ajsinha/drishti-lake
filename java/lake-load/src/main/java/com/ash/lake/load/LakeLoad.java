@@ -75,7 +75,7 @@ public final class LakeLoad {
         try (com.ash.lake.iceberg.io.FileAccess io = new com.ash.lake.iceberg.io.FileAccess(com.ash.lake.io.S3Settings.from(Map.of()),
                 com.ash.lake.iceberg.io.Relocation.none(), null)) {
             Archives.Plan p = Archives.plan(io, path, java.nio.file.Files.size(java.nio.file.Path.of(path)), null,
-                    Archives.Limits.defaults(System::getenv));
+                    Archives.Limits.defaults(com.ash.lake.LakeOptions.current().lookup()));
             p.datasets().forEach((table, members) -> members.forEach(m -> out.computeIfAbsent(table, k -> new java.util.TreeSet<>()).add(m.date())));
         }
         return out;
@@ -234,7 +234,7 @@ public final class LakeLoad {
             error = e.getMessage();
         } catch (Exception | OutOfMemoryError e) {
             error = oneLine(e);
-            if (Boolean.getBoolean("drishti.loader.trace")) {
+            if (com.ash.lake.LakeOptions.current().loaderTrace()) {
                 e.printStackTrace(out);
             }
         } finally {
@@ -348,7 +348,7 @@ public final class LakeLoad {
         }
     }
 
-    /** A failure in one line: the innermost message (never a stack trace; -Ddrishti.loader.trace=true prints one). */
+    /** A failure in one line: the innermost message (never a stack trace; -Dlake.loader.trace=true prints one). */
     static String oneLine(Throwable e) {
         for (Throwable c = e; c != null; c = c.getCause() == c ? null : c.getCause()) {
             if (c instanceof Archives.ArchiveException) {

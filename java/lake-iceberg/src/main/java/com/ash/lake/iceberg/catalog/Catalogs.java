@@ -77,7 +77,7 @@ public final class Catalogs {
         if (!files.isEmpty() && settings.getOrDefault("root", "").isBlank()) {
             return new StaticCatalog(files, io);
         }
-        String root = settings.getOrDefault("root", "").isBlank() ? com.ash.lake.hostcompat.DataDir.under("iceberg") : settings.get("root").trim();
+        String root = settings.getOrDefault("root", "").isBlank() ? com.ash.lake.LakeRoots.under("iceberg") : settings.get("root").trim();
         if (!FileAccess.supports(root)) {
             io.close();
             throw new UnsupportedOperationException("Iceberg tables are not read from " + root

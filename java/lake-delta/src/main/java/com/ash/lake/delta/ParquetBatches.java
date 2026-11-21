@@ -130,8 +130,8 @@ final class ParquetBatches implements CloseableIterator<ColumnarBatch> {
         }
     }
 
-    /** Whether single-entity reads use the page index (drishti.parquet.page-index, default true; every Parquet library is one version, the root pom). */
-    static final boolean PAGE_INDEX = Boolean.parseBoolean(System.getProperty("drishti.parquet.page-index", "true"));
+    /** Whether single-entity reads use the page index (lake.parquet.page-index, default true; every Parquet library is one version, the root pom). */
+    static final boolean PAGE_INDEX = com.ash.lake.LakeOptions.current().parquetPageIndex();
     /** This read skips the pages the page index rules out. */
     private boolean pageFiltered;
 

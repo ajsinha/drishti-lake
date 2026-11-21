@@ -53,7 +53,7 @@ public final class DrishtiFileIO implements FileIO {
     private static final Set<DrishtiFileIO> ALL = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
     private static final Map<String, String> CACHE = Map.of("io.manifest.cache-enabled", "true",
             "io.manifest.cache.expiration-interval-ms", String.valueOf(24 * 3_600_000L),
-            "io.manifest.cache.max-total-bytes", String.valueOf(Long.getLong("drishti.iceberg.manifest-cache-bytes", 512L << 20)),
+            "io.manifest.cache.max-total-bytes", String.valueOf(com.ash.lake.LakeOptions.current().icebergManifestCacheBytes()),
             "io.manifest.cache.max-content-length", String.valueOf(64L << 20));
 
     private transient volatile FileAccess access;

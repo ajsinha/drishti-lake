@@ -13,24 +13,22 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.hostcompat;
+package com.ash.lake;
 
 import java.util.function.Function;
 
 /**
- * The one placeholder resolver of every file Drishti reads (docs/admin/CONFIGURATION.md, "Placeholders"): packs, connector templates
- * and site files, bindings, lakes, data loads, engines, modules, lenses, the UI kit, AI and MCP providers, the store and the network
- * files. {@code ${key}} or {@code ${key:default}} (also {@code ${key:-default}}), nested in the default ({@code ${a:${b:x}}}), resolves in
+ * The one placeholder resolver of every file the product reads: lake files, loader configurations, the network files. {@code ${key}} or {@code ${key:default}} (also {@code ${key:-default}}), nested in the default ({@code ${a:${b:x}}}), resolves in
  * this order:
  * <ol>
  *   <li>an explicit {@code -D} system property;</li>
- *   <li>the settings files ({@code -Ddrishti.settings.file}: their entries are system properties, a {@code -D} still wins);</li>
- *   <li>the environment: the key as written ({@code DRISHTI_DELTA_ROOT}), then its variable form ({@code lake.risk.root} is
+ *   <li>the settings files ({@code -Dlake.settings.file}: their entries are system properties, a {@code -D} still wins);</li>
+ *   <li>the environment: the key as written ({@code LAKE_RISK_ROOT}), then its variable form ({@code lake.risk.root} is
  *       {@code LAKE_RISK_ROOT});</li>
  *   <li>the default; none: the reference stays as written ({@link #resolve}) or is an error ({@link #require}).</li>
  * </ol>
- * A reader inside the server passes the server's own view ({@code view}: its environment, which holds the system properties, the
- * settings files' entries and the environment in the same order, then its configuration files); a test passes a map. The view replaces
+ * A host passes its own view ({@code view}: its system properties, settings files' entries and environment in the same order, then
+ * its configuration files); a test passes a map. The view replaces
  * the process lookup; null means the process. A value that is not a placeholder is kept as written. Pure Java, no dependencies.
  */
 public final class Placeholders {

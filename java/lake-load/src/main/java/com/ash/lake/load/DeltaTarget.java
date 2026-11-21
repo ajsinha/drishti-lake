@@ -83,11 +83,9 @@ import java.util.Optional;
 final class DeltaTarget implements TableTarget {
 
     static final String ENGINE_INFO = "Drishti parallel loader";   // the commits' engineInfo (lake undo's too)
-    /** The writer's row groups and pages: as {@link LakeWriter} (DRISHTI_LAKE_ROW_GROUP_KB, 256; DRISHTI_LAKE_PAGE_KB, 64). */
-    private static final long ROW_GROUP = System.getenv("DRISHTI_LAKE_ROW_GROUP_MB") != null
-            ? Long.parseLong(System.getenv("DRISHTI_LAKE_ROW_GROUP_MB")) * 1024 * 1024
-            : Long.parseLong(System.getenv().getOrDefault("DRISHTI_LAKE_ROW_GROUP_KB", "256")) * 1024;
-    private static final long PAGE = Long.parseLong(System.getenv().getOrDefault("DRISHTI_LAKE_PAGE_KB", "64")) * 1024;
+    /** The writer's row groups and pages: as {@link LakeWriter} (lake.parquet.row-group-kb, 256; lake.parquet.page-kb, 64). */
+    private static final long ROW_GROUP = com.ash.lake.LakeOptions.current().rowGroupBytes();
+    private static final long PAGE = com.ash.lake.LakeOptions.current().pageBytes();
 
     private final String path;
     private final LoadConfig cfg;

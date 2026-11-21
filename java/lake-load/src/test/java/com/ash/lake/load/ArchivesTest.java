@@ -139,8 +139,8 @@ class ArchivesTest {
         assertThat(Archives.DEFAULT_MAX_RATIO).isEqualTo(d.get("max_ratio").asDouble());
         assertThat(Archives.DEFAULT_MAX_MEMBERS).isEqualTo(d.get("max_members").asInt());
         assertThat(Archives.FLOOR).isEqualTo(d.get("floor_bytes").asLong());
-        Archives.Limits env = Archives.Limits.defaults(Map.of("DRISHTI_ARCHIVE_MAX_MB", "5", "DRISHTI_ARCHIVE_MAX_RATIO", "7",
-                "DRISHTI_ARCHIVE_MAX_MEMBERS", "9")::get);
+        Archives.Limits env = Archives.Limits.defaults(Map.of("lake.archive.max-mb", "5", "lake.archive.max-ratio", "7",
+                "lake.archive.max-members", "9")::get);
         assertThat(env).isEqualTo(new Archives.Limits(5L << 20, 7, 9));
         assertThat(Inputs.SUFFIXES).contains(".zip", ".tgz", ".tar", ".gz", ".zst");
     }

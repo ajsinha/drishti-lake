@@ -83,8 +83,9 @@ final class Archives {
     record Limits(long maxBytes, double maxRatio, int maxMembers) {
 
         static Limits defaults(Function<String, String> env) {
-            return new Limits(mb(env.apply("DRISHTI_ARCHIVE_MAX_MB"), DEFAULT_MAX_MB), num(env.apply("DRISHTI_ARCHIVE_MAX_RATIO"), DEFAULT_MAX_RATIO),
-                    (int) num(env.apply("DRISHTI_ARCHIVE_MAX_MEMBERS"), DEFAULT_MAX_MEMBERS));
+            return new Limits(mb(env.apply(com.ash.lake.LakeOptions.ARCHIVE_MAX_MB), DEFAULT_MAX_MB),
+                    num(env.apply(com.ash.lake.LakeOptions.ARCHIVE_MAX_RATIO), DEFAULT_MAX_RATIO),
+                    (int) num(env.apply(com.ash.lake.LakeOptions.ARCHIVE_MAX_MEMBERS), DEFAULT_MAX_MEMBERS));
         }
 
         long cap(long archiveBytes) {

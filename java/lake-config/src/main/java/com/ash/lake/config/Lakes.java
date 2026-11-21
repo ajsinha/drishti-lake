@@ -44,10 +44,10 @@ import java.util.stream.Stream;
  */
 public final class Lakes {
 
-    /** The system property that names the lake folder; it wins over the environment. */
-    public static final String PROPERTY = "drishti.lakes.dir";
-    /** The environment variable that names the lake folder. */
-    public static final String ENV = "DRISHTI_LAKES_DIR";
+    /** The setting that names the lake folder ({@link com.ash.lake.LakeOptions#LAKES_DIR}). */
+    public static final String PROPERTY = com.ash.lake.LakeOptions.LAKES_DIR;
+    /** Its environment variable. */
+    public static final String ENV = "LAKE_LAKES_DIR";
     /**
      * The variable that names the demo lake's root (config/lakes/demo.yaml: {@code ${DRISHTI_DELTA_ROOT:<data>/delta/demo}}); kept for the
      * launchers and tools that set it, under {@code lake.demo.root} ({@code [lake.demo] root=}), which wins over it.
@@ -97,17 +97,17 @@ public final class Lakes {
 
     /** The lake folder: {@value #PROPERTY}, else {@value #ENV}, else {@code <config>/lakes}; absolute (a relative value is under the install folder). */
     public static Path dir() {
-        String p = System.getProperty(PROPERTY);
+        String p = com.ash.lake.LakeOptions.current().value(PROPERTY);
         if (p == null || p.isBlank()) {
             p = properties.apply(PROPERTY);
         }
         if (p == null || p.isBlank()) {
             p = properties.apply(ENV);
         }
-        return com.ash.lake.hostcompat.Roots.anchored(p == null || p.isBlank() ? com.ash.lake.hostcompat.Roots.config("lakes") : p.strip());
+        return com.ash.lake.LakeRoots.anchored(p == null || p.isBlank() ? com.ash.lake.LakeRoots.config("lakes") : p.strip());
     }
 
-    private static volatile Function<String, String> properties = com.ash.lake.hostcompat.Placeholders::process;
+    private static volatile Function<String, String> properties = com.ash.lake.Placeholders::process;
 
     /**
      * How a lake file's references are resolved by {@link #current()}: the server installs its own settings (its environment, system
@@ -115,7 +115,7 @@ public final class Lakes {
      * setting is seen; null: the process's environment.
      */
     public static void useProperties(Function<String, String> lookup) {
-        properties = lookup == null ? com.ash.lake.hostcompat.Placeholders::process : lookup;
+        properties = lookup == null ? com.ash.lake.Placeholders::process : lookup;
     }
 
     private static final Pattern NAMED = Pattern.compile("\\$\\{([A-Za-z_][A-Za-z0-9_.-]*)");
@@ -165,7 +165,7 @@ public final class Lakes {
 
     /** The lakes of {@link #dir()} with the process's environment. */
     public static Lakes load() {
-        return read(dir(), com.ash.lake.hostcompat.Placeholders::process);
+        return read(dir(), com.ash.lake.Placeholders::process);
     }
 
     /**
@@ -547,8 +547,8 @@ public final class Lakes {
             if (raw == null) {
                 return null;
             }
-            try {   // the one resolver (com.ash.lake.hostcompat.Placeholders), through this reader's view
-                return com.ash.lake.hostcompat.Placeholders.require(raw, this::lookup);
+            try {   // the one resolver (com.ash.lake.Placeholders), through this reader's view
+                return com.ash.lake.Placeholders.require(raw, this::lookup);
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException(where + ": " + key + ": " + e.getMessage() + " (or give the reference a default: ${name:default})", e);
             }

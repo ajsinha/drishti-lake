@@ -36,5 +36,12 @@ Entries are written per release; unreleased work is listed first.
 - **L4, part 2: small utilities.** `ChannelIo`, `SingleFlight` and `LoadGuard` are the product's own (`com.ash.lake.common`); the
   quarantine's business zone variable is `LAKE_BUSINESS_ZONE`; `Extensions` stays listed until L5 (`Vocabularies` needs it).
   hostcompat 26 → 23. Parity kit equal to the reference (30/30).
+- **L4, part 3: own settings.** `LakeOptions` (new module `lake-api`, the JDK only) is the one place the product reads a setting:
+  `lake.*` names and their `LAKE_*` variables (home, configuration, data, lake-file, connectors and temp folders; Parquet row group,
+  page, page index, footer cache; Iceberg delete and manifest caches; archive caps; loader trace); built options read nothing from the
+  process. `LakeRoots`, `Placeholders` and `SettingsFile` (`lake.settings.file`) are the product's own (`com.ash.lake`), `RowFeed`
+  `com.ash.lake.common`; `DataDir` folded into `LakeRoots`. The loader's child process gets the `lake.*` settings. `StartOnFewCoresTest`:
+  eight loads at once, Delta and Iceberg, on one carrier thread. Names persisted into tables keep the host's prefix until L7.
+  hostcompat 23 → 18, host-word files 79 → 73. Parity kit equal to the reference (30/30).
 - Not moved yet, on purpose (each with its step): the memory lake (L8), the Delta lake opener that chooses the Hadoop engine (L7;
   the engine itself stays in Drishti, LK-9), the files store (L8), the Python path (L10), the contracts tool (L11).

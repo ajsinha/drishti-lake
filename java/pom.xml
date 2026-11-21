@@ -23,6 +23,7 @@
   <name>Drishti Lake (reactor)</name>
 
   <modules>
+    <module>lake-api</module>
     <module>lake-hostcompat</module>
     <module>lake-io</module>
     <module>lake-config</module>
@@ -70,6 +71,7 @@
         <groupId>org.springframework.boot</groupId><artifactId>spring-boot-dependencies</artifactId><version>${host-boot-bom.version}</version>
         <type>pom</type><scope>import</scope>
       </dependency>
+      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-api</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-hostcompat</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-io</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-config</artifactId><version>${project.version}</version></dependency>
@@ -119,13 +121,11 @@
           <argLine>@{argLine} -Djava.io.tmpdir=${project.build.directory}/tmp</argLine>
           <systemPropertyVariables>
             <jdk.http.auth.tunneling.disabledSchemes></jdk.http.auth.tunneling.disabledSchemes>
-            <!-- SPLIT EXEMPTION (host words): the moved code and tests still read the host's setting names; L4 replaces them with
-                 LakeOptions. Every root is absolute (explicit paths). -->
-            <drishti.data.dir>${project.build.directory}/test-data</drishti.data.dir>
-            <drishti.home>${project.basedir}</drishti.home>
-            <drishti.modules.home>none</drishti.modules.home>
-            <drishti.repo.root>${maven.multiModuleProjectDirectory}/..</drishti.repo.root>
-            <drishti.module.root>${project.basedir}</drishti.module.root>
+            <!-- the product's own roots (LakeOptions); every root is absolute (explicit paths) -->
+            <lake.data.dir>${project.build.directory}/test-data</lake.data.dir>
+            <lake.home>${project.basedir}</lake.home>
+            <lake.repo.root>${maven.multiModuleProjectDirectory}/..</lake.repo.root>
+            <lake.module.root>${project.basedir}</lake.module.root>
           </systemPropertyVariables>
         </configuration>
       </plugin>

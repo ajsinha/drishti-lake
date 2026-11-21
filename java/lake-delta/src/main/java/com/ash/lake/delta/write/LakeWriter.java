@@ -84,14 +84,12 @@ public final class LakeWriter {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final String ENGINE_INFO = "Drishti lake build";
     /**
-     * The most bytes one Parquet row group holds: DRISHTI_LAKE_ROW_GROUP_KB (default 256), or DRISHTI_LAKE_ROW_GROUP_MB. A single
+     * The most bytes one Parquet row group holds: lake.parquet.row-group-kb (default 256), or lake.parquet.row-group-mb. A single
      * entity's read decodes at most its row group (its page, with the page index), so small groups make first reads cheap.
      */
-    static final long ROW_GROUP_BYTES = System.getenv("DRISHTI_LAKE_ROW_GROUP_MB") != null
-            ? Long.parseLong(System.getenv("DRISHTI_LAKE_ROW_GROUP_MB")) * 1024 * 1024
-            : Long.parseLong(System.getenv().getOrDefault("DRISHTI_LAKE_ROW_GROUP_KB", "256")) * 1024;
-    /** The most bytes one Parquet page holds (DRISHTI_LAKE_PAGE_KB, default 64): the unit the page index can skip to. */
-    static final long PAGE_BYTES = Long.parseLong(System.getenv().getOrDefault("DRISHTI_LAKE_PAGE_KB", "64")) * 1024;
+    static final long ROW_GROUP_BYTES = com.ash.lake.LakeOptions.current().rowGroupBytes();
+    /** The most bytes one Parquet page holds (lake.parquet.page-kb, default 64): the unit the page index can skip to. */
+    static final long PAGE_BYTES = com.ash.lake.LakeOptions.current().pageBytes();
 
     /** What a write did. */
     public record Result(long version, int files, long rows, int removed, List<String> leftOut) {}

@@ -25,6 +25,7 @@
   <name>Drishti Lake: host types the moved code still names (SPLIT_EXEMPTIONS.md; shrinks to nothing)</name>
 
   <dependencies>
+    <dependency><groupId>com.ash.lake</groupId><artifactId>lake-api</artifactId></dependency>
     <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>
     <dependency><groupId>com.fasterxml.jackson.dataformat</groupId><artifactId>jackson-dataformat-yaml</artifactId></dependency>
   </dependencies>

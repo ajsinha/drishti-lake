@@ -47,7 +47,7 @@ import java.util.Set;
 public final class Deletes {
 
     private static final Cache<String, Object> FILES = Caffeine.newBuilder()
-            .maximumWeight(Long.getLong("drishti.iceberg.delete-cache-rows", 5_000_000))
+            .maximumWeight(com.ash.lake.LakeOptions.current().icebergDeleteCacheRows())
             .weigher((String k, Object v) -> 1 + (v instanceof Map<?, ?> m ? m.values().stream().mapToInt(a -> ((long[]) a).length).sum()
                     : ((Set<?>) v).size())).build();
     /**

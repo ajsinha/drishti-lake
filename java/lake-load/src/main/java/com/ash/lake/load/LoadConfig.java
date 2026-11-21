@@ -146,7 +146,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
 
     /** Reads {@code file} (YAML or JSON) and applies {@code overrides} ({@code key.path=value}). */
     static LoadConfig read(Path file, List<String> overrides) throws IOException {
-        return read(file, overrides, com.ash.lake.hostcompat.Placeholders::process);
+        return read(file, overrides, com.ash.lake.Placeholders::process);
     }
 
     static LoadConfig read(Path file, List<String> overrides, Function<String, String> env) throws IOException {
@@ -339,7 +339,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
 
     /** A connector's table as the site's own connector file names it ({@code settings.lake-tables}, its first entry's table), else the template's. */
     private static String siteTable(String connector, String template) {
-        Path f = com.ash.lake.hostcompat.Roots.connectors().resolve(connector + ".yaml");
+        Path f = com.ash.lake.LakeRoots.connectors().resolve(connector + ".yaml");
         if (!Files.isRegularFile(f)) {
             return template;
         }
@@ -596,14 +596,14 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         }
     }
 
-    /** {@code source.dataset} and {@code source.archive.*}: the caps' defaults from DRISHTI_ARCHIVE_MAX_MB, _MAX_RATIO, _MAX_MEMBERS. */
+    /** {@code source.dataset} and {@code source.archive.*}: the caps' defaults from lake.archive.max-mb, max-ratio, max-members. */
     private static Archive archive(Reader r, JsonNode s) {
         JsonNode a = s.path("archive");
         Archives.Limits d;
         try {
-            d = Archives.Limits.defaults(r.env());
+            d = Archives.Limits.defaults(k -> com.ash.lake.Placeholders.lookup(k, r.env()));
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("DRISHTI_ARCHIVE_MAX_MB, _MAX_RATIO and _MAX_MEMBERS are numbers");
+            throw new IllegalArgumentException("lake.archive.max-mb, max-ratio and max-members (LAKE_ARCHIVE_MAX_MB, ...) are numbers");
         }
         long maxBytes = a.has("max-mb") ? mb(r, a, "max-mb", 1) : d.maxBytes();
         double ratio = a.has("max-ratio") ? Double.parseDouble(r.text(a, "max-ratio", "0")) : d.maxRatio();
@@ -721,9 +721,9 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
     /** Reads values with {@code ${VAR}} expanded. */
     record Reader(Function<String, String> env) {
 
-        /** Every {@code ${key}} / {@code ${key:-default}} through the one resolver (com.ash.lake.hostcompat.Placeholders), this reader's view. */
+        /** Every {@code ${key}} / {@code ${key:-default}} through the one resolver (com.ash.lake.Placeholders), this reader's view. */
         String expand(String s) {
-            return com.ash.lake.hostcompat.Placeholders.require(s, env);
+            return com.ash.lake.Placeholders.require(s, env);
         }
 
         String text(JsonNode n, String key, String dflt) {

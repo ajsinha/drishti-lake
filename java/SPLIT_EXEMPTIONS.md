@@ -9,8 +9,8 @@ go down from its value at the move. **This list only shrinks**; at `v1.0.0` it i
 
 ## Counts (read by the guards)
 
-- hostcompat types: 23
-- host-word files: 79
+- hostcompat types: 18
+- host-word files: 73
 - parked checks: 2
 
 ## Dependencies
@@ -24,7 +24,7 @@ go down from its value at the move. **This list only shrinks**; at `v1.0.0` it i
 
 ## Host types
 
-In package `com.ash.lake.hostcompat` (module `lake-hostcompat`; `RowFeed` sits in `lake-io` because it names `FileDates`). Copied
+In package `com.ash.lake.hostcompat` (module `lake-hostcompat`). Copied
 from the host at the freeze commit (Drishti `main` `9ce7c3170`) with only their package changed, so behaviour stays as the host's;
 two edits: `ModuleLoaders` lost the static block that joined the host's `DatesInUse` registry, and `TlsContexts` logs as
 `com.ash.lake.hostcompat.tls`.
@@ -32,12 +32,7 @@ two edits: `ModuleLoaders` lost the static block that joined the host's `DatesIn
 | Type | Host type | Removed by |
 |---|---|---|
 | `ConnectorSecrets` | `com.ash.drishti.common.ConnectorSecrets` | L5: with `NamedResources` (the connector half leaves for the host's `LakeCatalog`) |
-| `DataDir` | `com.ash.drishti.api.DataDir` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
-| `ModuleHomes` | `com.ash.drishti.api.resolution.ModuleHomes` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
-| `Placeholders` | `com.ash.drishti.settingsfile.Placeholders` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
-| `Roots` | `com.ash.drishti.api.Roots` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
-| `RowFeed` | `com.ash.drishti.common.RowFeed` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
-| `SettingsFile` | `com.ash.drishti.settingsfile.SettingsFile` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
+| `ModuleHomes` | `com.ash.drishti.api.resolution.ModuleHomes` | L5: the pack and module half leaves for the host's `LakeCatalog` (the loader's child process forwards the module boot's result until then) |
 | `Extensions` | `com.ash.drishti.common.Extensions` | L5: with `Vocabularies` (the pack and module half leaves for the host's `LakeCatalog`) |
 | `ConfigResolution` | `com.ash.drishti.api.resolution.ConfigResolution` | L5: the pack and module half leaves for the host's `LakeCatalog` |
 | `DomainVocabulary` | `com.ash.drishti.kernel.api.vocabulary.DomainVocabulary` | L5: the pack and module half leaves for the host's `LakeCatalog` |
@@ -57,10 +52,14 @@ two edits: `ModuleLoaders` lost the static block that joined the host's `DatesIn
 
 ## Setting names and host words (read by `NamesNoHostTest`)
 
-The moved code still reads the host's setting names (`drishti.data.dir`, `drishti.repo.root`, `drishti.module.root`,
-`drishti.home`, the `DRISHTI_*` variables: the surefire configuration in `java/pom.xml` sets the first ones, absolute) and carries
-`DRS-` codes, source-system names (`trade_endur`) and the host's name in comments. The count of such files is the "host-word files"
-line above. L4 removes the settings and codes, L5 the pack and source-system words, L13 the rest of the prose.
+The product reads its own settings only, through `LakeOptions` (`lake.*` names, `LAKE_*` variables; the surefire configuration in
+`java/pom.xml` sets `lake.home`, `lake.data.dir`, `lake.repo.root`, `lake.module.root`, absolute). What still carries a host word:
+the pack and module types above (they read `drishti.packs.*`, `drishti.modules.*`, the module boot's `drishti.module.*`, which the
+loader's child process forwards: L5); the lake files' placeholder text `${drishti.data.dir:./data}` (configuration, L5); the
+**persisted names** written into tables (Iceberg snapshot summaries and table properties `drishti.business-dates`, `drishti.load-ids`,
+`drishti.layout.*`, `drishti.parquet.*`, the Delta commit's engine info): kept so the lakes written before the split read the same, decided
+with the table layer (L7: read both, write the product's); `DRS-` codes in messages, source-system names (`trade_endur`) and the host's
+name in comments (L5 the pack and source-system words, L13 the prose). The count of such files is the "host-word files" line above.
 
 ## Parked checks
 

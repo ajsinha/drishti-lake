@@ -141,7 +141,7 @@ public final class IcebergMaintenance {
 
     public static void main(String[] args) throws Exception {
         Map<String, String> settings = new HashMap<>();
-        settings.put("root", args.length > 0 && !args[0].startsWith("--") ? args[0] : com.ash.lake.hostcompat.DataDir.under("iceberg"));
+        settings.put("root", args.length > 0 && !args[0].startsWith("--") ? args[0] : com.ash.lake.LakeRoots.under("iceberg"));
         List<String> domains = new ArrayList<>(List.of(""));
         List<String> kinds = List.of();
         Map<String, List<String>> addColumns = new HashMap<>();

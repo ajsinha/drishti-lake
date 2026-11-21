@@ -148,7 +148,7 @@ public final class LoaderProcess implements LoadRunner {
                 return;
             }
         }
-        com.ash.lake.config.Lake lake = com.ash.lake.config.Lakes.readFile(file, com.ash.lake.hostcompat.Placeholders::process);
+        com.ash.lake.config.Lake lake = com.ash.lake.config.Lakes.readFile(file, com.ash.lake.Placeholders::process);
         com.ash.lake.config.LakeTable entry = packEntry(r);
         // the table's entry already there; or, with no connector naming one table, any table of the kind (the lake file is the truth)
         if (lake.tables().containsKey(entry.name())
@@ -207,14 +207,19 @@ public final class LoaderProcess implements LoadRunner {
             cmd.add(Path.of(System.getProperty("java.home"), "bin", windows ? "java.exe" : "java").toString());
             cmd.add("-Xmx" + settings.loaderHeap());
             cmd.add("-Djava.io.tmpdir=" + tmp.toAbsolutePath());
-            cmd.add("-Ddrishti.tmp-dir=" + tmp.toAbsolutePath());
+            cmd.add("-D" + com.ash.lake.LakeOptions.TMP_DIR + "=" + tmp.toAbsolutePath());
             cmd.add("-D" + com.ash.lake.config.Lakes.PROPERTY + "=" + com.ash.lake.config.Lakes.dir().toAbsolutePath());
             // the launch roots this process resolved (LaunchRoots, the settings file): the loader takes no folder from its working folder.
             // The data folder is not among them: the lake files' settings (Lakes.environment(), below) give it, as this process reads it
             // and the module boot's result (KERNEL_AND_MODULES.md section 4.2.1): every module's folder and, after a boot on packages, the
             // whole value; the loader never boots or unpacks itself
-            List<String> keys = new ArrayList<>(List.of("drishti.home", "drishti.config.dir",
-                    "drishti.settings.file", com.ash.lake.hostcompat.ModuleHomes.PROPERTY, "drishti.modules.dev"));
+            // the product's own settings (LakeOptions: lake.home, lake.config.dir, lake.settings.file, ...; not the temp folder, set above)
+            List<String> keys = new ArrayList<>();
+            System.getProperties().stringPropertyNames().stream()
+                    .filter(k -> k.startsWith("lake.") && !k.equals(com.ash.lake.LakeOptions.TMP_DIR) && !k.equals(com.ash.lake.config.Lakes.PROPERTY))
+                    .sorted().forEach(keys::add);
+            // SPLIT EXEMPTION (L5): the module boot's result, until the pack half leaves for the host's LakeCatalog
+            keys.addAll(List.of(com.ash.lake.hostcompat.ModuleHomes.PROPERTY, "drishti.modules.dev"));
             System.getProperties().stringPropertyNames().stream().filter(k -> k.startsWith(com.ash.lake.hostcompat.ModuleHomes.DIR_PROPERTY))
                     .sorted().forEach(keys::add);
             for (String key : keys) {

@@ -61,9 +61,9 @@ public record ResolutionSettings(Path siteDir, Path installedDir, Path kernelDir
      * properties carry ({@link ModuleHomes#PROPERTY}), else none.
      */
     public static ResolutionSettings of(Function<String, String> property) {
-        String data = or(property.apply("drishti.data.dir"), com.ash.lake.hostcompat.Roots.data());
+        String data = or(property.apply("drishti.data.dir"), com.ash.lake.LakeRoots.data());
         String newSite = property.apply("drishti.packs.site-dir");
-        String site = or(newSite, or(property.apply("drishti.packs.dir"), com.ash.lake.hostcompat.Roots.config("packs")));
+        String site = or(newSite, or(property.apply("drishti.packs.dir"), com.ash.lake.LakeRoots.config("packs")));
         return new ResolutionSettings(abs(site), abs(or(property.apply("drishti.packs.installed-dir"), data + "/packs/installed")),
                 abs(or(property.apply("drishti.kernel.packs-dir"), site + "/core")), null,
                 // a test's or a tool's own folders of packs (drishti.packs.extra-dirs, the retired example packs): part of the site, after it

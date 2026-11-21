@@ -58,7 +58,7 @@ class DirectMemorySoakTest {
 
     @Test
     void manyThreadsReadingLargeRangesKeepDirectMemoryFlat() throws Exception {
-        long seconds = Long.getLong("drishti.soak.seconds", 12);
+        long seconds = Long.getLong("lake.soak.seconds", 12);
         byte[][] content = new byte[FILES][];
         Random random = new Random(42);
         for (int i = 0; i < FILES; i++) {

@@ -45,8 +45,8 @@ public final class ParquetFooters {
     /** The bytes a parsed footer is weighed at per column chunk, and on its own. */
     static final int CHUNK_BYTES = 700;
     static final int FOOTER_BYTES = 1024;
-    /** The most bytes of parsed footers kept: {@code -Ddrishti.parquet.footer-cache-mb} (64). */
-    static final long LIMIT_BYTES = Math.max(1, Long.getLong("drishti.parquet.footer-cache-mb", 64)) << 20;
+    /** The most bytes of parsed footers kept: {@code lake.parquet.footer-cache-mb} (64). */
+    static final long LIMIT_BYTES = com.ash.lake.LakeOptions.current().footerCacheBytes();
 
     private static final Cache<String, ParquetMetadata> FOOTERS = Caffeine.newBuilder().maximumWeight(LIMIT_BYTES)
             .weigher((String k, ParquetMetadata m) -> weight(m)).recordStats().build();

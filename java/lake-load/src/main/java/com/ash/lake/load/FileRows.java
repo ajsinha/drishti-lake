@@ -81,7 +81,7 @@ public final class FileRows {
             return out;
         }
         try (FileAccess io = access()) {
-            Archives.Limits limits = Archives.Limits.defaults(System::getenv);
+            Archives.Limits limits = Archives.Limits.defaults(com.ash.lake.LakeOptions.current().lookup());
             Archives.Plan plan = Archives.plan(io, file.toString(), Files.size(file), null, limits);
             for (Map.Entry<String, List<Archives.Member>> e : plan.datasets().entrySet()) {
                 List<String> lines = new ArrayList<>();
@@ -116,7 +116,7 @@ public final class FileRows {
             return;
         }
         try (FileAccess io = access()) {
-            Archives.Limits limits = Archives.Limits.defaults(System::getenv);
+            Archives.Limits limits = Archives.Limits.defaults(com.ash.lake.LakeOptions.current().lookup());
             Archives.Plan plan = Archives.plan(io, file.toString(), Files.size(file), null, limits);
             Archives.read(io, plan, plan.members(), limits, new Meter("count", 1), BLOCK, (m, in) -> sink.accept(m.dataset(), in));
         } catch (InterruptedException x) {

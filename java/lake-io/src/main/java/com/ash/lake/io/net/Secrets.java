@@ -70,13 +70,13 @@ public final class Secrets {
     }
 
     /**
-     * Every {@code ${NAME}} or {@code ${NAME:default}} in the value, through the one resolver (com.ash.lake.hostcompat.Placeholders): a
+     * Every {@code ${NAME}} or {@code ${NAME:default}} in the value, through the one resolver (com.ash.lake.Placeholders): a
      * {@code -D}, the settings files, the environment, then or {@code env} when given (an empty value is unset); a reference with no value and no default
      * is refused, naming it.
      */
     static String expand(String value, Function<String, String> env, String key) {
         try {
-            return com.ash.lake.hostcompat.Placeholders.require(value, env);   // env null: the process
+            return com.ash.lake.Placeholders.require(value, env);   // env null: the process
         } catch (IllegalArgumentException e) {
             throw new TlsException(key + ": " + e.getMessage());
         }

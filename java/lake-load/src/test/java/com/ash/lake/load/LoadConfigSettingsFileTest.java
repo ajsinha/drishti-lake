@@ -17,7 +17,7 @@ package com.ash.lake.load;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ash.lake.hostcompat.SettingsFile;
+import com.ash.lake.SettingsFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
