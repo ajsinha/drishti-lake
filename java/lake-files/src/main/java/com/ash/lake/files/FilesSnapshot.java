@@ -81,6 +81,8 @@ final class FilesSnapshot implements TableSnapshot {
     private final Set<String> vectors;
     private final Map<LocalDate, Map<String, Integer>> shadows = new ConcurrentHashMap<>();
     private final Map<LocalDate, DayFiles> dayFiles = new ConcurrentHashMap<>();
+    /** Per date, its ids with the byte range of each one's live line (built once, on the first read by id). */
+    private final Map<LocalDate, JsonlDay> indexes = new HashMap<>();
 
     FilesSnapshot(FilesLakeReader lake, String name, long version, Instant committed, Columns columns, NavigableMap<LocalDate, Day> days) {
         this.lake = lake;
@@ -100,6 +102,50 @@ final class FilesSnapshot implements TableSnapshot {
         }
         this.promoted = Collections.unmodifiableMap(p);
         this.vectors = Collections.unmodifiableSet(v);
+    }
+
+    @FunctionalInterface
+    private interface ByIndex<T> {
+        T apply(JsonlDay index) throws IOException;
+    }
+
+    /**
+     * {@code fn} over the date's id index, built on first use and kept (the date's content is immutable at this version). An index
+     * released under the call ({@link #close}) is built again and the call repeated once.
+     */
+    private <T> T byIndex(LocalDate date, ByIndex<T> fn) throws IOException {
+        for (int attempt = 0; ; attempt++) {
+            JsonlDay ix;
+            synchronized (indexes) {
+                ix = indexes.get(date);
+                if (ix == null) {
+                    ix = JsonlDay.index(days.get(date).file(), date, List.of(), "id");
+                    if (!ix.readable() || ix.report().unreadable() > 0) {             // a committed day reads whole or fails, as a scan does
+                        ix.close();
+                        throw new IOException(days.get(date).file() + ": " + (ix.readable() ? ix.report().unreadableLines() : ix.report().failure()));
+                    }
+                    indexes.put(date, ix);
+                }
+            }
+            try {
+                return fn.apply(ix);
+            } catch (JsonlDay.StaleIndexException e) {
+                synchronized (indexes) {
+                    indexes.remove(date, ix);
+                }
+                if (attempt > 0) {
+                    throw e;
+                }
+            }
+        }
+    }
+
+    /** Releases the dates' indexes and the files they hold open (the reader dropped or purged this snapshot); a later read builds them again. */
+    void close() {
+        synchronized (indexes) {
+            indexes.values().forEach(JsonlDay::close);
+            indexes.clear();
+        }
     }
 
     private <T> T read(LocalDate date, Problems.Read<T> body) {
@@ -238,33 +284,22 @@ final class FilesSnapshot implements TableSnapshot {
     @Override
     public IdMap ids(LocalDate date) {
         return read(date, () -> {
-            List<String> ids = new ArrayList<>();
-            lines(date, (i, line) -> {
-                String id = idOf(line);
-                if (id != null) {
-                    ids.add(id);
-                }
-            });
-            String[] sorted = new TreeSet<>(ids).toArray(new String[0]);
+            if (!days.containsKey(date)) {
+                return IdMap.of(new String[0], new int[0]);
+            }
+            String[] sorted = byIndex(date, ix -> ix.ids().clone());       // the caller's copy: the index searches its own
             return IdMap.of(sorted, new int[sorted.length]);
         });
     }
 
+    /** A document by id: a binary search of the date's index and one positioned read of its line (the last copy: the newest load's). */
     @Override
     public Optional<String> document(LocalDate date, int file, String id) {
         return read(date, () -> {
-            String[] found = {null};
-            if (file == 0) {
-                lines(date, (i, line) -> {
-                    if (line.contains(id)) {
-                        JsonlDay.Line l = JsonlDay.line(line.getBytes(StandardCharsets.UTF_8), "id", JsonlFormat.DEFAULT);
-                        if (id.equals(l.id())) {
-                            found[0] = new String(l.doc(), StandardCharsets.UTF_8);      // the last copy wins
-                        }
-                    }
-                });
+            if (file != 0 || !days.containsKey(date)) {
+                return Optional.<String>empty();
             }
-            return Optional.ofNullable(found[0]);
+            return byIndex(date, ix -> ix.document(id)).map(b -> new String(b, StandardCharsets.UTF_8));
         });
     }
 
@@ -414,26 +449,28 @@ final class FilesSnapshot implements TableSnapshot {
     public Map<String, Map<String, double[]>> vectorsOf(LocalDate date, int file, Set<String> ids, List<String> cols) {
         return read(date, () -> {
             Map<String, Map<String, double[]>> out = new HashMap<>();
-            if (file != 0 || ids.isEmpty() || cols.isEmpty()) {
+            if (file != 0 || ids.isEmpty() || cols.isEmpty() || !days.containsKey(date)) {
                 return out;
             }
-            Map<String, Integer> shadow = shadow(date);
             double[][] buf = {new double[512]};
             String[] id = new String[1];
-            lines(date, (i, line) -> {
-                if (!ids.contains(idOf(line)) ) {
-                    return;
-                }
-                Map<String, double[]> vs = new LinkedHashMap<>();
-                for (String c : cols) {
-                    int len = vectorLine(line, c, List.of(), new String[0], buf, id);
-                    if (len >= 0) {
-                        vs.put(c, Arrays.copyOf(buf[0], len));
+            byIndex(date, ix -> {
+                for (String want : ids) {
+                    Optional<byte[]> line = ix.lineOf(want);              // the live line alone: O(log n), not a pass over the date
+                    if (line.isEmpty()) {
+                        continue;
                     }
+                    String text = new String(line.get(), StandardCharsets.UTF_8);
+                    Map<String, double[]> vs = new LinkedHashMap<>();
+                    for (String c : cols) {
+                        int len = vectorLine(text, c, List.of(), new String[0], buf, id);
+                        if (len >= 0) {
+                            vs.put(c, Arrays.copyOf(buf[0], len));
+                        }
+                    }
+                    out.put(want, vs);
                 }
-                if (live(shadow, id[0], i)) {
-                    out.put(id[0], vs);
-                }
+                return null;
             });
             return out;
         });

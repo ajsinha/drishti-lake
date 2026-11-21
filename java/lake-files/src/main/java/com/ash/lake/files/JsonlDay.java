@@ -218,6 +218,29 @@ final class JsonlDay implements AutoCloseable {
         return Optional.of(line.doc());
     }
 
+    /**
+     * The line of {@code id} (its last, the one readers see), read alone; empty when the day does not hold it.
+     *
+     * @throws StaleIndexException as {@link #document}
+     */
+    Optional<byte[]> lineOf(String id) throws IOException {
+        int i = Arrays.binarySearch(ids, id);
+        if (i < 0 || channel == null) {
+            return Optional.empty();
+        }
+        byte[] b = read(i);
+        Line line;
+        try {
+            line = line(b, idField, format);
+        } catch (JsonProcessingException e) {
+            throw new StaleIndexException(file + " changed under its index: the line at " + offsets[i] + " is no longer JSON");
+        }
+        if (!id.equals(line.id())) {
+            throw new StaleIndexException(file + " changed under its index: the line at " + offsets[i] + " is not " + id + "'s");
+        }
+        return Optional.of(b);
+    }
+
     private byte[] read(int i) throws IOException {
         ByteBuffer b = ByteBuffer.allocate(lengths[i]);
         long pos = offsets[i];

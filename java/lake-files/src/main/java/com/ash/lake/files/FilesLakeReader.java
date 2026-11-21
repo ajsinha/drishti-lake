@@ -137,6 +137,7 @@ final class FilesLakeReader implements LakeReader {
 
     @Override
     public void close() {
+        refresh();                                               // the snapshots' indexes hold their files open
     }
 
     /** One table: its snapshots per version (the newest four). */
@@ -149,6 +150,7 @@ final class FilesLakeReader implements LakeReader {
         }
 
         synchronized void forget() {
+            kept.values().forEach(FilesSnapshot::close);
             kept.clear();
         }
 
@@ -219,7 +221,7 @@ final class FilesLakeReader implements LakeReader {
                         s = new FilesSnapshot(FilesLakeReader.this, name, version, committed, FilesStore.columnsOf(ref), days);
                         kept.put(version, s);
                         while (kept.size() > 4) {
-                            kept.remove(kept.keySet().iterator().next());
+                            kept.remove(kept.keySet().iterator().next()).close();
                         }
                     }
                     if (asOf.latest()) {
