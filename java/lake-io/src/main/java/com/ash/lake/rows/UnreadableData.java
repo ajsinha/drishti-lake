@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.hostcompat;
+package com.ash.lake.rows;
 
 /**
  * Thrown by a source that holds the data asked for but cannot read it, for a reason the reader can act on: a Delta

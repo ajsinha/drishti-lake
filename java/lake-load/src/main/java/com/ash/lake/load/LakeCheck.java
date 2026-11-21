@@ -13,31 +13,42 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.config;
+package com.ash.lake.load;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.ash.lake.LakeRuntime;
+import com.ash.lake.config.ConnectorLake;
+import com.ash.lake.config.Lake;
+import com.ash.lake.config.LakeTable;
+import com.ash.lake.config.Lakes;
+import com.ash.lake.config.LakesCli;
+import com.ash.lake.delta.NativeEngine;
+import com.ash.lake.iceberg.catalog.PathCatalog;
+import com.ash.lake.iceberg.io.FileAccess;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.BufferedReader;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import io.delta.kernel.Snapshot;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 
 /**
  * The checks of docs/architecture/DATA_ARCHITECTURE.md section 6, run at start and by {@code drishti.py lake check}: every Delta or Iceberg
  * connector names a known lake; every table of a lake file that exists on a local disk matches it (its format, its partition columns,
  * its promoted columns present). A difference is reported, never rewritten. A table on S3 or in memory is reported as not checked from
- * here (the server's connector checks it when it opens the table).
+ * here (the server's connector checks it when it opens the table). A table's partition columns and columns are read through the official
+ * libraries: the Delta Kernel's latest snapshot, Apache Iceberg's current metadata (the path catalog's). In {@code lake-load}, which
+ * holds both; the lake-file model ({@code lake-config}) reads neither.
  */
 public final class LakeCheck {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectMapper JSON = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     /** One finding: {@code level} error (the lake file and the table disagree, or a connector names no known lake) or note. */
     public record Finding(String level, String lake, String table, String message) {}
@@ -46,7 +57,7 @@ public final class LakeCheck {
     }
 
     /** Checks every lake, and every connector setting map given ({@code name -> (plugin, settings)}). */
-    public static List<Finding> check(Lakes lakes, Map<String, Map.Entry<String, Map<String, String>>> connectors) {
+    public static List<Finding> check(LakeRuntime runtime, Lakes lakes, Map<String, Map.Entry<String, Map<String, String>>> connectors) {
         List<Finding> out = new ArrayList<>();
         connectors.forEach((name, c) -> {
             if (!ConnectorLake.PLUGINS.contains(c.getKey())) {
@@ -67,14 +78,14 @@ public final class LakeCheck {
         });
         for (Lake l : lakes.all().values()) {
             for (LakeTable t : l.tables().values()) {
-                out.addAll(table(l, t));
+                out.addAll(table(runtime, l, t));
             }
         }
         return out;
     }
 
     /** One table against what is on disk. */
-    public static List<Finding> table(Lake lake, LakeTable t) {
+    public static List<Finding> table(LakeRuntime runtime, Lake lake, LakeTable t) {
         List<Finding> out = new ArrayList<>();
         String loc = lake.location(t);
         if (lake.inMemory() || lake.root().isEmpty() || loc.matches("^[a-z][a-z0-9+]*://.*") && !loc.startsWith("file://")) {
@@ -95,11 +106,7 @@ public final class LakeCheck {
             return out;
         }
         try {
-            Shape s = delta ? deltaShape(dir) : icebergShape(dir);
-            if (s == null) {
-                out.add(new Finding("note", lake.name(), t.name(), "the table's schema is only in a checkpoint: partition and columns not checked"));
-                return out;
-            }
+            Shape s = delta ? deltaShape(runtime, dir) : icebergShape(runtime, dir);
             List<String> want = t.format().equals("delta") ? t.partitionColumns() : List.of(LakeTable.BUSINESS_DATE);
             if (!s.partitions().equals(want)) {
                 out.add(new Finding("error", lake.name(), t.name(), "partitioned by " + s.partitions() + " on disk; the lake file says " + want
@@ -109,7 +116,7 @@ public final class LakeCheck {
             if (!missing.isEmpty()) {
                 out.add(new Finding("error", lake.name(), t.name(), "promoted columns missing from the table: " + missing));
             }
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             out.add(new Finding("error", lake.name(), t.name(), "cannot read the table's metadata at " + dir + ": " + e.getMessage()));
         }
         return out;
@@ -118,65 +125,70 @@ public final class LakeCheck {
     /** A table's partition columns and its column names. */
     record Shape(List<String> partitions, Set<String> columns) {}
 
-    /** The last metaData action of the Delta log's JSON commits (null when only a checkpoint holds it). */
-    static Shape deltaShape(Path table) throws IOException {
-        List<Path> commits;
-        try (Stream<Path> s = Files.list(table.resolve("_delta_log"))) {
-            commits = s.filter(p -> p.getFileName().toString().matches("\\d{20}\\.json")).sorted(Comparator.reverseOrder()).toList();
+    /** The Delta table's partition columns and columns, from the Kernel's latest snapshot (commits and checkpoints alike). */
+    static Shape deltaShape(LakeRuntime runtime, Path table) throws IOException {
+        try (NativeEngine engine = NativeEngine.create(runtime)) {
+            Snapshot s = io.delta.kernel.Table.forPath(engine, table.toString()).getLatestSnapshot(engine);
+            return new Shape(List.copyOf(s.getPartitionColumnNames()), new HashSet<>(s.getSchema().fieldNames()));
         }
-        for (Path c : commits) {
-            JsonNode meta = null;
-            try (BufferedReader r = Files.newBufferedReader(c)) {
-                for (String line = r.readLine(); line != null; line = r.readLine()) {
-                    if (line.contains("\"metaData\"")) {
-                        meta = JSON.readTree(line).path("metaData");
-                    }
-                }
-            }
-            if (meta != null) {
-                List<String> parts = new ArrayList<>();
-                meta.path("partitionColumns").forEach(p -> parts.add(p.asText()));
-                Set<String> cols = new HashSet<>();
-                JSON.readTree(meta.path("schemaString").asText("{}")).path("fields").forEach(f -> cols.add(f.path("name").asText()));
-                return new Shape(parts, cols);
-            }
-        }
-        return null;
     }
 
-    /** The current schema and partition spec of the newest Iceberg metadata file. */
-    static Shape icebergShape(Path table) throws IOException {
-        Path newest;
-        try (Stream<Path> s = Files.list(table.resolve("metadata"))) {
-            newest = s.filter(p -> p.getFileName().toString().endsWith(".metadata.json")).max(Comparator.comparing(Path::getFileName)).orElse(null);
+    /** The Iceberg table's current schema and partition spec, from its current metadata (the path catalog's, through iceberg-core). */
+    static Shape icebergShape(LakeRuntime runtime, Path table) throws IOException {
+        try (FileAccess io = FileAccess.local(runtime)) {
+            PathCatalog c = new PathCatalog(table.getParent().toString(), io);
+            org.apache.iceberg.Table t = c.load(table.getFileName().toString())
+                    .orElseThrow(() -> new IOException("no Iceberg table at " + table)).iceberg();
+            Set<String> cols = new HashSet<>();
+            t.schema().columns().forEach(f -> cols.add(f.name()));
+            List<String> parts = new ArrayList<>();
+            t.spec().fields().forEach(f -> parts.add(t.schema().findColumnName(f.sourceId())));
+            return new Shape(parts, cols);
         }
-        if (newest == null) {
-            return null;
-        }
-        JsonNode m = JSON.readTree(newest.toFile());
-        int schemaId = m.path("current-schema-id").asInt(0);
-        JsonNode schema = null;
-        for (JsonNode sc : m.path("schemas")) {
-            if (sc.path("schema-id").asInt() == schemaId) {
-                schema = sc;
+    }
+
+    /**
+     * {@code check [--dir LAKES] [--connectors DIR]}: the lakes of the folder (the runtime's lake folder by default) and the connectors'
+     * lake names checked, as JSON; exit 0 when no error was found, 1 otherwise, 2 for a bad command.
+     */
+    public static int run(LakeRuntime runtime, String[] args, PrintStream out) {
+        try {
+            Path dir = null;
+            Path conns = null;
+            for (int i = 0; i < args.length; i++) {
+                switch (args[i]) {
+                    case "check" -> { }
+                    case "--dir" -> dir = Path.of(args[++i]);
+                    case "--connectors" -> conns = Path.of(args[++i]);
+                    default -> throw new IllegalArgumentException("usage: LakeCheck check [--dir LAKES] [--connectors DIR]");
+                }
             }
+            Path d = dir != null ? dir : Lakes.dir(runtime);
+            Lakes lakes = Lakes.read(runtime, d);
+            List<Finding> f = check(runtime, lakes, conns == null ? Map.of() : LakesCli.connectors(conns));
+            long errors = f.stream().filter(x -> x.level().equals("error")).count();
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("dir", d.toString());
+            m.put("lakes", lakes.all().keySet());
+            m.put("findings", f);
+            m.put("errors", errors);
+            out.println(JSON.writeValueAsString(m));
+            return errors == 0 ? 0 : 1;
+        } catch (IllegalArgumentException | IOException | java.io.UncheckedIOException e) {
+            out.println("{\"error\": " + quoted(e.getMessage()) + "}");
+            return 2;
         }
-        if (schema == null) {
-            schema = m.path("schema");
+    }
+
+    public static void main(String[] args) {
+        System.exit(run(LakeRuntime.fromProcess(), args, System.out));
+    }
+
+    private static String quoted(String s) {
+        try {
+            return JSON.writeValueAsString(String.valueOf(s));
+        } catch (IOException e) {
+            return "\"unprintable\"";
         }
-        Map<Integer, String> byId = new java.util.HashMap<>();
-        Set<String> cols = new HashSet<>();
-        schema.path("fields").forEach(f -> {
-            byId.put(f.path("id").asInt(), f.path("name").asText());
-            cols.add(f.path("name").asText());
-        });
-        int specId = m.path("default-spec-id").asInt(0);
-        List<String> parts = new ArrayList<>();
-        for (JsonNode spec : m.path("partition-specs")) {
-            if (spec.path("spec-id").asInt() == specId) {
-                spec.path("fields").forEach(f -> parts.add(byId.getOrDefault(f.path("source-id").asInt(), f.path("name").asText())));
-            }
-        }
-        return new Shape(parts, cols);
     }
 }

@@ -201,7 +201,7 @@ interface TableTarget extends AutoCloseable {
         if (tag == RowPlan.STR) {
             return List.of(r.text(i));
         }
-        List<String> values = com.ash.lake.hostcompat.ListValues.of(text);
+        List<String> values = com.ash.lake.rows.ListValues.of(text);
         if (values == null) {
             return List.of(r.text(i));                                  // an object or a nested list: its JSON text, the one element
         }
@@ -224,15 +224,15 @@ interface TableTarget extends AutoCloseable {
         for (String v : vectorColumns) {
             paths.add(v + ".list.element");
             if (!layout.vectorCompression().equals(codec)) {
-                p.put("drishti.parquet.codec." + v + ".list.element", layout.vectorCompression());
+                p.put("lake.parquet.codec." + v + ".list.element", layout.vectorCompression());
             }
         }
         if (!paths.isEmpty()) {
             if (layout.byteStreamSplit()) {
-                p.put("drishti.parquet.byte-stream-split", String.join(",", paths));
+                p.put("lake.parquet.byte-stream-split", String.join(",", paths));
             }
-            p.put("drishti.parquet.no-dictionary", String.join(",", paths));
-            p.put("drishti.parquet.no-statistics", String.join(",", paths));
+            p.put("lake.parquet.no-dictionary", String.join(",", paths));
+            p.put("lake.parquet.no-statistics", String.join(",", paths));
         }
         return p;
     }

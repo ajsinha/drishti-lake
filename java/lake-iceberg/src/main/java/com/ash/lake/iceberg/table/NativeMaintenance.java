@@ -91,7 +91,7 @@ final class NativeMaintenance {
         Operations.deletePartitions(t, f -> {
             LocalDate d = NativeLayout.dateOf(t, f);
             return d != null && d.isBefore(cut);
-        }, Map.of("drishti.keep-days", String.valueOf(keep)));
+        }, Map.of(com.ash.lake.PersistedNames.key("keep-days"), String.valueOf(keep)));
         return old.size();
     }
 
@@ -126,7 +126,7 @@ final class NativeMaintenance {
             Operations.deletePartitions(t, f -> {
                 LocalDate d = NativeLayout.dateOf(t, f);
                 return d != null && gone.contains(d);
-            }, Map.of("drishti.delete-dates", String.join(",", new java.util.TreeSet<>(gone).stream().map(LocalDate::toString).toList())));
+            }, Map.of(com.ash.lake.PersistedNames.key("delete-dates"), String.join(",", new java.util.TreeSet<>(gone).stream().map(LocalDate::toString).toList())));
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("held", held);
@@ -312,7 +312,7 @@ final class NativeMaintenance {
                         }
                     }
                     if (rows.rows() == 0) {
-                        Operations.deletePartitions(t, f -> date.equals(NativeLayout.dateOf(t, f)), Map.of("drishti.undo", id));
+                        Operations.deletePartitions(t, f -> date.equals(NativeLayout.dateOf(t, f)), Map.of(com.ash.lake.PersistedNames.key("undo"), id));
                         continue;
                     }
                     List<DataFile> files = NativeLayout.writeDay(t, date, rows.merged(), fileRows);
@@ -392,7 +392,7 @@ final class NativeMaintenance {
                         }
                     }
                     if (rows.rows() == 0) {
-                        Operations.deletePartitions(t, f -> date.equals(NativeLayout.dateOf(t, f)), Map.of("drishti.retention", "rows"));
+                        Operations.deletePartitions(t, f -> date.equals(NativeLayout.dateOf(t, f)), Map.of(com.ash.lake.PersistedNames.key("retention"), "rows"));
                         continue;
                     }
                     List<DataFile> files = NativeLayout.writeDay(t, date, rows.merged(), fileRows);
@@ -423,8 +423,8 @@ final class NativeMaintenance {
     /** The snapshot before the commit that replaced {@code date} with load {@code id}'s rows (an overwrite naming it); null when it appended. */
     private static Long replacedFrom(Table t, String id, LocalDate date) {
         for (com.ash.lake.iceberg.meta.Snapshot s : t.metadata().snapshots()) {
-            String ids = s.summary().getOrDefault("drishti.load-ids", "");
-            String dates = s.summary().getOrDefault("drishti.business-dates", "");
+            String ids = com.ash.lake.PersistedNames.get(s.summary(), "load-ids", "");
+            String dates = com.ash.lake.PersistedNames.get(s.summary(), "business-dates", "");
             if ("overwrite".equals(s.operation()) && java.util.Arrays.asList(ids.split(",")).contains(id)
                     && java.util.Arrays.asList(dates.split(",")).contains(date.toString())) {
                 return s.parentId();

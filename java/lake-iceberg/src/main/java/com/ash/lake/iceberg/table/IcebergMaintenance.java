@@ -391,7 +391,7 @@ public final class IcebergMaintenance {
      * re-lays it.
      */
     static boolean shardSorted(java.util.Map<String, String> properties) {
-        String by = properties.getOrDefault("drishti.layout.sort-by", "").trim();
+        String by = com.ash.lake.PersistedNames.get(properties, "layout.sort-by", "").trim();
         return !by.isEmpty() && !by.equals("id");
     }
 }

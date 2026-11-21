@@ -15,7 +15,7 @@
  */
 package com.ash.lake.iceberg.table;
 
-import com.ash.lake.hostcompat.ColumnSet;
+import com.ash.lake.rows.ColumnSet;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -392,7 +392,7 @@ abstract class KindTable {
                 for (int c = 0; c < paths.size(); c++) {
                     Object v = r[c + 1];
                     values.get(c).add(v == null ? null : num[c] ? (Object) ((Number) v).doubleValue()
-                            : v instanceof java.util.Collection<?> items ? com.ash.lake.hostcompat.ListValues.json(items) : v.toString());   // a list: JSON text
+                            : v instanceof java.util.Collection<?> items ? com.ash.lake.rows.ListValues.json(items) : v.toString());   // a list: JSON text
                 }
             });
             return new Object[] {ids, values};

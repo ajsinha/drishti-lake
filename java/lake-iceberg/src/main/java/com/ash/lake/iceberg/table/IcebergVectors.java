@@ -15,8 +15,8 @@
  */
 package com.ash.lake.iceberg.table;
 
-import com.ash.lake.hostcompat.VectorReads;
-import com.ash.lake.hostcompat.VectorSink;
+import com.ash.lake.rows.VectorReads;
+import com.ash.lake.rows.VectorSink;
 import com.ash.lake.iceberg.table.KindTable.Day;
 import com.ash.lake.iceberg.table.KindTable.Layout;
 import java.math.BigDecimal;
@@ -161,16 +161,16 @@ final class IcebergVectors {
             return null;
         }
         if (v instanceof Double d) {
-            return com.ash.lake.hostcompat.IdText.of(d);
+            return com.ash.lake.rows.IdText.of(d);
         }
         if (v instanceof Float f) {
-            return com.ash.lake.hostcompat.IdText.of(f);
+            return com.ash.lake.rows.IdText.of(f);
         }
         if (v instanceof BigDecimal d) {
             return d.stripTrailingZeros().toPlainString();
         }
         if (v instanceof java.util.Collection<?> l) {
-            return com.ash.lake.hostcompat.ListValues.json(l);           // a list attribute (TRADE_IDS): its JSON text
+            return com.ash.lake.rows.ListValues.json(l);           // a list attribute (TRADE_IDS): its JSON text
         }
         return v.toString();
     }

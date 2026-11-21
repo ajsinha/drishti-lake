@@ -330,19 +330,6 @@ class LakesTest {
     }
 
     @Test
-    void theCheckComparesTheLakeFileWithTheTableOnDisk() throws Exception {
-        Path log = Files.createDirectories(tmp.resolve("lake/trading/trade_endur/_delta_log"));
-        Files.writeString(log.resolve("00000000000000000000.json"), "{\"metaData\":{\"partitionColumns\":[\"business_date\"],\"schemaString\":"
-                + "\"{\\\"type\\\":\\\"struct\\\",\\\"fields\\\":[{\\\"name\\\":\\\"id\\\"},{\\\"name\\\":\\\"TRADE_ID\\\"}]}\"}}\n");
-        Lake l = Lakes.parse("lake: main\nroot: '" + tmp.resolve("lake") + "'\ntables:\n  trading.trade_endur:\n    kind: trade\n"
-                + "    partition-by: [PRODUCT_TYPE]\n    promote: [TRADE_ID, PORTFOLIO]\n", "main", ENV);
-        List<LakeCheck.Finding> f = LakeCheck.check(Lakes.of(l), Map.of("x", Map.entry("delta", Map.of("lake", "nowhere"))));
-        assertTrue(f.stream().anyMatch(x -> x.message().contains("partitioned by [business_date] on disk")), f.toString());
-        assertTrue(f.stream().anyMatch(x -> x.message().contains("[PRODUCT_TYPE, PORTFOLIO]") || x.message().contains("PORTFOLIO")), f.toString());
-        assertTrue(f.stream().anyMatch(x -> x.message().contains("names lake nowhere")), f.toString());
-    }
-
-    @Test
     void aPacksEntryIsCopiedIntoTheLakeFileOnce() throws Exception {
         Path pack = Files.createDirectories(tmp.resolve("packs/demo"));
         Files.writeString(pack.resolve("pack.yaml"), """

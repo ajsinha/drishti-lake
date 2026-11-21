@@ -68,7 +68,7 @@ public final class IcebergAppender {
             }
             sorted.sort(Comparator.comparing(IcebergLayout.Row::id));
             List<?> files = t.writeDay(date, sorted.iterator(), IcebergLayout.DEFAULT_FILE_ROWS);
-            t.append(files, Map.of("drishti.business-dates", date.toString(), "drishti.operation", "append"));
+            t.append(files, Map.of(com.ash.lake.PersistedNames.key("business-dates"), date.toString(), com.ash.lake.PersistedNames.key("operation"), "append"));
             return t.sequenceNumber();
         } catch (RuntimeException e) {
             throw e.getCause() instanceof IOException io ? io : new IOException(e.getMessage(), e);

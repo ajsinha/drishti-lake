@@ -82,7 +82,7 @@ import java.util.Optional;
  */
 final class DeltaTarget implements TableTarget {
 
-    static final String ENGINE_INFO = "Drishti parallel loader";   // the commits' engineInfo (lake undo's too)
+    static final String ENGINE_INFO = "Drishti Lake parallel loader";   // the commits' engineInfo (lake undo's too)
     /** The writer's row groups and pages: as {@link LakeWriter} (lake.parquet.row-group-kb, 256; lake.parquet.page-kb, 64), the runtime's. */
     private final long rowGroup;
     private final long page;

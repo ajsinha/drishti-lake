@@ -34,7 +34,7 @@ public final class IcebergLayout {
     public static final String DOC = "doc";
     public static final String DATE = "business_date";
     /** Table property: the rows per file the layout cuts each day into (maintenance re-cuts drifted days to it). */
-    public static final String FILE_ROWS = "drishti.layout.file-rows";
+    public static final String FILE_ROWS = "layout.file-rows";   // a persisted name (com.ash.lake.PersistedNames)
     public static final int DEFAULT_FILE_ROWS = 250_000;
     /**
      * About 900 trade documents a row group (measured: zstd packs a 6.3 KB trade into about 0.7 KB, and the writer

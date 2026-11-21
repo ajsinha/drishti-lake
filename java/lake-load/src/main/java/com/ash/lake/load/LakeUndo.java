@@ -199,7 +199,7 @@ public final class LakeUndo {
             if (removed == 0) {
                 continue;
             }
-            long replacedAt = replacedAt(Path.of(table), date, id);
+            long replacedAt = replacedAt(engine, table, s.getVersion(), date, id);
             long restored = 0;
             if (replacedAt > 0) {
                 Snapshot before = Table.forPath(engine, table).getSnapshotAsOfVersion(engine, replacedAt - 1);
@@ -311,42 +311,94 @@ public final class LakeUndo {
         }
     }
 
+    /** How many commits the newest-first walk of {@link #replacedAt} reads at a time. */
+    static final int COMMITS_PER_READ = 64;
+
     /**
      * The version of the commit that wrote the load's rows of {@code date} when that commit also removed the date's earlier files (a replace),
-     * else 0: read from the table's log (a local table; one in object storage is undone as an append).
+     * else 0: the table's commits read newest first through the Delta Kernel's commit range (its add and remove actions), down to the
+     * oldest commit the log still holds.
      */
-    static long replacedAt(Path table, String date, String id) throws IOException {
-        Path log = table.resolve("_delta_log");
-        if (!Files.isDirectory(log)) {
-            return 0;
-        }
-        List<Path> commits;
-        try (Stream<Path> s = Files.list(log)) {
-            commits = s.filter(p -> p.getFileName().toString().matches("\\d{20}\\.json")).sorted().toList().reversed();
-        }
-        for (Path c : commits) {
-            boolean adds = false;
-            boolean removes = false;
-            for (String line : Files.readAllLines(c, StandardCharsets.UTF_8)) {
-                JsonNode n = JSON.readTree(line);
-                JsonNode add = n.get("add");
-                if (add != null && date.equals(add.path("partitionValues").path("business_date").asText(null))) {
-                    String stats = add.path("stats").asText("");
-                    JsonNode st = stats.isEmpty() ? null : JSON.readTree(stats);
-                    String lo = st == null ? null : st.path("minValues").path(RowPlan.LOAD_ID).asText(null);
-                    String hi = st == null ? null : st.path("maxValues").path(RowPlan.LOAD_ID).asText(null);
-                    adds |= lo != null && hi != null && lo.compareTo(id) <= 0 && hi.compareTo(id) >= 0;
+    static long replacedAt(Engine engine, String table, long latest, String date, String id) throws IOException {
+        for (long end = latest; end >= 0; end -= COMMITS_PER_READ) {
+            long start = Math.max(0, end - COMMITS_PER_READ + 1);
+            List<long[]> found = new ArrayList<>();               // per commit, newest first: {version, adds the load's rows, removes the date}
+            try {
+                io.delta.kernel.CommitRange range = io.delta.kernel.TableManager.loadCommitRange(table,
+                        io.delta.kernel.CommitRangeBuilder.CommitBoundary.atVersion(start))
+                        .withEndBoundary(io.delta.kernel.CommitRangeBuilder.CommitBoundary.atVersion(end)).build(engine);
+                try (CloseableIterator<io.delta.kernel.CommitActions> commits = range.getCommitActions(engine,
+                        java.util.Set.of(io.delta.kernel.internal.DeltaLogActionUtils.DeltaAction.ADD,
+                                io.delta.kernel.internal.DeltaLogActionUtils.DeltaAction.REMOVE))) {
+                    while (commits.hasNext()) {
+                        try (io.delta.kernel.CommitActions c = commits.next()) {
+                            found.add(commit(c, date, id));
+                        } catch (Exception e) {
+                            throw e instanceof IOException io ? io : new IOException(e.getMessage(), e);
+                        }
+                    }
                 }
-                JsonNode rem = n.get("remove");
-                if (rem != null && date.equals(rem.path("partitionValues").path("business_date").asText(null))) {
-                    removes = true;
-                }
+            } catch (io.delta.kernel.exceptions.KernelException | IllegalArgumentException e) {
+                return 0;                                         // the log no longer holds these commits (retention): no replace found
             }
-            if (adds) {
-                return removes ? Long.parseLong(c.getFileName().toString().substring(0, 20)) : 0;
+            found.sort((a, b) -> Long.compare(b[0], a[0]));
+            for (long[] c : found) {
+                if (c[1] == 1) {
+                    return c[2] == 1 ? c[0] : 0;
+                }
             }
         }
         return 0;
+    }
+
+    /** One commit's {version, whether an add holds the load's rows of the date (its _load_id bounds), whether a remove is of the date}. */
+    private static long[] commit(io.delta.kernel.CommitActions c, String date, String id) throws IOException {
+        boolean adds = false;
+        boolean removes = false;
+        try (CloseableIterator<io.delta.kernel.data.ColumnarBatch> batches = c.getActions()) {
+            while (batches.hasNext()) {
+                io.delta.kernel.data.ColumnarBatch b = batches.next();
+                int addAt = b.getSchema().indexOf("add");
+                int removeAt = b.getSchema().indexOf("remove");
+                try (CloseableIterator<Row> rows = b.getRows()) {
+                    while (rows.hasNext()) {
+                        Row r = rows.next();
+                        if (addAt >= 0 && !r.isNullAt(addAt)) {
+                            Row add = r.getStruct(addAt);
+                            if (date.equals(partition(add, "business_date"))) {
+                                int st = add.getSchema().indexOf("stats");
+                                String stats = st < 0 || add.isNullAt(st) ? "" : add.getString(st);
+                                JsonNode n = stats.isEmpty() ? null : JSON.readTree(stats);
+                                String lo = n == null ? null : n.path("minValues").path(RowPlan.LOAD_ID).asText(null);
+                                String hi = n == null ? null : n.path("maxValues").path(RowPlan.LOAD_ID).asText(null);
+                                adds |= lo != null && hi != null && lo.compareTo(id) <= 0 && hi.compareTo(id) >= 0;
+                            }
+                        }
+                        if (removeAt >= 0 && !r.isNullAt(removeAt) && date.equals(partition(r.getStruct(removeAt), "business_date"))) {
+                            removes = true;
+                        }
+                    }
+                }
+            }
+        }
+        return new long[] {c.getVersion(), adds ? 1 : 0, removes ? 1 : 0};
+    }
+
+    /** One partition value of an add or remove action (null when the action has none of that name). */
+    private static String partition(Row action, String column) {
+        int at = action.getSchema().indexOf("partitionValues");
+        if (at < 0 || action.isNullAt(at)) {
+            return null;
+        }
+        io.delta.kernel.data.MapValue m = action.getMap(at);
+        io.delta.kernel.data.ColumnVector keys = m.getKeys();
+        io.delta.kernel.data.ColumnVector values = m.getValues();
+        for (int i = 0; i < m.getSize(); i++) {
+            if (column.equals(keys.getString(i))) {
+                return values.isNullAt(i) ? null : values.getString(i);
+            }
+        }
+        return null;
     }
 
     /** The date rewritten with {@code rows} (one commit: its files replaced); with none, the date's files removed. Returns the version. */

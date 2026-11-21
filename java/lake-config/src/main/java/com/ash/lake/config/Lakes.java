@@ -534,10 +534,19 @@ public final class Lakes {
         }
 
         /**
-         * A variable through the settings given; a dotted name ({@code drishti.data.dir}) also in its environment form
-         * ({@code DRISHTI_DATA_DIR}).
+         * A variable through the settings given; a dotted name ({@code lake.data.dir}) also in its environment form
+         * ({@code LAKE_DATA_DIR}), then under the other prefix ({@link com.ash.lake.PersistedNames#alias}).
          */
         String lookup(String name) {
+            String v = one(name);
+            String other = com.ash.lake.PersistedNames.alias(name);
+            if ((v == null || v.isEmpty()) && other != null) {
+                v = one(other);                           // drishti.data.dir and lake.data.dir: a lake file of either age (read both)
+            }
+            return v;
+        }
+
+        private String one(String name) {
             String v = env.apply(name);
             if ((v == null || v.isEmpty()) && (name.contains(".") || name.contains("-"))) {
                 v = env.apply(name.toUpperCase(java.util.Locale.ROOT).replace('.', '_').replace('-', '_'));

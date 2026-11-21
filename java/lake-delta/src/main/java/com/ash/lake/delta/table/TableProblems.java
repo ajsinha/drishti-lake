@@ -15,7 +15,7 @@
  */
 package com.ash.lake.delta.table;
 
-import com.ash.lake.hostcompat.UnreadableData;
+import com.ash.lake.rows.UnreadableData;
 import com.ash.lake.io.PageDecodeException;
 import com.ash.lake.io.UnsupportedCodec;
 import java.time.Instant;

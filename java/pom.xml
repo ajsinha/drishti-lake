@@ -24,7 +24,6 @@
 
   <modules>
     <module>lake-api</module>
-    <module>lake-hostcompat</module>
     <module>lake-io</module>
     <module>lake-config</module>
     <module>lake-delta</module>
@@ -72,7 +71,6 @@
         <type>pom</type><scope>import</scope>
       </dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-api</artifactId><version>${project.version}</version></dependency>
-      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-hostcompat</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-io</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-config</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-delta</artifactId><version>${project.version}</version></dependency>

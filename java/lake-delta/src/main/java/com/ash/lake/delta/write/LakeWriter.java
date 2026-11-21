@@ -82,7 +82,7 @@ import java.util.function.IntConsumer;
 public final class LakeWriter {
 
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final String ENGINE_INFO = "Drishti lake build";
+    private static final String ENGINE_INFO = "Drishti Lake writer";
     /*
      * The most bytes one Parquet row group holds: lake.parquet.row-group-kb (default 256), or lake.parquet.row-group-mb. A single
      * entity's read decodes at most its row group (its page, with the page index), so small groups make first reads cheap. The most
@@ -464,7 +464,7 @@ public final class LakeWriter {
         private static String[] texts(JsonNode v) {
             JsonNode items = v;
             if (v.isTextual() && v.asText().startsWith("[")) {
-                java.util.List<String> parsed = com.ash.lake.hostcompat.ListValues.of(v.asText());
+                java.util.List<String> parsed = com.ash.lake.rows.ListValues.of(v.asText());
                 if (parsed != null) {
                     return parsed.toArray(new String[0]);
                 }
@@ -475,7 +475,7 @@ public final class LakeWriter {
             List<String> out = new ArrayList<>(items.size());
             for (JsonNode x : items) {
                 if (x != null && !x.isNull()) {
-                    out.add(x.isTextual() ? x.asText() : x.isNumber() ? com.ash.lake.hostcompat.ListValues.text(x.numberValue()) : x.toString());
+                    out.add(x.isTextual() ? x.asText() : x.isNumber() ? com.ash.lake.rows.ListValues.text(x.numberValue()) : x.toString());
                 }
             }
             return out.toArray(new String[0]);

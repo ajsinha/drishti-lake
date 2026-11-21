@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.hostcompat;
+package com.ash.lake.rows;
 
 /**
  * Receives the rows of a vector column, one entity at a time, as a source decodes them (VAR_GUIDE.md section 29.3): a P&amp;L

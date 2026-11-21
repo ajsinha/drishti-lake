@@ -25,7 +25,6 @@ lake-iceberg software.amazon.awssdk:auth
 lake-iceberg software.amazon.awssdk:http-auth-aws
 lake-iceberg org.slf4j:slf4j-api
 lake-io com.ash.lake:lake-api
-lake-io com.ash.lake:lake-hostcompat                until L7 (lake-delta and lake-iceberg reach the row and vector types through it)
 lake-io com.fasterxml.jackson.core:jackson-databind
 lake-io com.fasterxml.jackson.dataformat:jackson-dataformat-yaml
 lake-io com.github.ben-manes.caffeine:caffeine

@@ -50,7 +50,7 @@ import java.util.Map;
 final class IcebergTarget implements TableTarget {
 
     /** The table property naming a layout sorted by more than the id (lake maintain leaves such days in their order). */
-    static final String SORT_BY = "drishti.layout.sort-by";
+    static final String SORT_BY = "layout.sort-by";   // a persisted name (com.ash.lake.PersistedNames)
     private static final int DEFAULT_FILE_ROWS = 250_000;
     private static final long DEFAULT_ROW_GROUP = 1024L * 1024;
 
@@ -134,8 +134,8 @@ final class IcebergTarget implements TableTarget {
             Operations.addColumns(table, missing);
             table.refresh();
         }
-        if (!plan.sortedById() && !String.join(",", plan.sortNames).equals(table.metadata().property(SORT_BY, ""))) {
-            Operations.setProperties(table, Map.of(SORT_BY, String.join(",", plan.sortNames)));
+        if (!plan.sortedById() && !String.join(",", plan.sortNames).equals(com.ash.lake.PersistedNames.get(table.metadata().properties(), SORT_BY, ""))) {
+            Operations.setProperties(table, Map.of(com.ash.lake.PersistedNames.key(SORT_BY), String.join(",", plan.sortNames)));
             table.refresh();
         }
         schema = table.metadata().schema();
@@ -166,9 +166,9 @@ final class IcebergTarget implements TableTarget {
         p.put("write.metadata.delete-after-commit.enabled", "true");
         p.put("write.metadata.previous-versions-max", "50");
         p.put("commit.retry.num-retries", "10");
-        p.put("drishti.layout.file-rows", String.valueOf(DEFAULT_FILE_ROWS));
+        p.put(com.ash.lake.PersistedNames.key("layout.file-rows"), String.valueOf(DEFAULT_FILE_ROWS));
         if (!plan.sortedById()) {
-            p.put(SORT_BY, String.join(",", plan.sortNames));
+            p.put(com.ash.lake.PersistedNames.key(SORT_BY), String.join(",", plan.sortNames));
         }
         return p;
     }
@@ -233,12 +233,12 @@ final class IcebergTarget implements TableTarget {
         for (byte[] b : plan.loadIds) {
             ids.add(new String(b, java.nio.charset.StandardCharsets.UTF_8));
         }
-        Map<String, String> summary = new LinkedHashMap<>(Map.of("drishti.business-dates", date.toString(), "drishti.loader", "parallel",
-                "drishti.load-ids", String.join(",", ids)));    // an undo finds the commit of a load (and whether it replaced the date)
+        Map<String, String> summary = new LinkedHashMap<>(Map.of(com.ash.lake.PersistedNames.key("business-dates"), date.toString(), com.ash.lake.PersistedNames.key("loader"), "parallel",
+                com.ash.lake.PersistedNames.key("load-ids"), String.join(",", ids)));    // an undo finds the commit of a load (and whether it replaced the date)
         Snapshot s;
         if (cfg.target().appends()) {                     // append: the date's earlier files stay; the batch (when named) in the snapshot
             if (cfg.target().batchId() != null) {
-                summary.put(BATCH, batchKey(date));
+                summary.put(com.ash.lake.PersistedNames.key(BATCH), batchKey(date));
             }
             s = Operations.append(table, add, summary).orElseThrow(() -> new IllegalStateException("the commit of " + date + " made no snapshot"));
         } else {
@@ -270,7 +270,7 @@ final class IcebergTarget implements TableTarget {
     }
 
     /** The snapshot summary key that names an append's batch and date. */
-    static final String BATCH = "drishti.batch";
+    static final String BATCH = "batch";   // a persisted name (com.ash.lake.PersistedNames)
 
     @Override
     public boolean appended(LocalDate date) {
@@ -278,7 +278,7 @@ final class IcebergTarget implements TableTarget {
             return false;                                  // no batch named: an append is not guarded (its rows carry their _load_id)
         }
         String key = batchKey(date);
-        return table.metadata().snapshots().stream().anyMatch(x -> x.summary() != null && key.equals(x.summary().get(BATCH)));
+        return table.metadata().snapshots().stream().anyMatch(x -> x.summary() != null && key.equals(com.ash.lake.PersistedNames.get(x.summary(), BATCH)));
     }
 
     private String batchKey(LocalDate date) {

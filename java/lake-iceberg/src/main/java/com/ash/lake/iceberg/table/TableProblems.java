@@ -64,7 +64,7 @@ final class TableProblems {
 
     /**
      * Reading the kind's table failed with {@code e}: recorded, and logged in one line when the kind's problem is new or changed. Returns
-     * the failure to give the reader: for a table whose files are not there, {@link com.ash.lake.hostcompat.UnreadableData} saying so in words
+     * the failure to give the reader: for a table whose files are not there, {@link com.ash.lake.rows.UnreadableData} saying so in words
      * without a path (the 502 says what is wrong; Admin → Health has the folders and the fix), else {@code e} itself.
      */
     Throwable failed(String kind, Throwable e) {
@@ -75,7 +75,7 @@ final class TableProblems {
         }
         if (missing(e).isPresent()) {
             missingFiles.add(kind);
-            return new com.ash.lake.hostcompat.UnreadableData(movedWords(kind), e);
+            return new com.ash.lake.rows.UnreadableData(movedWords(kind), e);
         }
         missingFiles.remove(kind);
         return e;

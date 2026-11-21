@@ -126,23 +126,23 @@ public final class ParquetDataWriter implements Closeable {
 
     /**
      * Per-column writer options a caller may add to {@code props} (the parallel lake loader, 2.9.6; never table properties): a list of
-     * Parquet column paths each ({@code PNL.list.element}), comma separated: {@code drishti.parquet.byte-stream-split} (BYTE_STREAM_SPLIT
-     * encoding: a double's bytes split into streams, which ZSTD packs far better), {@code drishti.parquet.no-dictionary},
-     * {@code drishti.parquet.no-statistics}; and {@code drishti.parquet.codec.<column path>} a codec for that column alone.
+     * Parquet column paths each ({@code PNL.list.element}), comma separated: {@code lake.parquet.byte-stream-split} (BYTE_STREAM_SPLIT
+     * encoding: a double's bytes split into streams, which ZSTD packs far better), {@code lake.parquet.no-dictionary},
+     * {@code lake.parquet.no-statistics}; and {@code lake.parquet.codec.<column path>} a codec for that column alone.
      */
     private static Builder columnOptions(Builder b, Map<String, String> props) {
-        for (String c : paths(props.get("drishti.parquet.byte-stream-split"))) {
+        for (String c : paths(props.get("lake.parquet.byte-stream-split"))) {
             b = b.withByteStreamSplitEncoding(c, true);
         }
-        for (String c : paths(props.get("drishti.parquet.no-dictionary"))) {
+        for (String c : paths(props.get("lake.parquet.no-dictionary"))) {
             b = b.withDictionaryEncoding(c, false);
         }
-        for (String c : paths(props.get("drishti.parquet.no-statistics"))) {
+        for (String c : paths(props.get("lake.parquet.no-statistics"))) {
             b = b.withStatisticsEnabled(c, false);
         }
         for (Map.Entry<String, String> e : props.entrySet()) {
-            if (e.getKey().startsWith("drishti.parquet.codec.")) {
-                b = b.withCompressionCodec(e.getKey().substring("drishti.parquet.codec.".length()),
+            if (e.getKey().startsWith("lake.parquet.codec.")) {
+                b = b.withCompressionCodec(e.getKey().substring("lake.parquet.codec.".length()),
                         CompressionCodecName.valueOf(e.getValue().trim().toUpperCase(Locale.ROOT)));
             }
         }

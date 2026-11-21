@@ -17,7 +17,7 @@ package com.ash.lake.load;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ash.lake.hostcompat.ListValues;
+import com.ash.lake.rows.ListValues;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.nio.file.Files;
 import java.nio.file.Path;

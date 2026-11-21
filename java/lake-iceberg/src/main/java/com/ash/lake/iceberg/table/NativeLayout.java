@@ -95,7 +95,7 @@ final class NativeLayout {
         p.put("write.metadata.delete-after-commit.enabled", "true");
         p.put("write.metadata.previous-versions-max", "50");
         p.put("commit.retry.num-retries", "10");
-        p.put(IcebergLayout.FILE_ROWS, String.valueOf(fileRows));
+        p.put(com.ash.lake.PersistedNames.key(IcebergLayout.FILE_ROWS), String.valueOf(fileRows));
         return p;
     }
 
@@ -151,7 +151,7 @@ final class NativeLayout {
 
     /** The table's file-rows (the layout's), or the default. */
     static int fileRows(Table t) {
-        return Integer.parseInt(t.metadata().property(IcebergLayout.FILE_ROWS, String.valueOf(IcebergLayout.DEFAULT_FILE_ROWS)));
+        return Integer.parseInt(com.ash.lake.PersistedNames.get(t.metadata().properties(), IcebergLayout.FILE_ROWS, String.valueOf(IcebergLayout.DEFAULT_FILE_ROWS)));
     }
 
     /** The index of the {@code business_date} identity field in the table's current spec. */
@@ -247,7 +247,7 @@ final class NativeLayout {
             return null;
         }
         if (type instanceof Type.ListType l && Type.Primitive.STRING.equals(l.element())) {
-            List<String> texts = v instanceof IcebergLoader.Texts x ? x.values() : com.ash.lake.hostcompat.ListValues.of(v);
+            List<String> texts = v instanceof IcebergLoader.Texts x ? x.values() : com.ash.lake.rows.ListValues.of(v);
             return texts != null ? texts : List.of(String.valueOf(v));      // a list attribute; a single value is a list of one
         }
         if (type.id() == Type.Id.LIST) {
@@ -278,6 +278,6 @@ final class NativeLayout {
         List<DataFile> files = new ArrayList<>();
         days.values().forEach(files::addAll);
         String label = days.size() == 1 ? days.keySet().iterator().next().toString() : days.size() + " days";
-        Operations.replacePartitions(table, f -> dates.contains(dateOf(table, f)), files, Map.of("drishti.business-dates", label));
+        Operations.replacePartitions(table, f -> dates.contains(dateOf(table, f)), files, Map.of(com.ash.lake.PersistedNames.key("business-dates"), label));
     }
 }

@@ -9,8 +9,8 @@ go down from its value at the move. **This list only shrinks**; at `v1.0.0` it i
 
 ## Counts (read by the guards)
 
-- hostcompat types: 6
-- host-word files: 72
+- hostcompat types: 0
+- host-word files: 70
 - parked checks: 1
 
 ## Dependencies
@@ -24,29 +24,23 @@ go down from its value at the move. **This list only shrinks**; at `v1.0.0` it i
 
 ## Host types
 
-In package `com.ash.lake.hostcompat` (module `lake-hostcompat`). Copied
-from the host at the freeze commit (Drishti `main` `9ce7c3170`) with only their package changed, so behaviour stays as the host's;
-two edits: `ModuleLoaders` lost the static block that joined the host's `DatesInUse` registry, and `TlsContexts` logs as
-`com.ash.lake.hostcompat.tls`.
+None since step L7: the last six (`ColumnSet`, `IdText`, `ListValues`, `UnreadableData`, `VectorReads`, `VectorSink`) are the
+product's own row, column and vector types (`com.ash.lake.rows`, module `lake-io`), and the module `lake-hostcompat` is gone.
 
 | Type | Host type | Removed by |
 |---|---|---|
-| `ColumnSet` | `com.ash.drishti.api.ColumnSet` | L7: the product's own row, column and vector types (`TableStore`) |
-| `IdText` | `com.ash.drishti.api.IdText` | L7: the product's own row, column and vector types (`TableStore`) |
-| `ListValues` | `com.ash.drishti.api.ListValues` | L7: the product's own row, column and vector types (`TableStore`) |
-| `UnreadableData` | `com.ash.drishti.api.UnreadableData` | L7: the product's own row, column and vector types (`TableStore`) |
-| `VectorReads` | `com.ash.drishti.api.VectorReads` | L7: the product's own row, column and vector types (`TableStore`) |
-| `VectorSink` | `com.ash.drishti.api.VectorSink` | L7: the product's own row, column and vector types (`TableStore`) |
 
 ## Setting names and host words (read by `NamesNoHostTest`)
 
 The product reads its own settings only, through `LakeOptions` (`lake.*` names, `LAKE_*` variables; the surefire configuration in
 `java/pom.xml` sets `lake.home`, `lake.data.dir`, `lake.repo.root`, `lake.module.root`, absolute). What still carries a host word: the lake
 files' placeholder text `${drishti.data.dir:./data}` and the demo root `DRISHTI_DELTA_ROOT` (configuration the host writes and sets,
-read as text; the connector-migration helpers name the host's connector files: L12 decides whether they stay in the product); the
-**persisted names** written into tables (Iceberg snapshot summaries and table properties `drishti.business-dates`, `drishti.load-ids`,
-`drishti.layout.*`, `drishti.parquet.*`, the Delta commit's engine info): kept so the lakes written before the split read the same, decided
-with the table layer (L7: read both, write the product's); `DRS-` codes in messages, source-system names (`trade_endur`) and the host's
+read as text; the connector-migration helpers name the host's connector files: L12 decides whether they stay in the product). The
+**persisted names** are decided (L7, `PersistedNames`): the product writes `lake.<name>` into Iceberg snapshot summaries and table
+properties (`lake.business-dates`, `lake.load-ids`, `lake.layout.*`; the per-column writer options are `lake.parquet.*`) and reads
+`lake.<name>` first, then the host's `drishti.<name>`, so tables written before the split read the same and nothing is rewritten; a lake
+file's `${drishti.x}` and `${lake.x}` resolve each other's value when only one is set; the Delta commit's engine info names the
+product ("Drishti Lake"). Left: `DRS-` codes in messages, source-system names (`trade_endur`) and the host's
 name in comments (L13 the prose). The count of such files is the "host-word files" line above.
 
 ## Parked checks
