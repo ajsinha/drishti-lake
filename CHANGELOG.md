@@ -162,4 +162,10 @@ Entries are written per release; unreleased work is listed first.
   over the winner's `<n>.jsonl` before the number was won (rows lost or doubled), an append was built on the published day file, and two
   writers shared `columns.json.tmp`; commits to one table now go one at a time under an operating-system lock (`commit.lock`), an append
   is built on the date's newest version and rebuilt if another writer moved it, and the day file never goes back to an older version.
+- **L12: the product's bill of materials, `lake-bom`.** One place for every version a host pins: each Drishti Lake module and the
+  third-party libraries the product runs on (Delta Kernel, Iceberg, Parquet, the AWS SDK, Hadoop, codecs, Jackson, Netty, the HTTP
+  clients); a host imports it (`<scope>import</scope>`) and keeps no lake version of its own. It is the reactor's parent, so the build
+  uses exactly it; test support's libraries (S3Mock and its Spring Boot, JUnit, AssertJ, Logback) stay pinned in the reactor and never
+  reach a host. Resolved dependencies of every module unchanged (dependency:list before and after); no Spring Boot bill of materials is
+  needed by the product.
 - Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).

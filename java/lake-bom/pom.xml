@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
+
+  Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
+  All rights reserved.
+
+  PROPRIETARY AND CONFIDENTIAL.
+
+  This file is the confidential and proprietary property of Ashutosh Sinha.
+  Unauthorised copying, use, modification, distribution or disclosure of this
+  file, via any medium, is strictly prohibited except with the express prior
+  written permission of the copyright holder.
+
+  See the LICENSE file in the root of this repository for the full terms.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <!-- The product's bill of materials: a host imports it (scope import) and pins every Drishti Lake module and the third-party versions the
+       product runs on, from one place. It is also the parent of the reactor (java/pom.xml), so the build uses exactly these versions.
+       Test support's own libraries (the S3 simulator, JUnit) are pinned in the reactor, never here. -->
+  <groupId>com.ash.lake</groupId>
+  <artifactId>lake-bom</artifactId>
+  <version>0.9.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>Drishti Lake: bill of materials</name>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Third-party versions: those of the host at the freeze commit (Drishti main 9ce7c3170), so the moved code runs on what it was
+         tested with (design section 6). -->
+    <delta-kernel.version>4.4.0</delta-kernel.version>
+    <iceberg.version>1.10.1</iceberg.version>
+    <parquet.version>1.18.0</parquet.version>
+    <hadoop.version>3.4.3</hadoop.version>
+    <awssdk.version>2.55.9</awssdk.version>
+    <snappy-java.version>1.1.10.4</snappy-java.version>
+    <lz4-java.version>1.10.2</lz4-java.version>
+    <zstd-jni.version>1.5.7-6</zstd-jni.version>
+    <caffeine.version>3.2.4</caffeine.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-annotations</artifactId><version>2.21</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-core</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.dataformat</groupId><artifactId>jackson-dataformat-xml</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.dataformat</groupId><artifactId>jackson-dataformat-yaml</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.datatype</groupId><artifactId>jackson-datatype-jdk8</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.datatype</groupId><artifactId>jackson-datatype-jsr310</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.module</groupId><artifactId>jackson-module-parameter-names</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>commons-codec</groupId><artifactId>commons-codec</artifactId><version>1.18.0</version></dependency>
+      <dependency><groupId>commons-io</groupId><artifactId>commons-io</artifactId><version>2.21.0</version></dependency>
+      <dependency><groupId>commons-pool</groupId><artifactId>commons-pool</artifactId><version>1.6</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-buffer</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-codec</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-codec-http</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-codec-http2</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-common</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-handler</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-resolver</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-transport</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-transport-classes-epoll</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-transport-native-unix-common</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>org.apache.commons</groupId><artifactId>commons-compress</artifactId><version>1.28.0</version></dependency>
+      <dependency><groupId>org.apache.commons</groupId><artifactId>commons-lang3</artifactId><version>3.17.0</version></dependency>
+      <dependency><groupId>org.apache.httpcomponents</groupId><artifactId>httpcore</artifactId><version>4.4.16</version></dependency>
+      <dependency><groupId>org.apache.httpcomponents.client5</groupId><artifactId>httpclient5</artifactId><version>5.5.2</version></dependency>
+      <dependency><groupId>org.apache.httpcomponents.core5</groupId><artifactId>httpcore5</artifactId><version>5.3.6</version></dependency>
+      <dependency><groupId>org.apache.httpcomponents.core5</groupId><artifactId>httpcore5-h2</artifactId><version>5.3.6</version></dependency>
+      <dependency><groupId>org.reactivestreams</groupId><artifactId>reactive-streams</artifactId><version>1.0.4</version></dependency>
+      <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-api</artifactId><version>2.0.18</version></dependency>
+      <dependency><groupId>org.yaml</groupId><artifactId>snakeyaml</artifactId><version>2.4</version></dependency>
+      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-api</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-io</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-config</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-delta</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-iceberg</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-files</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-memory</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-load</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>org.apache.parquet</groupId><artifactId>parquet-hadoop</artifactId><version>${parquet.version}</version></dependency>
+      <dependency><groupId>org.apache.parquet</groupId><artifactId>parquet-column</artifactId><version>${parquet.version}</version></dependency>
+      <dependency><groupId>org.apache.parquet</groupId><artifactId>parquet-common</artifactId><version>${parquet.version}</version></dependency>
+      <dependency><groupId>org.apache.parquet</groupId><artifactId>parquet-encoding</artifactId><version>${parquet.version}</version></dependency>
+      <dependency><groupId>org.apache.parquet</groupId><artifactId>parquet-format-structures</artifactId><version>${parquet.version}</version></dependency>
+      <dependency><groupId>org.apache.parquet</groupId><artifactId>parquet-jackson</artifactId><version>${parquet.version}</version></dependency>
+      <dependency><groupId>org.apache.parquet</groupId><artifactId>parquet-avro</artifactId><version>${parquet.version}</version></dependency>
+      <dependency><groupId>org.apache.parquet</groupId><artifactId>parquet-variant</artifactId><version>${parquet.version}</version></dependency>
+      <dependency><groupId>com.github.luben</groupId><artifactId>zstd-jni</artifactId><version>${zstd-jni.version}</version></dependency>
+      <dependency><groupId>com.github.ben-manes.caffeine</groupId><artifactId>caffeine</artifactId><version>${caffeine.version}</version></dependency>
+      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-tck</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>io.delta</groupId><artifactId>delta-kernel-api</artifactId><version>${delta-kernel.version}</version></dependency>
+      <dependency><groupId>io.delta</groupId><artifactId>delta-kernel-defaults</artifactId><version>${delta-kernel.version}</version></dependency>
+      <dependency><groupId>org.apache.iceberg</groupId><artifactId>iceberg-core</artifactId><version>${iceberg.version}</version></dependency>
+      <dependency><groupId>org.apache.iceberg</groupId><artifactId>iceberg-aws</artifactId><version>${iceberg.version}</version></dependency>
+      <dependency><groupId>org.apache.hadoop</groupId><artifactId>hadoop-client-api</artifactId><version>${hadoop.version}</version></dependency>
+      <dependency><groupId>org.apache.hadoop</groupId><artifactId>hadoop-client-runtime</artifactId><version>${hadoop.version}</version></dependency>
+      <dependency><groupId>org.xerial.snappy</groupId><artifactId>snappy-java</artifactId><version>${snappy-java.version}</version></dependency>
+      <dependency><groupId>at.yawk.lz4</groupId><artifactId>lz4-java</artifactId><version>${lz4-java.version}</version></dependency>
+      <dependency><groupId>software.amazon.awssdk</groupId><artifactId>apache5-client</artifactId><version>${awssdk.version}</version></dependency>
+      <dependency><groupId>software.amazon.awssdk</groupId><artifactId>apache-client</artifactId><version>${awssdk.version}</version></dependency>
+      <dependency><groupId>software.amazon.awssdk</groupId><artifactId>auth</artifactId><version>${awssdk.version}</version></dependency>
+      <dependency><groupId>software.amazon.awssdk</groupId><artifactId>http-auth-aws</artifactId><version>${awssdk.version}</version></dependency>
+      <dependency><groupId>software.amazon.awssdk</groupId><artifactId>kms</artifactId><version>${awssdk.version}</version></dependency>
+      <dependency><groupId>software.amazon.awssdk</groupId><artifactId>s3</artifactId><version>${awssdk.version}</version></dependency>
+      <dependency><groupId>software.amazon.awssdk</groupId><artifactId>sts</artifactId><version>${awssdk.version}</version></dependency>
+    </dependencies>
+  </dependencyManagement>
+</project>
