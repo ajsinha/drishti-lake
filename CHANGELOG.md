@@ -103,4 +103,12 @@ Entries are written per release; unreleased work is listed first.
   three stores: Delta through the Kernel's snapshot at a version or timestamp and its commit range, Iceberg through its snapshot log
   (snapshot id or time), files through its log (each commit now records when it was committed). `tck/capabilities.yaml` is empty for
   every store; parity case `time-travel/versions-and-earlier-rows` equal on Delta, Iceberg and files (and the memory row).
+- **Delta interop with delta-rs runs, both ways, never skipped.** `com.ash.lake.tck.DeltaRs` runs `tools/ci/delta_rs.py` under
+  `uv run --with` the pins of `tools/ci/interop-pins.txt` (`deltalake==1.6.6`, `pyarrow==26.0.1`; from uv's cache, else fetched);
+  `DeltaInteropTest` (47 partition values of every special-character class × 2 dates): our lake writer writes, delta-rs (`DeltaTable`
+  and `pyarrow.dataset`) reads every row, each folder is Spark's Hive escaping, each `add.path` decodes to a file; our loader's ids and
+  texts read by delta-rs; delta-rs writes, the Delta store reads. Found and fixed at the cause: the Delta store read a partition
+  value recorded as `""` as an empty string; the protocol (and Spark, delta-rs) read it as null. The memory lake's delete and retention
+  parity tests read through delta-rs the same way (they skipped before). `tools/ci/check.py`: delta-rs at hand first, then the interop
+  tests' reports must show them run with none skipped.
 - Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).

@@ -232,6 +232,7 @@ public final class DeltaStore implements TableStore {
         Snapshot s = found.get();
         Columns cols = columns(s.getSchema());
         StoreScans rows = new StoreScans(cols, request);
+        Set<String> partitions = Set.copyOf(s.getPartitionColumnNames());
         Scan scan = s.getScanBuilder().build();
         Row state = scan.getScanState(engine);
         StructType physical = ScanStateRow.getPhysicalDataReadSchema(state);
@@ -244,7 +245,7 @@ public final class DeltaStore implements TableStore {
                         if (day != null && !rows.wants(LocalDate.parse(day))) {
                             continue;                                   // a file of a date the scan does not want
                         }
-                        read(engine, state, physical, file, cols, rows);
+                        read(engine, state, physical, file, cols, rows, partitions);
                     }
                 }
             }
@@ -252,7 +253,12 @@ public final class DeltaStore implements TableStore {
         return RowScan.of(rows.columns(), rows.rows());
     }
 
-    private static void read(Engine engine, Row state, StructType physical, Row file, Columns cols, StoreScans rows) throws IOException {
+    /**
+     * The rows of one data file. A partition column's empty string is null, as the Delta protocol reads it (and Spark and delta-rs with
+     * it): a writer may record a null partition value as {@code ""}.
+     */
+    private static void read(Engine engine, Row state, StructType physical, Row file, Columns cols, StoreScans rows, Set<String> partitions)
+            throws IOException {
         FileStatus fs = InternalScanFileUtils.getAddFileStatus(file);
         try (CloseableIterator<FileReadResult> raw = engine.getParquetHandler().readParquetFiles(Utils.singletonCloseableIterator(fs), physical,
                 Optional.empty());
@@ -264,6 +270,10 @@ public final class DeltaStore implements TableStore {
                 for (int c = 0; c < at.length; c++) {
                     at[c] = cols.indexOf(schema.at(c).getName());
                 }
+                boolean[] partition = new boolean[at.length];
+                for (int c = 0; c < at.length; c++) {
+                    partition[c] = partitions.contains(schema.at(c).getName());
+                }
                 Optional<ColumnVector> sel = b.getSelectionVector();
                 for (int r = 0; r < b.getData().getSize(); r++) {
                     if (sel.isPresent() && (sel.get().isNullAt(r) || !sel.get().getBoolean(r))) {
@@ -272,7 +282,8 @@ public final class DeltaStore implements TableStore {
                     Object[] v = new Object[cols.size()];
                     for (int c = 0; c < at.length; c++) {
                         if (at[c] >= 0) {
-                            v[at[c]] = value(b.getData().getColumnVector(c), r);
+                            Object x = value(b.getData().getColumnVector(c), r);
+                            v[at[c]] = partition[c] && "".equals(x) ? null : x;
                         }
                     }
                     rows.add(v);

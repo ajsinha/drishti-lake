@@ -17,12 +17,10 @@ package com.ash.lake.memory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.ash.lake.load.LakeLoad;
 import com.ash.lake.load.LakeRetention;
 import com.ash.lake.load.TableDump;
-import com.ash.lake.tck.TestRoots;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -32,7 +30,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -160,23 +157,11 @@ class DeleteDatesParityTest {
         assertThat(ids("delta", root)).containsExactly("T00", "T01", "T10", "T11");
     }
 
-    /** delta-rs reads what the delete committed (skipped when no Python with the deltalake package is at hand). */
+    /** delta-rs reads what was committed (com.ash.lake.tck.DeltaRs: uv with the pinned deltalake; never skipped). */
     private static void deltaRsReads(Path table, String... expected) throws Exception {
-        Path py = null;
-        for (Path d = Path.of(TestRoots.module()); d != null && py == null; d = d.getParent()) {
-            Path c = d.resolve("drishti-console/.venv/bin/python");
-            py = Files.isExecutable(c) ? c : null;
-        }
-        assumeTrue(py != null, "no Python environment with delta-rs (drishti-console/.venv)");
-        Path out = Files.createTempFile(table.getParent(), "deltars", ".out");
-        Process p = new ProcessBuilder(py.toString(), "-c",
-                "import os, sys\nfrom deltalake import DeltaTable\nt = DeltaTable(sys.argv[1]).to_pyarrow_table(columns=['id'])\n"
-                        + "print(','.join(sorted(t.column('id').to_pylist())))\nsys.stdout.flush()\nos._exit(0)", table.toString())
-                .redirectErrorStream(true).redirectOutput(out.toFile()).start();
-        if (!p.waitFor(90, TimeUnit.SECONDS)) {
-            p.destroyForcibly();
-        }
-        String text = Files.readString(out, StandardCharsets.UTF_8).trim();
-        assertThat(text.lines().reduce((x, y) -> y).orElse("")).as("delta-rs read: " + text).isEqualTo(String.join(",", expected));
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        com.ash.lake.tck.DeltaRs.read(table, "id").path("rows").forEach(r -> ids.add(r.path("id").asText()));
+        java.util.Collections.sort(ids);
+        assertThat(String.join(",", ids)).as("delta-rs read").isEqualTo(String.join(",", expected));
     }
 }
