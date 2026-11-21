@@ -18,20 +18,15 @@ package com.ash.lake.guards;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import com.ash.tools.guards.kit.ApiSurface;
 import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeSet;
-import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -65,58 +60,9 @@ class ApiSurfaceTest {
     static List<String> surface() throws Exception {
         TreeSet<String> out = new TreeSet<>();
         for (Map.Entry<String, String> e : new java.util.TreeMap<>(PACKAGES).entrySet()) {
-            Path dir = Sources.JAVA.resolve(e.getValue()).resolve("target/classes").resolve(e.getKey().replace('.', '/'));
-            if (!Files.isDirectory(dir)) {
-                throw new AssertionError(dir + " is missing: build the modules first");
-            }
-            try (Stream<Path> files = Files.list(dir)) {
-                for (Path f : files.filter(x -> x.toString().endsWith(".class")).sorted().toList()) {
-                    String n = f.getFileName().toString();
-                    if (n.contains("$") || n.equals("package-info.class")) {
-                        continue;                                       // nested classes come with their owner
-                    }
-                    describe(Class.forName(e.getKey() + "." + n.substring(0, n.length() - 6), false, ApiSurfaceTest.class.getClassLoader()), out);
-                }
-            }
+            out.addAll(ApiSurface.of(Sources.JAVA.resolve(e.getValue()).resolve("target/classes"), e.getKey(), ApiSurfaceTest.class.getClassLoader()));
         }
         return new ArrayList<>(out);
-    }
-
-    static boolean visible(int mod) {
-        return Modifier.isPublic(mod) || Modifier.isProtected(mod);
-    }
-
-    static void describe(Class<?> c, Set<String> out) {
-        if (!visible(c.getModifiers())) {
-            return;
-        }
-        String owner = c.getName();
-        StringBuilder head = new StringBuilder("class " + c.toGenericString());
-        if (c.getGenericSuperclass() != null && c.getSuperclass() != Object.class && !c.isEnum() && !c.isRecord()) {
-            head.append(" extends ").append(c.getGenericSuperclass().getTypeName());
-        }
-        for (java.lang.reflect.Type i : c.getGenericInterfaces()) {
-            head.append(" implements ").append(i.getTypeName());
-        }
-        out.add(head.toString());
-        for (Constructor<?> k : c.getDeclaredConstructors()) {
-            if (visible(k.getModifiers()) && !k.isSynthetic()) {
-                out.add(owner + " :: " + k.toGenericString());
-            }
-        }
-        for (Method m : c.getDeclaredMethods()) {
-            if (visible(m.getModifiers()) && !m.isSynthetic() && !m.isBridge()) {
-                out.add(owner + " :: " + m.toGenericString());
-            }
-        }
-        for (Field f : c.getDeclaredFields()) {
-            if (visible(f.getModifiers()) && !f.isSynthetic()) {
-                out.add(owner + " :: " + f.toGenericString());
-            }
-        }
-        for (Class<?> n : c.getDeclaredClasses()) {
-            describe(n, out);
-        }
     }
 
     static List<String> libraryTypes(List<String> surface) {

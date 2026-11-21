@@ -5,6 +5,10 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **Duplicate leftovers (i7b audit T10, E-tools)**: the guards' header, line-cap and API-surface checks are `drishti-tools`' published
+  `tools-guards` test jar (`GuardFiles`, `HeaderAndLineCap`, `ApiSurface`), not copies in `lake-guards`; the files store's two temporary
+  files (`columns-*.part`, `content-*.part`) come from a `tools-files` `TempFolder` made inside the table's own log folder (the same file system as
+  the place they are moved to, so the atomic move holds), removed when the JVM stops cleanly.
 - **Foreign tables: the account of a missing table and the documents' fields (G4 closure)**: `TableReader.absence()` says why a
   table has no snapshot (a foreign table: what its catalog looked for and what is there instead, a Delta table's missing log, a missing
   folder); `TableSnapshot.documentFields()` lists the documents' fields of a shaped table with their nested fields and the id and date

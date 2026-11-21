@@ -80,3 +80,4 @@ lake-io com.ash.tools:tools-files
 lake-delta com.ash.tools:tools-codec
 lake-load com.ash.tools:tools-codec
 lake-load com.ash.tools:tools-files
+lake-files com.ash.tools:tools-files

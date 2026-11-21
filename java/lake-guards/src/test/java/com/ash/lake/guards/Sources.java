@@ -15,14 +15,11 @@
  */
 package com.ash.lake.guards;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
+import com.ash.tools.guards.kit.GuardFiles;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /** The repository's files as the guards read them, and the numbers SPLIT_EXEMPTIONS.md records. */
 final class Sources {
@@ -35,24 +32,13 @@ final class Sources {
     private Sources() {
     }
 
-    /** Every file under {@code root} with one of the suffixes, build output left out. */
+    /** Every file under {@code root} with one of the suffixes, build output and the IDE's and git's folders left out (the shared guard kit's). */
     static List<Path> files(Path root, String... suffixes) {
-        try (Stream<Path> w = Files.walk(root)) {
-            return w.filter(Files::isRegularFile)
-                    .filter(p -> !p.toString().contains("/target/") && !p.toString().contains("/.mvn/"))
-                    .filter(p -> Stream.of(suffixes).anyMatch(s -> p.getFileName().toString().endsWith(s)))
-                    .sorted().toList();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        return GuardFiles.files(root, suffixes);
     }
 
     static String read(Path p) {
-        try {
-            return Files.readString(p);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        return GuardFiles.read(p);
     }
 
     /** The whole number SPLIT_EXEMPTIONS.md records after {@code "- <key>: "}. */

@@ -18,6 +18,7 @@ package com.ash.lake.files;
 import com.ash.lake.spi.Column;
 import com.ash.lake.spi.ColumnType;
 import com.ash.lake.spi.Columns;
+import com.ash.tools.files.TempFolder;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -86,6 +87,17 @@ final class FilesLog {
     private final Path domainDir;
     private final String table;
 
+    /** One temporary folder per log, inside the log (the same file system as the files it is moved to: the move is atomic). */
+    private static final java.util.concurrent.ConcurrentHashMap<Path, TempFolder> PARTS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private TempFolder parts() {
+        TempFolder t = PARTS.computeIfAbsent(dir.toAbsolutePath().normalize(), d -> TempFolder.of(d, "part-", "lake-temp-folder.txt"));
+        if (t.made() && !Files.isDirectory(t.root())) {
+            t.cleanUp();                                    // the log was removed (an undo, a dropped table) and is written again: made anew
+        }
+        return t;
+    }
+
     FilesLog(Path domainDir, String table) {
         this.domainDir = domainDir;
         this.table = table;
@@ -140,7 +152,7 @@ final class FilesLog {
         ObjectNode o = JSON.createObjectNode().put("id", id == null ? java.util.UUID.randomUUID().toString() : id);
         ArrayNode a = o.putArray("columns");
         cols.all().forEach(c -> a.addObject().put("name", c.name()).put("type", c.type().name().toLowerCase(Locale.ROOT)));
-        Path tmp = Files.createTempFile(dir, "columns-", ".part");      // one per writer: two writers never share a temporary file
+        Path tmp = parts().createFile("columns-", ".part");             // one per writer: two writers never share a temporary file
         JSON.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), o);
         return tmp;
     }
@@ -293,6 +305,6 @@ final class FilesLog {
     /** A new content file beside the log, to be filled and committed. */
     Path newContent() throws IOException {
         Files.createDirectories(dir);
-        return Files.createTempFile(dir, "content-", ".part");
+        return parts().createFile("content-", ".part");
     }
 }
