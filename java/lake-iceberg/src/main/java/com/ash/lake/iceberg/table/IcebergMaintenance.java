@@ -15,7 +15,7 @@
  */
 package com.ash.lake.iceberg.table;
 
-import com.ash.lake.hostcompat.LoadGuard;
+import com.ash.lake.common.LoadGuard;
 import com.ash.lake.common.RowRetention;
 import com.ash.lake.iceberg.table.KindTable.Day;
 import com.ash.lake.iceberg.table.KindTable.Layout;

@@ -54,7 +54,7 @@ public final class Deletes {
      * A delete file is read outside the cache's compute (2.9.7): Caffeine's synchronous {@code get(key, loader)} runs the loader inside a
      * {@code synchronized} bin, and a file read there pins a virtual thread's carrier on Java 21. One read a file still serves every caller.
      */
-    private static final com.ash.lake.hostcompat.SingleFlight<String> LOADS = new com.ash.lake.hostcompat.SingleFlight<>();
+    private static final com.ash.lake.common.SingleFlight<String> LOADS = new com.ash.lake.common.SingleFlight<>();
 
     /** No deletes. */
     public static final Deletes NONE = new Deletes(new long[0], List.of());

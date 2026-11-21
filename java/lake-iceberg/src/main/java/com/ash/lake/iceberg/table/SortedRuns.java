@@ -134,7 +134,7 @@ final class SortedRuns implements Closeable {
         try {
             Files.createDirectories(dir);
             Path file = dir.resolve(name + "-" + java.util.UUID.randomUUID() + ".run");   // a run file in the plugin's own state folder (new names only)
-            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(com.ash.lake.hostcompat.ChannelIo.newOutputStream(file), 1 << 20))) {
+            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(com.ash.lake.common.ChannelIo.newOutputStream(file), 1 << 20))) {
                 for (Row r : sorted) {
                     writeRow(out, r);
                 }
@@ -283,7 +283,7 @@ final class SortedRuns implements Closeable {
         private Row current;
 
         FileCursor(Path file, int seq) throws IOException {
-            this.in = new DataInputStream(new BufferedInputStream(com.ash.lake.hostcompat.ChannelIo.newInputStream(file), 1 << 20));
+            this.in = new DataInputStream(new BufferedInputStream(com.ash.lake.common.ChannelIo.newInputStream(file), 1 << 20));
             this.seq = seq;
         }
 

@@ -87,8 +87,8 @@ final class LocalWriteFileIO extends ReadingFileIO {
             public PositionOutputStream create(boolean putIfAbsent) throws IOException {
                 Files.createDirectories(target.getParent());
                 OutputStream out = putIfAbsent
-                        ? com.ash.lake.hostcompat.ChannelIo.newOutputStream(target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)
-                        : com.ash.lake.hostcompat.ChannelIo.newOutputStream(target, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+                        ? com.ash.lake.common.ChannelIo.newOutputStream(target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)
+                        : com.ash.lake.common.ChannelIo.newOutputStream(target, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
                 return new Counting(new java.io.BufferedOutputStream(out, 1 << 16));
             }
 

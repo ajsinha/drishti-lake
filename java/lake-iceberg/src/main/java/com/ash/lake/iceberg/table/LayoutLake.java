@@ -15,7 +15,7 @@
  */
 package com.ash.lake.iceberg.table;
 
-import com.ash.lake.hostcompat.LoadGuard;
+import com.ash.lake.common.LoadGuard;
 import com.ash.lake.iceberg.catalog.Catalog;
 import com.ash.lake.iceberg.catalog.Catalogs;
 import com.ash.lake.iceberg.table.IcebergLayout.Row;

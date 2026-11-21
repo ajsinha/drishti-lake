@@ -130,7 +130,7 @@ public final class LocalStorage implements Storage {
     public java.io.OutputStream create(String path) throws IOException {
         Path p = path(path);
         Files.createDirectories(p.getParent());
-        return new java.io.BufferedOutputStream(com.ash.lake.hostcompat.ChannelIo.newOutputStream(p), 1 << 16);
+        return new java.io.BufferedOutputStream(com.ash.lake.common.ChannelIo.newOutputStream(p), 1 << 16);
     }
 
     /**
@@ -202,7 +202,7 @@ public final class LocalStorage implements Storage {
 
     /**
      * Positional reads of a local file: {@link FileChannel#read(ByteBuffer, long)} is safe without a lock. Reads go
-     * through {@link com.ash.lake.hostcompat.ChannelIo}, so a multi-megabyte read into a heap buffer never makes the JDK
+     * through {@link com.ash.lake.common.ChannelIo}, so a multi-megabyte read into a heap buffer never makes the JDK
      * cache a direct buffer of that size per thread (the 2.9.6 direct-memory exhaustion).
      */
     private static final class ChannelReader implements RangeReader {
@@ -224,7 +224,7 @@ public final class LocalStorage implements Storage {
             if (!dst.hasRemaining()) {
                 return 0;
             }
-            return com.ash.lake.hostcompat.ChannelIo.read(channel, dst, position);
+            return com.ash.lake.common.ChannelIo.read(channel, dst, position);
         }
 
         @Override

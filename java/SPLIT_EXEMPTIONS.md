@@ -9,7 +9,7 @@ go down from its value at the move. **This list only shrinks**; at `v1.0.0` it i
 
 ## Counts (read by the guards)
 
-- hostcompat types: 26
+- hostcompat types: 23
 - host-word files: 79
 - parked checks: 2
 
@@ -32,16 +32,13 @@ two edits: `ModuleLoaders` lost the static block that joined the host's `DatesIn
 | Type | Host type | Removed by |
 |---|---|---|
 | `ConnectorSecrets` | `com.ash.drishti.common.ConnectorSecrets` | L5: with `NamedResources` (the connector half leaves for the host's `LakeCatalog`) |
-| `ChannelIo` | `com.ash.drishti.api.ChannelIo` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
 | `DataDir` | `com.ash.drishti.api.DataDir` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
-| `Extensions` | `com.ash.drishti.common.Extensions` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
-| `LoadGuard` | `com.ash.drishti.api.LoadGuard` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
 | `ModuleHomes` | `com.ash.drishti.api.resolution.ModuleHomes` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
 | `Placeholders` | `com.ash.drishti.settingsfile.Placeholders` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
 | `Roots` | `com.ash.drishti.api.Roots` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
 | `RowFeed` | `com.ash.drishti.common.RowFeed` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
 | `SettingsFile` | `com.ash.drishti.settingsfile.SettingsFile` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
-| `SingleFlight` | `com.ash.drishti.api.SingleFlight` | L4: `LakeOptions` and the product's own small utilities (`RowFeed`: the loader's rules, taken into `lake-load`) |
+| `Extensions` | `com.ash.drishti.common.Extensions` | L5: with `Vocabularies` (the pack and module half leaves for the host's `LakeCatalog`) |
 | `ConfigResolution` | `com.ash.drishti.api.resolution.ConfigResolution` | L5: the pack and module half leaves for the host's `LakeCatalog` |
 | `DomainVocabulary` | `com.ash.drishti.kernel.api.vocabulary.DomainVocabulary` | L5: the pack and module half leaves for the host's `LakeCatalog` |
 | `ModuleLoaders` | `com.ash.drishti.common.ModuleLoaders` | L5: the pack and module half leaves for the host's `LakeCatalog` |

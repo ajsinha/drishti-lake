@@ -16,7 +16,7 @@
 package com.ash.lake.iceberg.table;
 
 import com.ash.lake.hostcompat.RowFeed;
-import com.ash.lake.hostcompat.LoadGuard;
+import com.ash.lake.common.LoadGuard;
 import com.ash.lake.iceberg.table.IcebergLayout.Row;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;

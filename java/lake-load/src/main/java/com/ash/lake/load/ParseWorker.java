@@ -330,7 +330,7 @@ final class ParseWorker implements Callable<Void> {
             firstRejects.subList(keep, firstRejects.size()).clear();
         }
         if (rejectsOut == null) {
-            rejectsOut = new DataOutputStream(new BufferedOutputStream(com.ash.lake.hostcompat.ChannelIo.newOutputStream(rejectsFile), 1 << 16));
+            rejectsOut = new DataOutputStream(new BufferedOutputStream(com.ash.lake.common.ChannelIo.newOutputStream(rejectsFile), 1 << 16));
         }
         rejectsOut.writeInt(w.split());
         rejectsOut.writeInt(w.seq());

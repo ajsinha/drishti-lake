@@ -12,7 +12,7 @@ retired from Drishti in G4, so `LakeStore` comes here with the native path only 
 | L1 | bootstrap: reactor, headers, licence, guards | **done** | guards: names no host, exemptions only shrink, header, file cap, dependency allow-list, official libraries only (failing); public surface, relative paths, configuration writes (report mode); `tools/ci/check.py` (local, no hosted CI); `tools/release/release.py` skeleton |
 | L2 | bridge and first TCK cases | **done** | `make_reference.py` over Drishti's jars at `9ce7c3170`; 15 cases × Delta, Iceberg = 30 results, stable over two runs; this code's results equal the reference (30/30) |
 | L3 | move with history, rename, hostcompat | **done** (untagged: no tag before the owner says) | 283 commits, 587 files; `./mvnw clean verify` green: 348 tests, 0 failures, 1 skipped (parked); the guards green |
-| L4 | own settings and errors | **in progress** | part 1: `LakeException`/`LK-` codes, TLS and proxy records in `com.ash.lake.io.net` (hostcompat 41 → 26); kit 30/30 equal |
+| L4 | own settings and errors | **in progress** | part 1: `LakeException`/`LK-` codes, TLS and proxy records in `com.ash.lake.io.net`; part 2: `ChannelIo`, `SingleFlight`, `LoadGuard` in `com.ash.lake.common` (hostcompat 41 → 23); kit 30/30 equal each time |
 | L5 to L14 | untangle, TCK, Python, contracts, API, docs, release | not started | |
 
 ## What the move left for later (each listed with its step)

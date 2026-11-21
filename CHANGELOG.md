@@ -33,5 +33,8 @@ Entries are written per release; unreleased work is listed first.
   too large, `LK-1004` ready refused; each with its HTTP status for a host to map) replace the host's `DrishtiException` and
   `ErrorCode`; the TLS and proxy records (13 types) are the product's own, `com.ash.lake.io.net`; the insecure-TLS switch is
   `LAKE_ALLOW_INSECURE_TLS`. hostcompat 41 → 26. Parity kit equal to the reference (30/30).
+- **L4, part 2: small utilities.** `ChannelIo`, `SingleFlight` and `LoadGuard` are the product's own (`com.ash.lake.common`); the
+  quarantine's business zone variable is `LAKE_BUSINESS_ZONE`; `Extensions` stays listed until L5 (`Vocabularies` needs it).
+  hostcompat 26 → 23. Parity kit equal to the reference (30/30).
 - Not moved yet, on purpose (each with its step): the memory lake (L8), the Delta lake opener that chooses the Hadoop engine (L7;
   the engine itself stays in Drishti, LK-9), the files store (L8), the Python path (L10), the contracts tool (L11).
