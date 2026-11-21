@@ -188,5 +188,30 @@ class TwoRuntimesTest {
         }
         assertThat(ParquetFooters.of(a).weightBytes()).as("a's read filled a's cache").isPositive();
         assertThat(ParquetFooters.of(b).weightBytes()).as("and not b's").isEqualTo(before);
+
+        // the read API: two readers of one lake, one in each runtime, share no snapshot and no footer cache (READ_API.md section 6)
+        for (String format : List.of("delta", "iceberg")) {
+            Path lake = tmp.resolve("lake-api-" + format);
+            Path cfg = Files.writeString(tmp.resolve("load-api-" + format + ".yaml"), PvData.config(in + "/*", lake.toString(), format));
+            assertThat(LakeLoad.run(a, new String[] {"--config", cfg.toString(), "-q"}, new PrintStream(new ByteArrayOutputStream()))).isZero();
+            ParquetFooters.of(a).purge();
+            ParquetFooters.of(b).purge();
+            try (var ra = Stores.of(a, format).open(a, com.ash.lake.read.LakeAddress.of(lake.toString(), "risk"));
+                 var rb = Stores.of(b, format).open(b, com.ash.lake.read.LakeAddress.of(lake.toString(), "risk"))) {
+                var sa = ra.table("scenario-pv").snapshot(com.ash.lake.spi.AsOf.LATEST).orElseThrow();
+                var sb = rb.table("scenario-pv").snapshot(com.ash.lake.spi.AsOf.LATEST).orElseThrow();
+                assertThat(sa).as(format + ": each reader its own snapshot").isNotSameAs(sb);
+                java.time.LocalDate d = java.time.LocalDate.parse(PvData.DATES[0]);
+                long[] rows = {0};
+                sa.vectors(com.ash.lake.read.VectorRequest.of(d, "SCENARIO_PV", List.of()), (id, v, n, t) -> rows[0]++);
+                assertThat(rows[0]).isEqualTo(40);
+                assertThat(ParquetFooters.of(a).weightBytes()).as(format + ": a's read filled a's cache").isPositive();
+                assertThat(ParquetFooters.of(b).weightBytes()).as(format + ": and not b's").isZero();
+                assertThat(sb.ids(d).size()).isEqualTo(40);
+                rb.purge();
+                assertThat(ra.table("scenario-pv").snapshot(com.ash.lake.spi.AsOf.LATEST).orElseThrow())
+                        .as(format + ": b's purge leaves a's snapshots").isSameAs(sa);
+            }
+        }
     }
 }

@@ -34,7 +34,8 @@ import org.junit.jupiter.api.io.TempDir;
  * whose virtual threads share one carrier thread, eight callers on virtual threads each load a table at the same time, Delta and
  * Iceberg alternately, the first touch of every holder (the storage providers, the codecs, the catalogs) among them. A wait that pins
  * the one carrier (a class initialisation another caller holds, a monitor held across a park) hangs the JVM; the test then fails
- * with the hung JVM's threads in its message.
+ * with the hung JVM's threads in its message. Then eight readers at once read each table's vectors through the read API with four
+ * decoders each (READ_API.md section 6: the ordered parallel decode must not hang either).
  */
 class StartOnFewCoresTest {
 
@@ -66,11 +67,39 @@ class StartOnFewCoresTest {
             t.join();
         }
         System.out.println("LOADED " + loaded.get());
+        // then eight reads through the read API at once, each with four decoders (the ordered parallel decode on the one carrier)
+        com.ash.lake.LakeRuntime rt = com.ash.lake.LakeRuntime.fromProcess();
+        AtomicInteger read = new AtomicInteger();
+        List<Thread> readers = new ArrayList<>();
+        for (int i = 0; i < CALLERS; i++) {
+            int n = i;
+            String format = n % 2 == 0 ? "delta" : "iceberg";
+            readers.add(Thread.ofVirtual().name("reader-" + n).unstarted(() -> {
+                try (var lake = Stores.of(rt, format).open(rt, com.ash.lake.read.LakeAddress.of(work.resolve("lake" + n).toString(), "risk"))) {
+                    var snap = lake.table("scenario-pv").snapshot(com.ash.lake.spi.AsOf.LATEST).orElseThrow();
+                    long[] rows = {0};
+                    snap.vectors(com.ash.lake.read.VectorRequest.of(java.time.LocalDate.parse(PvData.DATES[0]), "SCENARIO_PV", List.of("DESK"))
+                            .parallel(4, 1L << 20), (id, v, len, t) -> rows[0]++);
+                    if (rows[0] == 30) {
+                        read.incrementAndGet();
+                    } else {
+                        System.out.println("reader " + n + " read " + rows[0] + " rows");
+                    }
+                } catch (Exception e) {
+                    System.out.println("reader " + n + ": " + e);
+                }
+            }));
+        }
+        readers.forEach(Thread::start);
+        for (Thread t : readers) {
+            t.join();
+        }
+        System.out.println("READ " + read.get());
         System.exit(0);
     }
 
     @Test
-    void eightLoadsAtOnceFinishWithOneCarrierThread(@TempDir Path dir) throws Exception {
+    void eightLoadsThenEightReadsAtOnceFinishWithOneCarrierThread(@TempDir Path dir) throws Exception {
         String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
         Path work = Files.createDirectories(dir.resolve("work"));
         List<String> cmd = new ArrayList<>(List.of(java, "-Xmx1g", "-Djdk.virtualThreadScheduler.parallelism=1",
@@ -93,6 +122,6 @@ class StartOnFewCoresTest {
         String out = Files.readString(dir.resolve("out.txt"))
                 + (Files.exists(dir.resolve("threads.txt")) ? Files.readString(dir.resolve("threads.txt")) : "");
         assertThat(done).as("eight loads finished within 120 s with one carrier thread (a hang is a start-up deadlock)\n" + out).isTrue();
-        assertThat(out).contains("LOADED " + CALLERS);
+        assertThat(out).contains("LOADED " + CALLERS).contains("READ " + CALLERS);
     }
 }

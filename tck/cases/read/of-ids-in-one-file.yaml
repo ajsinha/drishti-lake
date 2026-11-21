@@ -1,0 +1,10 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# vectorsOf in one file of a date: one id, three ids of that file, and an absent id (none found)
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 50, scenarios: 3, seed: 61}}
+config: |
+  source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+  target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+steps:
+  - load: []
+  - store: [read-vectors-of, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', SCENARIO_PV]

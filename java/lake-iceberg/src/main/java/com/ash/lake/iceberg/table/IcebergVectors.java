@@ -55,11 +55,15 @@ final class IcebergVectors {
         cols.addAll(textColumns);
         int[] files = java.util.stream.IntStream.range(0, day.files().size()).filter(keep).toArray();
         Map<String, Integer> shadow = t.shadow(l, day);
-        // file by file in file order; several files decode at once when the reader asked for it (VectorReads, VAR_GUIDE.md 27a.6)
-        VectorReads.inFileOrder(files, sink, (f, to) -> {
+        List<int[]> pieces = pieces(t, l, day, files, sink);
+        int[] order = java.util.stream.IntStream.range(0, pieces.size()).toArray();
+        // piece by piece in file order; several pieces decode at once when the reader asked for it (VectorReads, VAR_GUIDE.md 27a.6)
+        VectorReads.inFileOrder(order, sink, (i, to) -> {
+            int[] piece = pieces.get(i);
+            int f = piece[0];
             double[][] buf = {new double[512]};
             String[] texts = new String[textColumns.size()];
-            t.scan(l, day, f, cols, null, r -> {
+            t.scanGroups(l, day, f, piece[1], piece[2], cols, r -> {
                 for (int c = 0; c < texts.length; c++) {
                     texts[c] = text(r[c + 2]);
                 }
@@ -69,6 +73,37 @@ final class IcebergVectors {
                 }
             });
         });
+    }
+
+    /**
+     * The files cut into pieces {file, from group, to group} for {@code sink}'s decoding threads, as Delta's read cuts them (READ_API.md
+     * defect I2): whole files on one thread; else each file's row groups in runs of about {@link VectorReads#partBytes} uncompressed
+     * bytes (at least one group), so a date of a few large files still decodes on every thread. A file whose footer cannot be read is
+     * one piece: its read says what is wrong.
+     */
+    static List<int[]> pieces(KindTable t, Layout l, Day day, int[] files, VectorSink sink) {
+        List<int[]> out = new ArrayList<>();
+        boolean cut = VectorReads.threads(sink) > 1;
+        long part = cut ? VectorReads.partBytes(sink) : Long.MAX_VALUE;
+        for (int f : files) {
+            long[] groups = cut ? t.rowGroups(l, day, f) : new long[0];
+            if (groups.length <= 1 || Arrays.stream(groups).sum() <= part) {
+                out.add(new int[] {f, 0, Integer.MAX_VALUE});
+                continue;
+            }
+            int from = 0;
+            long bytes = 0;
+            for (int g = 0; g < groups.length; g++) {
+                if (g > from && bytes + groups[g] > part) {
+                    out.add(new int[] {f, from, g});
+                    from = g;
+                    bytes = 0;
+                }
+                bytes += groups[g];
+            }
+            out.add(new int[] {f, from, groups.length});
+        }
+        return out;
     }
 
     /** One entity's vector columns in one file of the day (its document's markers are put back with them); empty when none. */

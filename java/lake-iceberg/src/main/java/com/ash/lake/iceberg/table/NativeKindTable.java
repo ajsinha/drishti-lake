@@ -206,6 +206,24 @@ final class NativeKindTable extends KindTable {
 
     @Override
     void scan(Layout l, Day day, int file, List<String> columns, String idEquals, Consumer<Object[]> sink) {
+        read(l, day, file, columns, idEquals, 0, Integer.MAX_VALUE, sink);
+    }
+
+    @Override
+    long[] rowGroups(Layout l, Day day, int file) {
+        try {
+            return table().orElseThrow().rowGroups(tasks(day).get(file));
+        } catch (java.io.IOException | RuntimeException e) {
+            return new long[0];                                  // the footer cannot be read: the file is one piece, its read says why
+        }
+    }
+
+    @Override
+    void scanGroups(Layout l, Day day, int file, int from, int to, List<String> columns, Consumer<Object[]> sink) {
+        read(l, day, file, columns, null, from, to, sink);
+    }
+
+    private void read(Layout l, Day day, int file, List<String> columns, String idEquals, int from, int to, Consumer<Object[]> sink) {
         Table t = table().orElseThrow();
         Schema snap = t.metadata().schemaFor(snapshot(t, l.snapshotId()));
         // a column added since the snapshot (maintenance fills it): the current schema, which reads it as null
@@ -219,7 +237,7 @@ final class NativeKindTable extends KindTable {
             ids.add(f.id());
         }
         Expr filter = idEquals == null ? Expr.TRUE : Expr.eq(schema.field(IcebergLayout.ID).id(), idEquals);
-        try (TaskReader r = t.rows(tasks(day).get(file), schema, ids, filter, idEquals != null)) {
+        try (TaskReader r = t.rows(tasks(day).get(file), schema, ids, filter, idEquals != null, from, to)) {
             while (r.hasNext()) {
                 sink.accept(r.next());
             }

@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# IdMaps.write then open: every call of the mapped map equals the heap map's (ids in order, the file of each, an absent id -1), and it
+# is closed after close(); two loads of the date (append) so it has two files
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 400, scenarios: 2, seed: 31}}
+  more/pv.2026-10-27.jsonl: {pv: {n: 450, scenarios: 2, seed: 32}}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  more: |
+    source: {files: '${in}/more/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: append}
+steps:
+  - load: []
+  - load: {config: more}
+  - store: [read-ids, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']

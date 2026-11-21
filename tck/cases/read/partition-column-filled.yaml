@@ -1,0 +1,12 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# a partition-by field (Delta's partition column, Iceberg's identity field, the files store's typed column) is filled in the read API's
+# columns and in its vectors' texts, as any promoted field is (READ_API.md 2.4, 2.5; P1 on Iceberg)
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 30, scenarios: 2, seed: 41}}
+config: |
+  source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, partition-by: [LEGAL_ENTITY, CCY], promote: [DESK], vectors: [SCENARIO_PV]}
+  target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+steps:
+  - load: []
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'LEGAL_ENTITY:t', 'CCY:t', 'DESK:t']
+  - store: [read-vectors, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', SCENARIO_PV, LEGAL_ENTITY, CCY, DESK]

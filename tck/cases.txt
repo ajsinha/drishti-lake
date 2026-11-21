@@ -21,12 +21,17 @@ modes/key-override
 names/ready-file-business-date
 names/special-characters
 read/all-rows-in-file-order
+read/as-of-version-and-time
 read/by-id-and-all
 read/days-files-and-counts
 read/deleted-rows-not-read
 read/ids-and-file-of-id
+read/keep-prunes-files
+read/mapped-equals-heap
 read/newest-wins-long-load-ids
 read/numbers-texts-nulls
+read/of-ids-in-one-file
+read/partition-column-filled
 read/problem-recorded-and-cleared
 read/purge-then-read
 read/reachable-and-missing

@@ -171,6 +171,22 @@ abstract class KindTable {
      */
     abstract void scan(Layout l, Day day, int file, List<String> columns, String idEquals, Consumer<Object[]> sink);
 
+    /**
+     * The uncompressed bytes of each row group of one file of the day (its footer), so a vector read cuts a few large files into pieces
+     * for its decoding threads (READ_API.md defect I2); empty when the engine cannot say: the file is read whole.
+     */
+    long[] rowGroups(Layout l, Day day, int file) {
+        return new long[0];
+    }
+
+    /** As {@link #scan} without {@code idEquals}, the file's row groups {@code [from, to)} only (to: {@code Integer.MAX_VALUE} for the rest). */
+    void scanGroups(Layout l, Day day, int file, int from, int to, List<String> columns, Consumer<Object[]> sink) {
+        if (from != 0 || to != Integer.MAX_VALUE) {
+            throw new UnsupportedOperationException("this engine reads a file whole");
+        }
+        scan(l, day, file, columns, null, sink);
+    }
+
     /** The fingerprint of a day's files: their paths and their delete files' paths. */
     /**
      * A text column's bounds in one data file of the day, from its manifest entry: {min, max, nulls} ({@code nulls} "0" when the file

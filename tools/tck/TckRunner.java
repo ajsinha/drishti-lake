@@ -492,6 +492,9 @@ final class ReadVerbs {   // lake-only
                 case "read-identity" -> identity(store, a, lake);   // lake-only
                 case "read-purge" -> purge(lake, a[4], LocalDate.parse(args.get(0)));   // lake-only
                 case "read-problems" -> problems(lake, a[4], LocalDate.parse(args.get(0)));   // lake-only
+                case "read-at" -> readAt(store, lake, a, Integer.parseInt(args.get(0)), args.size() > 1 && args.get(1).equals("time"));   // lake-only
+                case "read-keep" -> keep(snap(lake, a[4]), LocalDate.parse(args.get(0)), args.get(1), args.get(2), args.get(3));   // lake-only
+                case "read-vectors-of" -> vectorsOf(snap(lake, a[4]), LocalDate.parse(args.get(0)), args.get(1));   // lake-only
                 default -> null;   // lake-only
             };   // lake-only
         }   // lake-only
@@ -623,6 +626,60 @@ final class ReadVerbs {   // lake-only
             }   // lake-only
         }   // lake-only
         return out.toString();   // lake-only
+    }   // lake-only
+
+    /**   // lake-only
+     * The read API as of a version (time-travel/versions-and-earlier-rows through snapshots): the table's version at {@code index} of   // lake-only
+     * {@code TableStore.versions}, by the version or by its commit time; each date's ids (sorted, a digest) and the newest-wins documents.   // lake-only
+     */   // lake-only
+    static String readAt(com.ash.lake.spi.TableStore store, com.ash.lake.read.LakeReader lake, String[] a, int index, boolean byTime) throws java.io.IOException {   // lake-only
+        var versions = store.versions(TckRunner.RT, new com.ash.lake.spi.TableRef(a[2], a[3], a[4]));   // lake-only
+        var asOf = byTime ? com.ash.lake.spi.AsOf.time(versions.get(index).committed()) : com.ash.lake.spi.AsOf.version(versions.get(index).version());   // lake-only
+        var s = lake.table(a[4]).snapshot(asOf).orElse(null);   // lake-only
+        if (s == null) return "no table then";   // lake-only
+        StringBuilder out = new StringBuilder("dates " + s.dates().size());   // lake-only
+        for (LocalDate d : s.dates()) {   // lake-only
+            out.append('\n').append(d).append(": ").append(ids(s, d).replaceAll(" mapped=.*", "")).append(" | ").append(docs(s, d).replaceAll(" filled .*", ""));   // lake-only
+        }   // lake-only
+        return out.toString();   // lake-only
+    }   // lake-only
+
+    /**   // lake-only
+     * Statistics pruning in a vector read: {@code keep} accepts the files whose partition values or text bounds may hold {@code column =   // lake-only
+     * value} (the pushdown rule); the rows with that value equal those of the full read, and no more files are read.   // lake-only
+     */   // lake-only
+    static String keep(com.ash.lake.read.TableSnapshot s, LocalDate d, String vector, String column, String value) throws java.io.IOException {   // lake-only
+        var where = com.ash.lake.spi.Expr.eq(column, value);   // lake-only
+        int[] kept = {0};   // lake-only
+        java.util.function.Predicate<com.ash.lake.read.DataFile> keep = f -> {   // lake-only
+            boolean k = com.ash.lake.io.read.Pruning.mayHold(where, d, f.partition(), f.bounds()::get);   // lake-only
+            kept[0] += k ? 1 : 0;   // lake-only
+            return k;   // lake-only
+        };   // lake-only
+        List<String> full = new ArrayList<>();   // lake-only
+        List<String> pruned = new ArrayList<>();   // lake-only
+        s.vectors(com.ash.lake.read.VectorRequest.of(d, vector, List.of(column)), (id, v, n, t) -> { if (value.equals(t[0])) full.add(id + "|" + n); });   // lake-only
+        s.vectors(com.ash.lake.read.VectorRequest.of(d, vector, List.of(column)).keep(keep), (id, v, n, t) -> { if (value.equals(t[0])) pruned.add(id + "|" + n); });   // lake-only
+        int files = s.day(d).map(x -> x.files().size()).orElse(0);   // lake-only
+        return pruned.size() + " rows equal=" + pruned.equals(full) + " kept<=files=" + (kept[0] <= files) + " kept>0=" + (kept[0] > 0);   // lake-only
+    }   // lake-only
+
+    /** {@code vectorsOf} in one file: one id, three ids of that file, an absent id; what each finds, and its vectors' digest. */   // lake-only
+    static String vectorsOf(com.ash.lake.read.TableSnapshot s, LocalDate d, String column) throws java.io.IOException {   // lake-only
+        var m = s.ids(d);   // lake-only
+        int file = m.file(m.id(0));   // lake-only
+        List<String> same = new ArrayList<>();   // lake-only
+        for (int i = 0; i < m.size() && same.size() < 3; i++) {   // lake-only
+            if (m.file(m.id(i)) == file) same.add(m.id(i));   // lake-only
+        }   // lake-only
+        StringBuilder out = new StringBuilder();   // lake-only
+        for (var ask : List.of(java.util.Set.of(same.get(0)), java.util.Set.copyOf(same), java.util.Set.of("ABSENT"))) {   // lake-only
+            var got = s.vectorsOf(d, file, ask, List.of(column));   // lake-only
+            List<String> lines = new ArrayList<>();   // lake-only
+            got.forEach((id, v) -> lines.add(id + "|" + java.util.Arrays.toString(v.get(column))));   // lake-only
+            out.append(ask.size()).append(" asked ").append(got.size()).append(" found ").append(digest(lines)).append('\n');   // lake-only
+        }   // lake-only
+        return out.toString().strip();   // lake-only
     }   // lake-only
 
     static String identity(com.ash.lake.spi.TableStore store, String[] a, com.ash.lake.read.LakeReader lake) throws java.io.IOException {   // lake-only

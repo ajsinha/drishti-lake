@@ -55,6 +55,12 @@ public final class TaskReader implements Closeable {
      */
     public TaskReader(FileTask task, TableMetadata table, Schema schema, List<NestedField> projection, Expr filter, FileAccess io, boolean pageIndex)
             throws IOException {
+        this(task, table, schema, projection, filter, io, pageIndex, 0, Integer.MAX_VALUE);
+    }
+
+    /** As above, the file's row groups {@code [fromGroup, toGroup)} only (ParquetRowReader); deletes apply by the rows' file positions. */
+    public TaskReader(FileTask task, TableMetadata table, Schema schema, List<NestedField> projection, Expr filter, FileAccess io, boolean pageIndex,
+            int fromGroup, int toGroup) throws IOException {
         this.deletes = Deletes.of(task.file(), task.deletes(), table.schema(), io);
         this.width = projection.size();
         List<NestedField> read = new ArrayList<>(projection);
@@ -78,7 +84,7 @@ public final class TaskReader implements Closeable {
         String p = io.resolve(task.file().path());
         this.reader = new ParquetRowReader(ParquetInput.of(io.storage(p), p, task.file().fileSizeInBytes()), task.file().path(),
                 task.file().fileSizeInBytes(), read, table.nameMapping().orElse(null), constants, filter, io.codecs(), com.ash.lake.io.ParquetFooters.of(io.runtime()),
-                pageIndex && !deletes.hasPositions());
+                pageIndex && !deletes.hasPositions(), fromGroup, toGroup);
     }
 
     /** Whether there is another live row. */

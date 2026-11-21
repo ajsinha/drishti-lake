@@ -114,6 +114,11 @@ public final class Table {
      * in that order, row groups pruned by {@code filter}.
      */
     public TaskReader rows(FileTask task, Schema schema, List<Integer> ids, Expr filter, boolean pageIndex) {
+        return rows(task, schema, ids, filter, pageIndex, 0, Integer.MAX_VALUE);
+    }
+
+    /** As above, the file's row groups {@code [fromGroup, toGroup)} only (a piece of the file, for parallel decoding). */
+    public TaskReader rows(FileTask task, Schema schema, List<Integer> ids, Expr filter, boolean pageIndex, int fromGroup, int toGroup) {
         List<NestedField> projection = ids.stream().map(id -> {
             NestedField f = schema.field(id);
             if (f == null) {
@@ -122,9 +127,20 @@ public final class Table {
             return f;
         }).toList();
         try {
-            return new TaskReader(task, metadata(), schema, projection, filter, io(), pageIndex);
+            return new TaskReader(task, metadata(), schema, projection, filter, io(), pageIndex, fromGroup, toGroup);
         } catch (IOException e) {
             throw new UncheckedIOException("reading " + task.file().path(), e);
+        }
+    }
+
+    /** The uncompressed bytes of each row group of {@code task}'s data file, from its footer (the runtime's footer cache). */
+    public long[] rowGroups(FileTask task) throws IOException {
+        FileAccess io = io();
+        String p = io.resolve(task.file().path());
+        org.apache.parquet.io.InputFile in = com.ash.lake.io.ParquetInput.of(io.storage(p), p, task.file().fileSizeInBytes());
+        try (org.apache.parquet.io.SeekableInputStream stream = in.newStream()) {
+            return com.ash.lake.io.ParquetFooters.of(io.runtime()).footer(task.file().path(), task.file().fileSizeInBytes(), in, stream,
+                    com.ash.lake.io.ParquetFooters.options(io.codecs()).build()).getBlocks().stream().mapToLong(b -> b.getTotalByteSize()).toArray();
         }
     }
 

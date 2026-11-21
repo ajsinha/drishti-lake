@@ -1,0 +1,12 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# a vector read with keep over the files' partition values and bounds (the pushdown rule): the rows of the kept value equal those of
+# the full read, and no more files are read than the date has
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 60, scenarios: 2, seed: 51}}
+config: |
+  source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, partition-by: [LEGAL_ENTITY], promote: [DESK], vectors: [SCENARIO_PV]}
+  target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+steps:
+  - load: []
+  - store: [read-keep, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', SCENARIO_PV, LEGAL_ENTITY, LE-TKY]
+  - store: [read-keep, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', SCENARIO_PV, DESK, DESK-FX]

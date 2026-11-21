@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# the read API as of a version (READ_API.md section 6): the cases of time-travel/versions-and-earlier-rows through snapshots, by the
+# version and by its commit time; each date's ids and documents as they were
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 12, scenarios: 2, seed: 1}}
+  next/pv.2026-10-28.jsonl: {pv: {n: 8, scenarios: 2, seed: 2, start: '2026-10-28'}}
+  again/pv.2026-10-27.jsonl: {pv: {n: 5, scenarios: 2, seed: 99}}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  next: |
+    source: {files: '${in}/next/pv.2026-10-28.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  again: |
+    source: {files: '${in}/again/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+steps:
+  - load: {args: [--run-id, tck-first]}
+  - load: {config: next, args: [--run-id, tck-second]}
+  - load: {config: again, args: [--run-id, tck-third]}
+  - store: [read-at, '${store}', '${lake}', risk, scenario-pv, '0']
+  - store: [read-at, '${store}', '${lake}', risk, scenario-pv, '1']
+  - store: [read-at, '${store}', '${lake}', risk, scenario-pv, '1', time]
+  - store: [read-at, '${store}', '${lake}', risk, scenario-pv, '2']

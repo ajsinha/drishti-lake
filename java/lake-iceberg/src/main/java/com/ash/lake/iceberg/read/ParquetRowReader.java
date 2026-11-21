@@ -93,6 +93,15 @@ public final class ParquetRowReader implements Closeable {
      */
     public ParquetRowReader(InputFile in, String path, long length, List<NestedField> projection, NameMapping mapping, Map<Integer, Object> constants,
             Expr filter, NativeCodecs codecs, ParquetFooters footers, boolean pageIndex) throws IOException {
+        this(in, path, length, projection, mapping, constants, filter, codecs, footers, pageIndex, 0, Integer.MAX_VALUE);
+    }
+
+    /**
+     * As above, the file's row groups {@code [fromGroup, toGroup)} only (a piece of a file decoded on its own thread; the rows keep their
+     * positions in the whole file, which position deletes refer to). A range reads without the filter's row-group pruning.
+     */
+    public ParquetRowReader(InputFile in, String path, long length, List<NestedField> projection, NameMapping mapping, Map<Integer, Object> constants,
+            Expr filter, NativeCodecs codecs, ParquetFooters footers, boolean pageIndex, int fromGroup, int toGroup) throws IOException {
         this.path = path;
         this.projection = List.copyOf(projection);
         this.constants = constants;
@@ -101,10 +110,16 @@ public final class ParquetRowReader implements Closeable {
         try {
             ParquetReadOptions base = ParquetFooters.options(codecs).build();
             ParquetMetadata footer = footers.footer(path, length, in, stream, base);
+            boolean range = fromGroup > 0 || toGroup < footer.getBlocks().size();
+            if (range) {                                  // the same block objects: their row index offsets stay the file's
+                List<org.apache.parquet.hadoop.metadata.BlockMetaData> blocks = footer.getBlocks();
+                int to = Math.min(toGroup, blocks.size());
+                footer = new ParquetMetadata(footer.getFileMetaData(), List.copyOf(blocks.subList(Math.min(fromGroup, to), to)));
+            }
             MessageType fileSchema = footer.getFileMetaData().getSchema();
             Converters.Ids ids = ids(fileSchema, mapping);
             MessageType requested = requested(fileSchema, ids);
-            Optional<FilterPredicate> pushed = rowGroupFilter(fileSchema, ids, filter);
+            Optional<FilterPredicate> pushed = range ? Optional.empty() : rowGroupFilter(fileSchema, ids, filter);
             this.pageFiltered = pageIndex && pushed.isPresent();
             ParquetReadOptions options = ParquetFooters.options(codecs).useColumnIndexFilter(pageFiltered)
                     .withRecordFilter(pushed.map(FilterCompat::get).orElse(FilterCompat.NOOP)).build();
