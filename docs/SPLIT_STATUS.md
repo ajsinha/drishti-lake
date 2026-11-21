@@ -69,10 +69,11 @@ Built (decisions RA-1 to RA-12 accepted): RA-S0 (section 10 checked, today's num
 `TableStore.open`, `Problems` in `lake-io`), RA-S2 Delta, RA-S3 Iceberg, RA-S4 files (F1, F2), RA-S5 deletes (D1 in the kit, I1 in
 `IcebergReadDeletesTest`), RA-S6 Iceberg `partition-by` (P1), RA-S7 pushdown and `ScanStats` (`Pruning`, one rule); the files store's
 read by id through a per-snapshot id index; Delta's newest-load order no longer depends on the load id's length. 14 `read/*` cases and
-`layout/partition-by-beside-the-date` equal on every store and the memory rows. Open, in order: RA-S9 (remaining cases to 20,
-`TwoRuntimesTest`/`StartOnFewCoresTest` extensions, old entry points to `internal`, `docs/BENCHMARK.md`), I2 (Iceberg row-group
-pieces), RA-S8 last (RA-9). Bench (`tools/bench/bench.py --repeat N`, interleaved rounds): the 3% bound is measured on a quiet machine
-(load under 6); see the latest entry of `tck/bench/`.
+`layout/partition-by-beside-the-date` equal on every store and the memory rows; I2 (Iceberg row-group pieces) and of RA-S9 the cases
+(19 of 20: `float32-and-null-vector` waits for a loader setting that writes float32 vectors on every store), `TwoRuntimesTest` and
+`StartOnFewCoresTest`, `docs/BENCHMARK.md`. Open: Delta's and the files store's bench rows on a quiet machine (load under 6); the old
+entry points (`LakeStore`, `NewTables`: tests in `lake-load` still use them; the table packages are outside the API surface) after
+G4; RA-S8 last (RA-9, its half-page design first).
 
 
 Designed in [READ_API](design/READ_API.md): the API, every host call mapped to it, the defects each store closes, the cases, the

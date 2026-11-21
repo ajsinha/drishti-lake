@@ -5,6 +5,12 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **Read API: I2 and part of RA-S9**: Iceberg vector reads cut a date's files into row-group pieces for their decoding threads, as
+  Delta's do (`ParquetRowReader`/`TaskReader` read a row-group range; positions stay the file's, so position deletes apply). Kit
+  verbs `read-at`, `read-keep`, `read-vectors-of` and cases `read/as-of-version-and-time`, `keep-prunes-files`, `mapped-equals-heap`,
+  `of-ids-in-one-file`, `partition-column-filled` (every store and row). `TwoRuntimesTest` (two readers of one lake in two runtimes:
+  no shared snapshot or footer cache) and `StartOnFewCoresTest` (eight read-API vector reads with four decoders each on one carrier)
+  extended. `docs/BENCHMARK.md`: the interleaved A/B run (Iceberg: the API at or below Drishti's jars, same allocation per row).
 - **Read API, accuracy and speed first, then RA-S6 and RA-S7** ([READ_API](docs/design/READ_API.md)):
   - *Newest load wins, made deterministic (Delta)*: a date's files were ordered by their largest `_load_id` from the log's statistics,
     and a value of 32 characters or more was "not stated", so it sorted first (oldest). A load id is `<time>-<pid>-<n>.<file>`: with a
