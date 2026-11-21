@@ -50,20 +50,13 @@
     <lz4-java.version>1.10.2</lz4-java.version>
     <zstd-jni.version>1.5.7-6</zstd-jni.version>
     <caffeine.version>3.2.4</caffeine.version>
-    <testcontainers.version>2.0.5</testcontainers.version>
     <s3mock.version>4.12.4</s3mock.version>
-    <kotlin.version>2.2.21</kotlin.version>
     <lake.test.forks>4</lake.test.forks>
     <argLine></argLine>
   </properties>
 
   <dependencyManagement>
     <dependencies>
-      <!-- the host overrode the Kotlin version its parent chose (the S3 mock runs on Kotlin) -->
-      <dependency>
-        <groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-bom</artifactId><version>${kotlin.version}</version>
-        <type>pom</type><scope>import</scope>
-      </dependency>
       <!-- the product's own versions (L12: the host's bill of materials is gone; each is the version the build resolved with it,
            so the class paths are unchanged): the libraries' shared transitive dependencies, Jackson, SLF4J, Logback, JUnit, AssertJ -->
       <dependency><groupId>ch.qos.logback</groupId><artifactId>logback-classic</artifactId><version>1.5.34</version></dependency>
@@ -77,6 +70,7 @@
       <dependency><groupId>com.fasterxml.jackson.datatype</groupId><artifactId>jackson-datatype-jsr310</artifactId><version>2.21.4</version></dependency>
       <dependency><groupId>com.fasterxml.jackson.module</groupId><artifactId>jackson-module-parameter-names</artifactId><version>2.21.4</version></dependency>
       <dependency><groupId>commons-codec</groupId><artifactId>commons-codec</artifactId><version>1.18.0</version></dependency>
+      <dependency><groupId>commons-io</groupId><artifactId>commons-io</artifactId><version>2.21.0</version></dependency>
       <dependency><groupId>commons-pool</groupId><artifactId>commons-pool</artifactId><version>1.6</version></dependency>
       <dependency><groupId>io.netty</groupId><artifactId>netty-buffer</artifactId><version>4.1.135.Final</version></dependency>
       <dependency><groupId>io.netty</groupId><artifactId>netty-codec</artifactId><version>4.1.135.Final</version></dependency>
@@ -89,6 +83,7 @@
       <dependency><groupId>io.netty</groupId><artifactId>netty-transport-classes-epoll</artifactId><version>4.1.135.Final</version></dependency>
       <dependency><groupId>io.netty</groupId><artifactId>netty-transport-native-unix-common</artifactId><version>4.1.135.Final</version></dependency>
       <dependency><groupId>net.bytebuddy</groupId><artifactId>byte-buddy</artifactId><version>1.17.8</version></dependency>
+      <dependency><groupId>org.apache.commons</groupId><artifactId>commons-compress</artifactId><version>1.28.0</version></dependency>
       <dependency><groupId>org.apache.commons</groupId><artifactId>commons-lang3</artifactId><version>3.17.0</version></dependency>
       <dependency><groupId>org.apache.httpcomponents</groupId><artifactId>httpcore</artifactId><version>4.4.16</version></dependency>
       <dependency><groupId>org.apache.httpcomponents.client5</groupId><artifactId>httpclient5</artifactId><version>5.5.2</version></dependency>
@@ -103,9 +98,8 @@
       <dependency><groupId>org.junit.platform</groupId><artifactId>junit-platform-engine</artifactId><version>1.12.2</version></dependency>
       <dependency><groupId>org.reactivestreams</groupId><artifactId>reactive-streams</artifactId><version>1.0.4</version></dependency>
       <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-api</artifactId><version>2.0.18</version></dependency>
-      <dependency><groupId>org.testcontainers</groupId><artifactId>testcontainers</artifactId><version>2.0.5</version></dependency>
       <dependency><groupId>org.yaml</groupId><artifactId>snakeyaml</artifactId><version>2.4</version></dependency>
-      <!-- the S3 mock's (a Spring Boot application, test support only; leaves with it, L9) -->
+      <!-- the S3 mock's (a Spring Boot application, test support only; the S3 simulator, decided at L9: SPLIT_EXEMPTIONS.md) -->
       <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-commons</artifactId><version>1.15.12</version></dependency>
       <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-observation</artifactId><version>1.15.12</version></dependency>
       <dependency><groupId>jakarta.annotation</groupId><artifactId>jakarta.annotation-api</artifactId><version>2.1.1</version></dependency>
@@ -150,8 +144,6 @@
       <dependency><groupId>org.apache.parquet</groupId><artifactId>parquet-variant</artifactId><version>${parquet.version}</version></dependency>
       <dependency><groupId>com.github.luben</groupId><artifactId>zstd-jni</artifactId><version>${zstd-jni.version}</version></dependency>
       <dependency><groupId>com.github.ben-manes.caffeine</groupId><artifactId>caffeine</artifactId><version>${caffeine.version}</version></dependency>
-      <dependency><groupId>org.testcontainers</groupId><artifactId>testcontainers</artifactId><version>${testcontainers.version}</version></dependency>
-      <dependency><groupId>org.testcontainers</groupId><artifactId>testcontainers-junit-jupiter</artifactId><version>${testcontainers.version}</version></dependency>
     </dependencies>
   </dependencyManagement>
 

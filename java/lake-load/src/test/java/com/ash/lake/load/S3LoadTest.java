@@ -16,7 +16,6 @@
 package com.ash.lake.load;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.ash.lake.common.FileDates;
 import com.ash.lake.tck.s3.S3Endpoint;
@@ -42,13 +41,7 @@ class S3LoadTest {
 
     @Test
     void readsFromS3AndWritesDeltaAndIcebergToS3() throws Exception {
-        S3MockServer s3;
-        try {
-            s3 = S3MockServer.start(tmp.resolve("s3mock"), "input", "lake");
-        } catch (Exception | LinkageError e) {
-            assumeTrue(false, "S3Mock does not start here: " + e);
-            return;
-        }
+        S3MockServer s3 = S3MockServer.start(tmp.resolve("s3mock"), "input", "lake");   // a simulator that does not start fails, never skips
         String oldKey = System.getProperty("aws.accessKeyId");
         String oldSecret = System.getProperty("aws.secretAccessKey");
         try (s3) {

@@ -60,5 +60,4 @@ lake-tck com.ash.lake:lake-api
 lake-tck com.fasterxml.jackson.core:jackson-databind
 lake-tck org.junit.jupiter:junit-jupiter-api
 lake-tck software.amazon.awssdk:s3
-lake-tck com.adobe.testing:s3mock                   until L9
-lake-tck org.testcontainers:testcontainers
+lake-tck com.adobe.testing:s3mock                   (optional: test support only; the S3 simulator, decided at L9)

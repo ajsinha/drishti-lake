@@ -130,4 +130,10 @@ Entries are written per release; unreleased work is listed first.
   product's own versions (39 libraries, and 25 for the S3 mock alone, test support, leaving with it at L9), each the version the build
   resolved with the bill, so every module's resolved dependencies are unchanged (checked: `dependency:list` before and after equal).
   The exemption is removed from `SPLIT_EXEMPTIONS.md`.
+- **L9, first part: the S3 simulator decided, the build's test support trimmed.** S3Mock stays as the S3 simulator (maintained,
+  in-process, no Docker or native binary: it runs on Windows), test support only: optional in `lake-tck`, so only a module that
+  declares it (`lake-load`, test scope) gets it; Spring Boot and Kotlin are gone from every other module's test class path. The host's
+  Kotlin bill of materials removed; Testcontainers (declared, never used) removed; `commons-compress` 1.28.0 and `commons-io` 2.21.0
+  pinned so every run-time class path is unchanged (`dependency:list` of every module before and after: compile and run-time scopes
+  equal). `S3LoadTest` fails when the simulator does not start (it skipped before: a missing tool never skips).
 - Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).
