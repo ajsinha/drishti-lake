@@ -180,18 +180,13 @@ public final class LoaderProcess implements LoadRunner {
 
     /** The batch id of a load: its files' names and sizes, so the same file dropped again is the same batch. */
     static String batchId(List<Path> files) throws IOException {
-        java.security.MessageDigest md;
-        try {
-            md = java.security.MessageDigest.getInstance("SHA-256");
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
+        java.security.MessageDigest md = com.ash.tools.codec.Hashes.sha256();
         List<Path> sorted = new ArrayList<>(files);
         sorted.sort(Comparator.comparing(f -> f.getFileName().toString()));
         for (Path f : sorted) {
             md.update((f.getFileName() + ":" + Files.size(f) + "\n").getBytes(StandardCharsets.UTF_8));
         }
-        return "inbox-" + java.util.HexFormat.of().formatHex(md.digest()).substring(0, 16);
+        return "inbox-" + com.ash.tools.codec.Hashes.hex(md).substring(0, 16);
     }
 
     private static void put(ObjectNode n, String key, String value) {

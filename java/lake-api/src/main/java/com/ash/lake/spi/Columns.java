@@ -15,9 +15,13 @@
  */
 package com.ash.lake.spi;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** A table's or a scan's columns, in order. */
 public record Columns(List<Column> all) {
@@ -58,5 +62,33 @@ public record Columns(List<Column> all) {
         Map<String, ColumnType> out = new HashMap<>();
         all.forEach(c -> out.put(c.name(), c.type()));
         return out;
+    }
+
+    /** The columns every store's layout table has that are not a document's paths. */
+    public static final Set<String> LAYOUT = Set.of("doc", "business_date", "_load_id", "_source_file");
+
+    /**
+     * The promoted paths, in column order: each column that is not a vector, a {@link #LAYOUT} column or {@code idColumn}, by its
+     * document path ({@code a__b} is {@code a.b}) to its column name.
+     */
+    public Map<String, String> promoted(String idColumn) {
+        Map<String, String> p = new LinkedHashMap<>();
+        for (Column c : all) {
+            if (!c.type().vector() && !LAYOUT.contains(c.name()) && !c.name().equals(idColumn)) {
+                p.put(c.name().replace("__", "."), c.name());
+            }
+        }
+        return Collections.unmodifiableMap(p);
+    }
+
+    /** The vector columns' names, in column order. */
+    public Set<String> vectors() {
+        Set<String> v = new LinkedHashSet<>();
+        for (Column c : all) {
+            if (c.type().vector()) {
+                v.add(c.name());
+            }
+        }
+        return Collections.unmodifiableSet(v);
     }
 }

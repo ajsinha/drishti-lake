@@ -48,7 +48,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -68,7 +67,6 @@ final class FilesSnapshot implements TableSnapshot {
     /** A date's content: its file, the rows its commit states ({@code -1}: none), the commit's statistics (null: none). */
     record Day(Path file, long rows, JsonNode stats) {}
 
-    static final Set<String> BASE = Set.of("doc", "business_date", "_load_id", "_source_file");
     private static final JsonFactory FACTORY = new JsonFactory();
 
     private final FilesLakeReader lake;
@@ -91,17 +89,8 @@ final class FilesSnapshot implements TableSnapshot {
         this.committed = committed;
         this.columns = columns;
         this.days = days;
-        Map<String, String> p = new LinkedHashMap<>();
-        Set<String> v = new LinkedHashSet<>();
-        for (var c : columns.all()) {
-            if (c.type().vector()) {
-                v.add(c.name());
-            } else if (!BASE.contains(c.name()) && !c.name().equals("id")) {
-                p.put(c.name().replace("__", "."), c.name());
-            }
-        }
-        this.promoted = Collections.unmodifiableMap(p);
-        this.vectors = Collections.unmodifiableSet(v);
+        this.promoted = columns.promoted("id");
+        this.vectors = columns.vectors();
     }
 
     @FunctionalInterface

@@ -38,7 +38,7 @@
     <lz4-java.version>1.10.2</lz4-java.version>
     <zstd-jni.version>1.5.7-6</zstd-jni.version>
     <caffeine.version>3.2.4</caffeine.version>
-    <!-- Drishti Tools (settings, net, concurrent, time, testkit): one version for every module, through its tools-bom. -->
+    <!-- Drishti Tools (settings, net, concurrent, time, codec, files, testkit): one version for every module, through its tools-bom. -->
     <drishti.tools.version>1.0.0-SNAPSHOT</drishti.tools.version>
   </properties>
 

@@ -44,7 +44,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
@@ -60,8 +59,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 final class DeltaSnapshot implements TableSnapshot {
 
-    /** The columns every layout table has that are not a document's paths. */
-    static final Set<String> BASE = Set.of("doc", "business_date", "_load_id", "_source_file");
 
     private final DeltaLakeReader lake;
     private final String name;
@@ -79,17 +76,8 @@ final class DeltaSnapshot implements TableSnapshot {
         this.table = table;
         this.layout = layout;
         this.columns = DeltaRows.columns(layout.schema());
-        Map<String, String> p = new LinkedHashMap<>();
-        Set<String> v = new LinkedHashSet<>();
-        for (var c : columns.all()) {
-            if (c.type().vector()) {
-                v.add(c.name());
-            } else if (!BASE.contains(c.name()) && !c.name().equals(table.idColumn())) {
-                p.put(c.name().replace("__", "."), c.name());
-            }
-        }
-        this.promoted = Collections.unmodifiableMap(p);
-        this.vectors = Collections.unmodifiableSet(v);
+        this.promoted = columns.promoted(table.idColumn());
+        this.vectors = columns.vectors();
         Map<String, String> back = new HashMap<>();
         layout.physicalNames().forEach((logical, phys) -> back.put(phys, logical));
         this.logicalOf = back;
@@ -191,18 +179,7 @@ final class DeltaSnapshot implements TableSnapshot {
 
     @Override
     public IdMap ids(LocalDate date) {
-        return read(date, () -> {
-            DeltaTable.IdMap m = table.ids(layout, date);
-            return m instanceof DeltaTable.HeapIdMap h ? IdMap.of(h.idsInOrder(), h.files()) : IdMap.of(m.ids(), files(m));
-        });
-    }
-
-    private static int[] files(DeltaTable.IdMap m) {
-        int[] out = new int[m.size()];
-        for (int i = 0; i < out.length; i++) {
-            out[i] = m.file(m.id(i));
-        }
-        return out;
+        return read(date, () -> table.ids(layout, date));
     }
 
     @Override

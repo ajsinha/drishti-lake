@@ -39,7 +39,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
@@ -54,7 +53,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 final class IcebergSnapshot implements TableSnapshot {
 
-    static final Set<String> BASE = Set.of(IcebergLayout.DOC, IcebergLayout.DATE, "_load_id", "_source_file");
 
     private final IcebergLakeReader lake;
     private final String name;
@@ -74,17 +72,8 @@ final class IcebergSnapshot implements TableSnapshot {
         this.layout = layout;
         this.schema = schema;
         this.columns = IcebergColumns.columns(schema);
-        Map<String, String> p = new LinkedHashMap<>();
-        Set<String> v = new LinkedHashSet<>();
-        for (var c : columns.all()) {
-            if (c.type().vector()) {
-                v.add(c.name());
-            } else if (!BASE.contains(c.name()) && !c.name().equals(IcebergLayout.ID)) {
-                p.put(c.name().replace("__", "."), c.name());
-            }
-        }
-        this.promoted = Collections.unmodifiableMap(p);
-        this.vectors = Collections.unmodifiableSet(v);
+        this.promoted = columns.promoted(IcebergLayout.ID);
+        this.vectors = columns.vectors();
         this.sequence = table.sequenceNumber(layout.snapshotId());
     }
 

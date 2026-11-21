@@ -9,6 +9,12 @@ Entries are written per release; unreleased work is listed first.
   table has no snapshot (a foreign table: what its catalog looked for and what is there instead, a Delta table's missing log, a missing
   folder); `TableSnapshot.documentFields()` lists the documents' fields of a shaped table with their nested fields and the id and date
   roles (the date also when it is the table's day partition), as `DocumentField`. Additive: `api-surface.txt` extended.
+- **Duplicates folded (i7b duplicate audit, G3)**: hashes through `drishti-tools` `Hashes` (five copies of SHA-256 and hex), the
+  temporary folder through `tools-files` `TempFolder` (`TempFiles` keeps only where the runtime's base is); one `StorageRoutes` in
+  `lake-io` for the Delta and Iceberg engines' local/S3/provider routing (the stale "set the engine to hadoop" hint dropped); `Columns.promoted`
+  and `Columns.vectors` for the three stores' snapshots; Delta's own `IdMap`/`HeapIdMap` replaced by the read API's; one counting stream
+  for the two Delta file writers; `NativeMaintenance` names a day's files once; the unused `Lz4RoutingEngine` (it routed to the retired
+  hadoop engine; the LZ4 page reader stays) and Iceberg's unused `withVectors` copy deleted.
 - **Shaped reads of foreign tables (RA-S8)**: `TableShape` (from a connector's `tables.<kind>.*` settings) and `LakeReader.foreign`
   read a table other engines wrote (Spark, delta-rs, pyiceberg, a folder of JSON Lines) as a kind's documents, through the same
   `TableSnapshot` on Delta, Iceberg and files; the shape rule (dates from partitions, a zone's day, bounds or the column; ids; documents;

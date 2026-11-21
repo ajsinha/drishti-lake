@@ -16,12 +16,12 @@
 package com.ash.lake.delta;
 
 import com.ash.lake.spi.FileEntry;
-import com.ash.lake.io.LocalPaths;
 import com.ash.lake.io.LocalStorage;
 import com.ash.lake.io.NativeCodecs;
 import com.ash.lake.io.ParquetInput;
 import com.ash.lake.io.S3Settings;
 import com.ash.lake.io.S3Storage;
+import com.ash.lake.io.StorageRoutes;
 import com.ash.lake.spi.Storage;
 import io.delta.kernel.defaults.engine.fileio.FileIO;
 import io.delta.kernel.defaults.engine.fileio.InputFile;
@@ -32,8 +32,6 @@ import io.delta.kernel.utils.FileStatus;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Kernel's file access without Hadoop: local paths through {@link LocalStorage}, {@code s3://} and {@code s3a://}
@@ -45,24 +43,18 @@ public final class NativeFileIO implements FileIO {
     /** The message of every refused write. */
     static final String READ_ONLY = "the native Delta engine only reads: the server does not write Delta tables (its loaders use delta-rs)";
 
-    private static final Set<String> S3_SCHEMES = Set.of("s3", "s3a", "s3n");
-
-    private final com.ash.lake.LakeRuntime runtime;
-    private final LocalStorage local;
-    private final S3Settings s3Settings;
+    private final StorageRoutes routes;
     private final Map<String, String> conf;
-    private final ReentrantLock s3Lock = new ReentrantLock();
-    private volatile S3Storage s3;
     private final NativeCodecs codecs;
 
     /** The outbound proxy of the S3 endpoint. */
     public com.ash.tools.net.ProxySettings proxy() {
-        return s3Settings.proxy();
+        return routes.s3Settings().proxy();
     }
 
     /** The TLS material of the S3 endpoint, or null. */
     public com.ash.tools.net.TlsMaterial tls() {
-        return s3Settings.tls();
+        return routes.s3Settings().tls();
     }
 
     /**
@@ -75,9 +67,7 @@ public final class NativeFileIO implements FileIO {
     }
 
     NativeFileIO(com.ash.lake.LakeRuntime runtime, LocalStorage local, S3Settings s3Settings, Map<String, String> conf) {
-        this.runtime = java.util.Objects.requireNonNull(runtime, "runtime");
-        this.local = local;
-        this.s3Settings = s3Settings;
+        this.routes = new StorageRoutes(runtime, local, s3Settings, "the native Delta engine");
         this.conf = Map.copyOf(conf);
         this.codecs = NativeCodecs.of(this.conf.get(NativeCodecs.LZ4_DECODER), "the native Delta engine",
                 "rewrite the date with Snappy or ZSTD (tools/lake/maintain.py relayout --force --dates <date>)");
@@ -90,63 +80,27 @@ public final class NativeFileIO implements FileIO {
 
     /** Whether the native engine reads paths of this scheme with no provider registered ({@code file}, {@code s3}, {@code s3a}, {@code s3n}). */
     public static boolean supports(String path) {
-        String scheme = LocalPaths.scheme(path);
-        return scheme.equals("file") || S3_SCHEMES.contains(scheme);
+        return StorageRoutes.supports(path);
     }
 
     /** Whether this reads {@code path}: the built-in schemes and those of the runtime's providers ({@code mem}). */
     public boolean reads(String path) {
-        return supports(path) || runtime.supports(path);
+        return routes.reads(path);
     }
 
     /** The runtime this reads with. */
     public com.ash.lake.LakeRuntime runtime() {
-        return runtime;
+        return routes.runtime();
     }
 
     /** The storage that serves {@code path}. */
     public Storage storage(String path) {
-        String scheme = LocalPaths.scheme(path);
-        if (scheme.equals("file")) {
-            return local;
-        }
-        if (S3_SCHEMES.contains(scheme)) {
-            return s3();
-        }
-        if (runtime.supports(path)) {
-            return runtime.storage(path);                            // mem://, the in-memory lake: never a disk
-        }
-        throw new UnsupportedOperationException("the native Delta engine reads local disk, S3 (s3://, s3a://) and memory (mem://), not " + scheme
-                + "://; set the connector's engine to hadoop for this lake");
-    }
-
-    private S3Storage s3() {
-        S3Storage s = s3;
-        if (s != null) {
-            return s;
-        }
-        s3Lock.lock();
-        try {
-            if (s3 == null) {
-                s3 = new S3Storage(s3Settings);
-            }
-            return s3;
-        } finally {
-            s3Lock.unlock();
-        }
+        return routes.storage(path);
     }
 
     /** Releases the S3 client, if one was made. */
     public void close() {
-        s3Lock.lock();
-        try {
-            if (s3 != null) {
-                s3.close();
-                s3 = null;
-            }
-        } finally {
-            s3Lock.unlock();
-        }
+        routes.close();
     }
 
     /** Kernel's form of a shared-module file entry. */

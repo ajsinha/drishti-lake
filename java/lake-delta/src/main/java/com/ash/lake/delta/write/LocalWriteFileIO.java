@@ -89,7 +89,7 @@ final class LocalWriteFileIO extends ReadingFileIO {
                 OutputStream out = putIfAbsent
                         ? com.ash.lake.common.ChannelIo.newOutputStream(target, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)
                         : com.ash.lake.common.ChannelIo.newOutputStream(target, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-                return new Counting(new java.io.BufferedOutputStream(out, 1 << 16));
+                return new CountingOutput(new java.io.BufferedOutputStream(out, 1 << 16), null);
             }
 
             @Override
@@ -121,43 +121,6 @@ final class LocalWriteFileIO extends ReadingFileIO {
             }
         } finally {
             Files.deleteIfExists(tmp);
-        }
-    }
-
-    /** An output stream that knows its position (Parquet writes its footer offsets from it). */
-    private static final class Counting extends PositionOutputStream {
-        private final OutputStream out;
-        private long pos;
-
-        Counting(OutputStream out) {
-            this.out = out;
-        }
-
-        @Override
-        public long getPos() {
-            return pos;
-        }
-
-        @Override
-        public void write(int b) throws IOException {
-            out.write(b);
-            pos++;
-        }
-
-        @Override
-        public void write(byte[] b, int off, int len) throws IOException {
-            out.write(b, off, len);
-            pos += len;
-        }
-
-        @Override
-        public void flush() throws IOException {
-            out.flush();
-        }
-
-        @Override
-        public void close() throws IOException {
-            out.close();
         }
     }
 }

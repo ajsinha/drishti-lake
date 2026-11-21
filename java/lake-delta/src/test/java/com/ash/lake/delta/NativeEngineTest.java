@@ -203,7 +203,7 @@ class NativeEngineTest {
         assertThatThrownBy(() -> engine.getJsonHandler().writeJsonFileAtomically("file:/tmp/x.json", Utils.toCloseableIterator(
                 java.util.Collections.emptyIterator()), false)).isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> engine.storage("abfs://c@acct.dfs.core.windows.net/lake")).isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("engine to hadoop");
+                .hasMessageContaining("not abfs://");
     }
 
     @Test

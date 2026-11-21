@@ -15,24 +15,21 @@
  */
 package com.ash.lake.inbox;
 
+import com.ash.tools.codec.Hashes;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -243,19 +240,6 @@ public final class Ledger {
 
     /** A file's SHA-256, read as a stream (any size). */
     public static String sha256(Path file) throws IOException {
-        MessageDigest md;
-        try {
-            md = MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-        try (InputStream in = Files.newInputStream(file)) {
-            byte[] buf = new byte[1 << 16];
-            int n;
-            while ((n = in.read(buf)) > 0) {
-                md.update(buf, 0, n);
-            }
-        }
-        return HexFormat.of().formatHex(md.digest());
+        return Hashes.sha256Hex(file);
     }
 }

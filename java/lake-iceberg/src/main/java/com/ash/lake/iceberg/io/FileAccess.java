@@ -19,13 +19,10 @@ import com.ash.lake.io.LocalPaths;
 import com.ash.lake.io.LocalStorage;
 import com.ash.lake.io.NativeCodecs;
 import com.ash.lake.io.S3Settings;
-import com.ash.lake.io.S3Storage;
+import com.ash.lake.io.StorageRoutes;
 import com.ash.lake.spi.Storage;
 import java.io.IOException;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * The engine's files: local paths and {@code file:} URIs through {@code java.nio} (Windows drive letters, backslashes
@@ -38,15 +35,9 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public final class FileAccess implements AutoCloseable {
 
-    private static final Set<String> S3_SCHEMES = Set.of("s3", "s3a", "s3n");
-
-    private final com.ash.lake.LakeRuntime runtime;
-    private final LocalStorage local;
-    private final S3Settings s3Settings;
+    private final StorageRoutes routes;
     private final Relocation relocate;
     private final NativeCodecs codecs;
-    private final ReentrantLock s3Lock = new ReentrantLock();
-    private volatile S3Storage s3;
 
     /**
      * @param runtime the runtime whose storages ({@code mem://}), options and caches this reads with
@@ -68,9 +59,7 @@ public final class FileAccess implements AutoCloseable {
     }
 
     FileAccess(com.ash.lake.LakeRuntime runtime, LocalStorage local, S3Settings s3Settings, Relocation relocate, String lz4Decoder) {
-        this.runtime = java.util.Objects.requireNonNull(runtime, "runtime");
-        this.local = local;
-        this.s3Settings = s3Settings;
+        this.routes = new StorageRoutes(runtime, local, s3Settings, "the Iceberg engine");
         this.relocate = relocate == null ? Relocation.none() : relocate;
         this.codecs = NativeCodecs.of(lz4Decoder, "drishti-iceberg", "rewrite the day with ZSTD or Snappy (IcebergMaintenance --relayout --force)");
     }
@@ -82,16 +71,16 @@ public final class FileAccess implements AutoCloseable {
 
     /** The runtime this reads with. */
     public com.ash.lake.LakeRuntime runtime() {
-        return runtime;
+        return routes.runtime();
     }
 
     /** The same local disk and relocation, with other S3 credentials (a REST catalog's vended credentials). */
     public FileAccess withS3(S3Settings settings) {
-        return new FileAccess(runtime, local, settings, relocate, null);
+        return new FileAccess(routes.runtime(), routes.local(), settings, relocate, null);
     }
 
     public S3Settings s3Settings() {
-        return s3Settings;
+        return routes.s3Settings();
     }
 
     /** The page codecs reads and writes use. */
@@ -101,13 +90,12 @@ public final class FileAccess implements AutoCloseable {
 
     /** Whether {@code path} is read with no provider registered: local paths and {@code file:}, {@code s3:}, {@code s3a:}, {@code s3n:} URIs. */
     public static boolean supports(String path) {
-        String scheme = LocalPaths.scheme(path);
-        return scheme.equals("file") || S3_SCHEMES.contains(scheme.toLowerCase(Locale.ROOT));
+        return StorageRoutes.supports(path);
     }
 
     /** Whether this reads {@code path}: the built-in schemes and those of the runtime's providers ({@code mem}). */
     public boolean reads(String path) {
-        return supports(path) || runtime.supports(path);
+        return routes.reads(path);
     }
 
     /**
@@ -138,18 +126,7 @@ public final class FileAccess implements AutoCloseable {
 
     /** The storage serving {@code path} (after relocation: call with {@link #resolve(String)}'s result). */
     public Storage storage(String path) {
-        String scheme = LocalPaths.scheme(path);
-        if (scheme.equals("file")) {
-            return local;
-        }
-        if (S3_SCHEMES.contains(scheme)) {
-            return s3();
-        }
-        if (runtime.supports(path)) {
-            return runtime.storage(path);                            // mem://, a warehouse in memory
-        }
-        throw new UnsupportedOperationException("drishti-iceberg reads local disk, S3 (s3://, s3a://) and memory (mem://), not " + scheme
-                + "://");
+        return routes.storage(path);
     }
 
     /** The whole file at {@code path} (relocated). */
@@ -158,33 +135,9 @@ public final class FileAccess implements AutoCloseable {
         return storage(p).readAll(p);
     }
 
-    private S3Storage s3() {
-        S3Storage s = s3;
-        if (s != null) {
-            return s;
-        }
-        s3Lock.lock();
-        try {
-            if (s3 == null) {
-                s3 = new S3Storage(s3Settings);
-            }
-            return s3;
-        } finally {
-            s3Lock.unlock();
-        }
-    }
-
     /** Releases the S3 client, if one was made. */
     @Override
     public void close() {
-        s3Lock.lock();
-        try {
-            if (s3 != null) {
-                s3.close();
-                s3 = null;
-            }
-        } finally {
-            s3Lock.unlock();
-        }
+        routes.close();
     }
 }

@@ -20,6 +20,7 @@ import com.ash.lake.common.LakeError;
 import com.ash.lake.common.FileDates;
 import com.ash.lake.load.FileRows;
 import com.ash.lake.load.LakeLoad;
+import com.ash.tools.codec.Hashes;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -32,13 +33,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -129,7 +128,7 @@ public final class ReadyDesk {
             this.inInbox = inInbox;
             this.file = file;
             this.at = at;
-            this.digest = sha256();
+            this.digest = Hashes.sha256();
         }
 
         boolean tar() {
@@ -391,7 +390,7 @@ public final class ReadyDesk {
 
     /** The upload is whole: its SHA-256 is known and its rows are counted in the background. */
     public Map<String, Object> finish(Item it) {
-        it.sha256 = HexFormat.of().formatHex(it.digest.digest());
+        it.sha256 = Hashes.hex(it.digest);
         it.hashed = it.size;
         inspect(it);
         return state(it);
@@ -472,7 +471,7 @@ public final class ReadyDesk {
                     it.hashed = read;
                 }
             }
-            it.sha256 = HexFormat.of().formatHex(it.digest.digest());
+            it.sha256 = Hashes.hex(it.digest);
         }
         if (it.tar()) {
             try {
@@ -732,13 +731,5 @@ public final class ReadyDesk {
 
     private static LakeException refused(String why) {
         return new LakeException(LakeError.READY_REFUSED, why);
-    }
-
-    private static MessageDigest sha256() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
     }
 }

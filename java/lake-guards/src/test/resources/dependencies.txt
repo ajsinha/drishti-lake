@@ -75,3 +75,8 @@ lake-io com.ash.tools:tools-net
 lake-load com.ash.tools:tools-settings
 lake-tck com.ash.tools:tools-settings
 lake-api com.ash.tools:tools-settings
+lake-api com.ash.tools:tools-codec
+lake-io com.ash.tools:tools-files
+lake-delta com.ash.tools:tools-codec
+lake-load com.ash.tools:tools-codec
+lake-load com.ash.tools:tools-files

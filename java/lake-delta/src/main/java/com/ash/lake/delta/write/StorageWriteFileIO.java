@@ -24,7 +24,6 @@ import io.delta.kernel.defaults.engine.fileio.PositionOutputStream;
 import io.delta.kernel.utils.CloseableIterator;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
 import java.util.Map;
@@ -86,9 +85,9 @@ final class StorageWriteFileIO extends ReadingFileIO {
             public PositionOutputStream create(boolean putIfAbsent) throws IOException {
                 if (putIfAbsent) {                               // held, then created exclusively when closed
                     ByteArrayOutputStream buf = new ByteArrayOutputStream();
-                    return new Counting(buf, () -> put(path, buf.toByteArray(), false));
+                    return new CountingOutput(buf, () -> put(path, buf.toByteArray(), false));
                 }
-                return new Counting(storage(path).create(path), null);
+                return new CountingOutput(storage(path).create(path), null);
             }
 
             @Override
@@ -102,52 +101,5 @@ final class StorageWriteFileIO extends ReadingFileIO {
                 put(path, b.toString().getBytes(StandardCharsets.UTF_8), overwrite);
             }
         };
-    }
-
-    /** What to do when a held stream is closed. */
-    private interface OnClose {
-        void run() throws IOException;
-    }
-
-    /** An output stream that knows its position (Parquet writes its footer offsets from it). */
-    private static final class Counting extends PositionOutputStream {
-        private final OutputStream out;
-        private final OnClose onClose;
-        private long pos;
-
-        Counting(OutputStream out, OnClose onClose) {
-            this.out = out;
-            this.onClose = onClose;
-        }
-
-        @Override
-        public long getPos() {
-            return pos;
-        }
-
-        @Override
-        public void write(int b) throws IOException {
-            out.write(b);
-            pos++;
-        }
-
-        @Override
-        public void write(byte[] b, int off, int len) throws IOException {
-            out.write(b, off, len);
-            pos += len;
-        }
-
-        @Override
-        public void flush() throws IOException {
-            out.flush();
-        }
-
-        @Override
-        public void close() throws IOException {
-            out.close();
-            if (onClose != null) {
-                onClose.run();
-            }
-        }
     }
 }

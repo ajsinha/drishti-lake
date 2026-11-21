@@ -129,31 +129,6 @@ final class IcebergVectors {
         return out;
     }
 
-    /** A document whose vector columns were kept out of it ({@code {"$vector": "PNL"}} markers) with the vectors put back. */
-    static String withVectors(String json, Map<String, double[]> vectors) {
-        String out = json;
-        for (Map.Entry<String, double[]> e : vectors.entrySet()) {
-            StringBuilder a = new StringBuilder(e.getValue().length * 8).append('[');
-            for (int i = 0; i < e.getValue().length; i++) {
-                double x = e.getValue()[i];
-                if (i > 0) {
-                    a.append(',');
-                }
-                if (Double.isNaN(x) || Double.isInfinite(x)) {
-                    a.append("null");
-                } else if (x == Math.rint(x) && Math.abs(x) < 1e15) {
-                    a.append((long) x);                          // whole currency units stay whole, as the batch wrote them
-                } else {
-                    a.append(x);
-                }
-            }
-            String array = a.append(']').toString();
-            // the marker as the lake tools write it (compact JSON), with or without a space after the colon
-            out = out.replace("{\"$vector\":\"" + e.getKey() + "\"}", array).replace("{\"$vector\": \"" + e.getKey() + "\"}", array);
-        }
-        return out;
-    }
-
     /** Every document of the day, file by file in file order (deletes applied): id and JSON text. */
     static void documents(KindTable t, Layout l, Day day, BiConsumer<String, String> sink) {
         Map<String, Integer> shadow = t.shadow(l, day);

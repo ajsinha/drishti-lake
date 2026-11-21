@@ -55,15 +55,10 @@ public record DayFiles(LocalDate date, List<DataFile> files, long rows, long byt
             lines.add(f.path() + ":" + f.size());
         }
         java.util.Collections.sort(lines);
-        try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
-            for (String l : lines) {
-                md.update(l.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                md.update((byte) 10);
-            }
-            return java.util.HexFormat.of().formatHex(md.digest()).substring(0, 16);
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
+        java.security.MessageDigest md = com.ash.tools.codec.Hashes.sha256();
+        for (String l : lines) {
+            com.ash.tools.codec.Hashes.update(md, l + "\n");
         }
+        return com.ash.tools.codec.Hashes.hex(md).substring(0, 16);
     }
 }

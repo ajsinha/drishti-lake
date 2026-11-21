@@ -26,6 +26,8 @@
 
   <dependencies>
     <dependency><groupId>com.ash.tools</groupId><artifactId>tools-settings</artifactId></dependency>
+    <dependency><groupId>com.ash.tools</groupId><artifactId>tools-codec</artifactId></dependency>
+    <dependency><groupId>com.ash.tools</groupId><artifactId>tools-files</artifactId></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-io</artifactId></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-files</artifactId></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-contracts</artifactId></dependency>

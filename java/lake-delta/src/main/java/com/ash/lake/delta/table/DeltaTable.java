@@ -112,64 +112,8 @@ final class DeltaTable {
             paths.add(fs.getPath() + ":" + fs.getSize());
         }
         java.util.Collections.sort(paths);
-        try {
-            String text = "files in load order\n" + String.join("\n", paths);     // the order changed with newest-last: older id maps rebuilt
-            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            return java.util.HexFormat.of().formatHex(h).substring(0, 16);
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    /** One business date's ids, sorted, each with the index of the file that holds it (in the date's file list). */
-    /** A date's ids, sorted, and the file each is in: in the heap ({@link HeapIdMap}) or memory-mapped from a file ({@link MappedIdMap}). */
-    interface IdMap {
-        int size();
-
-        /** The i-th id in order. */
-        String id(int i);
-
-        /** The file index of {@code id}, or -1. */
-        int file(String id);
-
-        /** What it holds in the heap (for the cache's budget). */
-        long bytes();
-
-        /** Every id in order (built for the type-ahead; a mapped map makes the array on each call). */
-        default String[] ids() {
-            String[] out = new String[size()];
-            for (int i = 0; i < out.length; i++) {
-                out[i] = id(i);
-            }
-            return out;
-        }
-    }
-
-    record HeapIdMap(String[] idsInOrder, int[] files) implements IdMap {
-        public int size() {
-            return idsInOrder.length;
-        }
-
-        public String id(int i) {
-            return idsInOrder[i];
-        }
-
-        public int file(String id) {
-            int i = java.util.Arrays.binarySearch(idsInOrder, id);
-            return i < 0 ? -1 : files[i];
-        }
-
-        public String[] ids() {
-            return idsInOrder;
-        }
-
-        public long bytes() {
-            long b = 64L + 4L * files.length;
-            for (String s : idsInOrder) {
-                b += 48L + 2L * s.length();
-            }
-            return b;
-        }
+        String text = "files in load order\n" + String.join("\n", paths);         // the order changed with newest-last: older id maps rebuilt
+        return com.ash.tools.codec.Hashes.sha256Hex(text).substring(0, 16);
     }
 
     private final Engine engine;
@@ -593,7 +537,7 @@ final class DeltaTable {
      * The date's ids, read from the id column alone (no document is read), sorted, with the file each is in. A file
      * with a deletion vector is read through Kernel so its deleted rows are left out (type-ahead must not offer them).
      */
-    IdMap ids(Layout layout, LocalDate date) {
+    com.ash.lake.read.IdMap ids(Layout layout, LocalDate date) {
         List<Row> files = layout.files().getOrDefault(date, List.of());
         List<String> ids = new ArrayList<>();
         List<Integer> fileOf = new ArrayList<>();
@@ -646,7 +590,7 @@ final class DeltaTable {
                 eldest.remove();
             }
         }
-        return new HeapIdMap(sortedIds.toArray(new String[0]), sortedFiles.stream().mapToInt(Integer::intValue).toArray());
+        return com.ash.lake.read.IdMap.of(sortedIds.toArray(new String[0]), sortedFiles.stream().mapToInt(Integer::intValue).toArray());
     }
 
     /**
@@ -1120,32 +1064,24 @@ final class DeltaTable {
         if (files == null) {
             return;
         }
-        StructType physical = ScanStateRow.getPhysicalDataReadSchema(layout.scanState());
         Map<String, Integer> shadow = shadow(layout, date);
         for (int fi = 0; fi < files.size(); fi++) {
-            Row fileRow = files.get(fi);
-            FileStatus fs = InternalScanFileUtils.getAddFileStatus(fileRow);
-            try (CloseableIterator<FileReadResult> raw = engine.getParquetHandler()
-                    .readParquetFiles(Utils.singletonCloseableIterator(fs), physical, Optional.empty());
-                 CloseableIterator<FilteredColumnarBatch> data = Scan.transformPhysicalData(engine, layout.scanState(), fileRow,
-                         raw.map(FileReadResult::getData))) {
-                while (data.hasNext()) {
-                    FilteredColumnarBatch b = data.next();
-                    ColumnarBatch cols = b.getData();
-                    int idIx = cols.getSchema().indexOf(idColumn);
-                    int docIx = cols.getSchema().indexOf(docColumn);
-                    try (CloseableIterator<Row> rows = b.getRows()) {
-                        while (rows.hasNext()) {
-                            Row r = rows.next();
-                            if (!r.isNullAt(idIx) && !r.isNullAt(docIx) && seen(shadow, r.getString(idIx), fi)) {
-                                sink.accept(r.getString(idIx), r.getString(docIx));
-                            }
+            int file = fi;
+            live(layout.scanState(), files.get(fi), b -> {
+                ColumnarBatch cols = b.getData();
+                int idIx = cols.getSchema().indexOf(idColumn);
+                int docIx = cols.getSchema().indexOf(docColumn);
+                try (CloseableIterator<Row> rows = b.getRows()) {
+                    while (rows.hasNext()) {
+                        Row r = rows.next();
+                        if (!r.isNullAt(idIx) && !r.isNullAt(docIx) && seen(shadow, r.getString(idIx), file)) {
+                            sink.accept(r.getString(idIx), r.getString(docIx));
                         }
                     }
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
                 }
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+            });
         }
     }
 }

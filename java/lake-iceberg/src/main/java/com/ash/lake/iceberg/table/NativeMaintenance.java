@@ -211,18 +211,8 @@ final class NativeMaintenance {
                         copy(k, l, day, f, promoted, rows, budget);
                     }
                     List<DataFile> files = NativeLayout.writeDay(t, day.date(), rows.merged(), fileRows);
-                    Set<String> read = new HashSet<>();
-                    Set<String> remove = new HashSet<>();
-                    for (FileTask task : NativeKindTable.tasks(day)) {
-                        read.add(task.file().path());
-                        remove.add(task.file().path());
-                        for (DataFile d : task.deletes()) {
-                            if (day.date().equals(NativeLayout.dateOf(t, d))) {
-                                read.add(d.path());
-                                remove.add(d.path());     // the day's own delete files: their rows are gone from the new files
-                            }
-                        }
-                    }
+                    Set<String> remove = dayFiles(t, day);
+                    Set<String> read = new HashSet<>(remove);
                     LocalDate date = day.date();
                     try {
                         Operations.rewriteFiles(t, remove, files, f -> date.equals(NativeLayout.dateOf(t, f)), read);
@@ -299,18 +289,8 @@ final class NativeMaintenance {
                     if (dryRun) {
                         continue;
                     }
-                    Set<String> read = new HashSet<>();
-                    Set<String> remove = new HashSet<>();
-                    for (FileTask task : NativeKindTable.tasks(day)) {
-                        read.add(task.file().path());
-                        remove.add(task.file().path());
-                        for (DataFile d : task.deletes()) {
-                            if (date.equals(NativeLayout.dateOf(t, d))) {
-                                read.add(d.path());
-                                remove.add(d.path());
-                            }
-                        }
-                    }
+                    Set<String> remove = dayFiles(t, day);
+                    Set<String> read = new HashSet<>(remove);
                     if (rows.rows() == 0) {
                         Operations.deletePartitions(t, f -> date.equals(NativeLayout.dateOf(t, f)), Map.of(com.ash.lake.PersistedNames.key("undo"), id));
                     } else {
@@ -382,18 +362,8 @@ final class NativeMaintenance {
                     for (int f = 0; f < day.files().size(); f++) {
                         copyWhere(k, l, day, f, promoted, rows, budget, v -> !judge.keeps(r.ageOfRow(v.doc(), v.columns()::get, dayStart)), skipped);
                     }
-                    Set<String> read = new HashSet<>();
-                    Set<String> remove = new HashSet<>();
-                    for (FileTask task : NativeKindTable.tasks(day)) {
-                        read.add(task.file().path());
-                        remove.add(task.file().path());
-                        for (DataFile d : task.deletes()) {
-                            if (date.equals(NativeLayout.dateOf(t, d))) {
-                                read.add(d.path());
-                                remove.add(d.path());
-                            }
-                        }
-                    }
+                    Set<String> remove = dayFiles(t, day);
+                    Set<String> read = new HashSet<>(remove);
                     if (rows.rows() == 0) {
                         Operations.deletePartitions(t, f -> date.equals(NativeLayout.dateOf(t, f)), Map.of(com.ash.lake.PersistedNames.key("retention"), "rows"));
                         continue;
@@ -446,6 +416,20 @@ final class NativeMaintenance {
     }
 
     /** True when the day is not as the layout writes it. */
+    /** The day's data files and the delete files of that same day: a rewrite of the day reads them and replaces them (their rows are gone from the new files). */
+    private static Set<String> dayFiles(Table t, Day day) {
+        Set<String> out = new HashSet<>();
+        for (FileTask task : NativeKindTable.tasks(day)) {
+            out.add(task.file().path());
+            for (DataFile d : task.deletes()) {
+                if (day.date().equals(NativeLayout.dateOf(t, d))) {
+                    out.add(d.path());
+                }
+            }
+        }
+        return out;
+    }
+
     private static boolean drifted(Day day, int fileRows, List<NestedField> promoted) {
         if (day.deletes() || day.files().size() > Math.max(1, (day.rows() + fileRows - 1) / fileRows)) {
             return true;
