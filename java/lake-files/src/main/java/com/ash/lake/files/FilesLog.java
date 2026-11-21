@@ -23,7 +23,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -117,9 +116,9 @@ final class FilesLog {
         ObjectNode o = JSON.createObjectNode();
         ArrayNode a = o.putArray("columns");
         cols.all().forEach(c -> a.addObject().put("name", c.name()).put("type", c.type().name().toLowerCase(Locale.ROOT)));
-        Path tmp = dir.resolve("columns.json.tmp");
+        Path tmp = Files.createTempFile(dir, "columns-", ".part");      // one per writer: two writers never share a temporary file
         JSON.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), o);
-        Files.move(tmp, dir.resolve("columns.json"), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        locked(() -> Files.move(tmp, dir.resolve("columns.json"), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE));
     }
 
     /** Every commit, oldest first. */
@@ -158,32 +157,89 @@ final class FilesLog {
         return Files.readAllLines(dir.resolve(c.content()), java.nio.charset.StandardCharsets.UTF_8).stream().filter(l -> !l.isBlank()).toList();
     }
 
+    /** A commit that does not check the date's version it was built on (a replace, a delete, an undo's rewrite). */
+    static final long ANY = Long.MIN_VALUE;
+
+    /** The newest commit of {@code date}, or null. */
+    Commit latest(LocalDate date) throws IOException {
+        return at(commits(), date, Long.MAX_VALUE);
+    }
+
+    /** The content file of a commit, or null for a commit that removed the date. */
+    Path content(Commit c) {
+        return c == null || c.content() == null ? null : dir.resolve(c.content());
+    }
+
     /**
      * Commits {@code content} (a file written beside the log, moved in; null: the date removed) as the date's next version and publishes the
      * day file. Returns the commit.
      */
     Commit commit(LocalDate date, String op, List<String> loads, String batch, long rows, Path content) throws IOException {
-        Files.createDirectories(dir);
-        long n = commits().stream().mapToLong(Commit::version).max().orElse(-1) + 1;
-        while (true) {
+        return commit(date, op, loads, batch, rows, content, ANY);
+    }
+
+    /**
+     * As {@link #commit(LocalDate, String, List, String, long, Path)}, when {@code date}'s newest version is still {@code base} (-1: the
+     * date had none): null when another writer committed the date since (an append built on older content: the caller builds it again).
+     * Writers of one table, in this process or another, commit one at a time ({@link #locked}): the number taken, the content and the
+     * commit written and the day file published together, so a day file never goes back to an older version.
+     */
+    Commit commit(LocalDate date, String op, List<String> loads, String batch, long rows, Path content, long base) throws IOException {
+        return locked(() -> {
+            List<Commit> all = commits();
+            if (base != ANY) {
+                Commit now = at(all, date, Long.MAX_VALUE);
+                if ((now == null ? -1 : now.version()) != base) {
+                    return null;
+                }
+            }
+            long n = all.stream().mapToLong(Commit::version).max().orElse(-1) + 1;
             String name = content == null ? null : n + ".jsonl";
             if (content != null) {
                 Files.move(content, dir.resolve(name), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             }
             Commit c = new Commit(n, date, op, List.copyOf(loads), batch, rows, name, System.currentTimeMillis());
-            try {
-                Files.write(dir.resolve(n + ".json"), JSON.writeValueAsBytes(c.json()), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            } catch (FileAlreadyExistsException taken) {                // another writer took the number: the content moves on with us
-                if (content != null) {
-                    Path back = dir.resolve(name + ".moving");
-                    Files.move(dir.resolve(name), back, StandardCopyOption.ATOMIC_MOVE);
-                    content = back;
-                }
-                n++;
-                continue;
-            }
+            Files.write(dir.resolve(n + ".json"), JSON.writeValueAsBytes(c.json()), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             publish(c);
             return c;
+        });
+    }
+
+    private interface LogWork<T> {
+        T run() throws IOException;
+    }
+
+    /**
+     * {@code work} holding the table's commit lock ({@code commit.lock} in its log folder: an operating-system file lock, released by the
+     * system if the process dies; a second thread of this process waits for the first).
+     */
+    private <T> T locked(LogWork<T> work) throws IOException {
+        Files.createDirectories(dir);
+        try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(dir.resolve("commit.lock"), StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE)) {
+            java.nio.channels.FileLock lock = null;
+            long wait = 1;
+            while (lock == null) {
+                try {
+                    lock = ch.tryLock();
+                } catch (java.nio.channels.OverlappingFileLockException heldHere) {
+                    lock = null;                                     // another thread of this process holds it
+                }
+                if (lock == null) {
+                    try {
+                        Thread.sleep(wait);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new java.io.InterruptedIOException("waiting for the commit lock of " + table);
+                    }
+                    wait = Math.min(50, wait * 2);
+                }
+            }
+            try {
+                return work.run();
+            } finally {
+                lock.release();
+            }
         }
     }
 

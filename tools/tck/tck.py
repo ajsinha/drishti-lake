@@ -89,6 +89,20 @@ S3 = "~s3"     # the matrix's S3 row: a case's lake on s3:// (S3Mock in the runn
 ROW = {"mem": MEM, "s3": S3}
 
 
+def step(s, work, env):
+    """One step of a case: {load|undo|retention|store: args}, or {parallel: [steps]} (writers started together)."""
+    (op, arg), = s.items()
+    if op == "parallel":
+        return {"op": "parallel", "steps": [step(x, work, env) for x in arg]}
+    arg = arg or []
+    if op == "load":
+        cfg = "main"
+        if isinstance(arg, dict):
+            cfg, arg = arg.get("config", "main"), arg.get("args", [])
+        return {"op": op, "args": ["--config", str(work / f"{cfg}.yaml")] + subst(arg, env)}
+    return {"op": op, "args": subst(arg, env)}
+
+
 def jobs(cases, scratch, stores=None, storages=("local",)):
     out = []
     for f, storage in [(f, s) for f in cases for s in storages]:
@@ -99,6 +113,8 @@ def jobs(cases, scratch, stores=None, storages=("local",)):
                 continue
             if storage != "local" and (store not in ("delta", "iceberg") or c.get("local-only")):
                 continue                                             # the memory and S3 rows: Delta and Iceberg tables (files: local disk)
+            if storage in (c.get("not-on") or {}):
+                continue                                             # a storage the case cannot run on, with the reason in the case
             cid = f"{name}@{store}" + ROW.get(storage, "")
             work = scratch / cid.replace("/", "_").replace("~", "_")
             work.mkdir(parents=True)
@@ -111,18 +127,7 @@ def jobs(cases, scratch, stores=None, storages=("local",)):
             configs = c.get("configs") or {"main": c["config"]}
             for k, y in configs.items():
                 (work / f"{k}.yaml").write_text(subst(y, env), encoding="utf-8")
-            steps = []
-            for s in c["steps"]:
-                (op, arg), = s.items()
-                arg = arg or []
-                if op == "load":
-                    cfg = "main"
-                    if isinstance(arg, dict):
-                        cfg, arg = arg.get("config", "main"), arg.get("args", [])
-                    args = ["--config", str(work / f"{cfg}.yaml")] + subst(arg, env)
-                else:
-                    args = subst(arg, env)
-                steps.append({"op": op, "args": args})
+            steps = [step(s, work, env) for s in c["steps"]]
             dumps = []
             for t in c.get("tables", ["risk/scenario-pv"]):
                 dom, tab = t.split("/")

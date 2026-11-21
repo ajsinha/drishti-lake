@@ -205,22 +205,35 @@ final class FilesWriter implements TableWriter {
         if (files.isEmpty() && (append || !Files.isRegularFile(log.day(date)))) {
             return -1;                                             // nothing to add, or nothing to remove
         }
-        Path content = null;
-        long rows = 0;
-        if (!files.isEmpty()) {
-            content = log.newContent();
-            try (OutputStream out = Files.newOutputStream(content)) {
-                if (append && Files.isRegularFile(log.day(date))) {
-                    rows += FilesStore.count(log.day(date));
-                    Files.copy(log.day(date), out);
-                }
-                for (WrittenFile f : files) {
-                    Files.copy((Path) f.handle(), out);
-                    rows += f.rows();
+        FilesLog.Commit c;
+        while (true) {                                             // an append is built on the date's newest version, again if another writer moved it
+            FilesLog.Commit base = append ? log.latest(date) : null;
+            Path content = null;
+            long rows = 0;
+            if (!files.isEmpty()) {
+                content = log.newContent();
+                try (OutputStream out = Files.newOutputStream(content)) {
+                    Path before = base != null ? log.content(base)            // a day file without a log (written before it): its lines
+                            : append && Files.isRegularFile(log.day(date)) ? log.day(date) : null;
+                    if (before != null) {
+                        rows += FilesStore.count(before);
+                        Files.copy(before, out);
+                    }
+                    for (WrittenFile f : files) {
+                        Files.copy((Path) f.handle(), out);
+                        rows += f.rows();
+                    }
                 }
             }
+            c = log.commit(date, append ? "append" : "replace", spec.loadIds(), append ? spec.batchId() : null, rows, content,
+                    append ? (base == null ? -1 : base.version()) : FilesLog.ANY);
+            if (c != null) {
+                break;
+            }
+            if (content != null) {
+                Files.deleteIfExists(content);
+            }
         }
-        FilesLog.Commit c = log.commit(date, append ? "append" : "replace", spec.loadIds(), append ? spec.batchId() : null, rows, content);
         for (WrittenFile f : files) {
             Files.deleteIfExists((Path) f.handle());
         }

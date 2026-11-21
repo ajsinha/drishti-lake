@@ -116,6 +116,42 @@ public final class TckRunner {
         System.setProperty("aws.secretAccessKey", (String) e.getClass().getMethod("secretKey").invoke(e));   // lake-only
     }   // lake-only
 
+    /** One step: its exit code, what it said when it refused (or an upkeep's answer), a load's stable summary. */
+    static ObjectNode step(JsonNode step) throws Exception {
+        List<String> a = new ArrayList<>();
+        step.path("args").forEach(x -> a.add(x.asText()));
+        String op = step.path("op").asText();
+        ByteArrayOutputStream said = new ByteArrayOutputStream();
+        PrintStream ps = new PrintStream(said, true, StandardCharsets.UTF_8);
+        Path summary = null;
+        if (op.equals("load")) {
+            summary = Files.createTempFile("tck-summary", ".json");
+            a.addAll(List.of("--summary", summary.toString(), "-q"));
+        }
+        String[] argv = a.toArray(new String[0]);
+        int code = switch (op) {
+            case "load" -> LakeLoad.run(RT, argv, ps);
+            case "undo" -> LakeUndo.run(RT, argv, ps);
+            case "retention" -> LakeRetention.run(RT, argv, ps);
+            case "store" -> store(argv, ps);   // lake-only
+            default -> throw new IllegalArgumentException("unknown op " + op);
+        };
+        ObjectNode s = JSON.createObjectNode().put("op", op).put("exit", code);
+        String text = said.toString(StandardCharsets.UTF_8).lines()
+                .filter(l -> !l.matches("\\d{4}-\\d{2}-\\d{2}T\\S+ lake-build .*"))   // the run log's line: a time and a run id
+                .collect(java.util.stream.Collectors.joining("\n")).strip();
+        if (!text.isEmpty() && (code != 0 || !op.equals("load"))) {
+            s.put("said", text);                    // a refusal's reason, an upkeep's answer (paths become ${work})
+        }
+        if (summary != null) {
+            if (Files.size(summary) > 0) {
+                s.set("summary", stable(JSON.readTree(summary.toFile())));
+            }
+            Files.deleteIfExists(summary);
+        }
+        return s;
+    }
+
     static ObjectNode run(JsonNode job) {
         ObjectNode r = JSON.createObjectNode().put("case", job.path("case").asText());
         ArrayNode steps = r.putArray("steps");
@@ -123,37 +159,27 @@ public final class TckRunner {
         if (!mem.isEmpty()) MEMORY.stores().define(mem, 512L << 20, 1 << 20, "");   // lake-only
         try {
             for (JsonNode step : job.path("steps")) {
-                List<String> a = new ArrayList<>();
-                step.path("args").forEach(x -> a.add(x.asText()));
-                String op = step.path("op").asText();
-                ByteArrayOutputStream said = new ByteArrayOutputStream();
-                PrintStream ps = new PrintStream(said, true, StandardCharsets.UTF_8);
-                Path summary = null;
-                if (op.equals("load")) {
-                    summary = Files.createTempFile("tck-summary", ".json");
-                    a.addAll(List.of("--summary", summary.toString(), "-q"));
-                }
-                String[] argv = a.toArray(new String[0]);
-                int code = switch (op) {
-                    case "load" -> LakeLoad.run(RT, argv, ps);
-                    case "undo" -> LakeUndo.run(RT, argv, ps);
-                    case "retention" -> LakeRetention.run(RT, argv, ps);
-                    case "store" -> store(argv, ps);   // lake-only
-                    default -> throw new IllegalArgumentException("unknown op " + op);
-                };
-                ObjectNode s = steps.addObject().put("op", op).put("exit", code);
-                String text = said.toString(StandardCharsets.UTF_8).lines()
-                        .filter(l -> !l.matches("\\d{4}-\\d{2}-\\d{2}T\\S+ lake-build .*"))   // the run log's line: a time and a run id
-                        .collect(java.util.stream.Collectors.joining("\n")).strip();
-                if (!text.isEmpty() && (code != 0 || !op.equals("load"))) {
-                    s.put("said", text);                    // a refusal's reason, an upkeep's answer (paths become ${work})
-                }
-                if (summary != null) {
-                    if (Files.size(summary) > 0) {
-                        s.set("summary", stable(JSON.readTree(summary.toFile())));
+                if (step.path("op").asText().equals("parallel")) {      // writers at once: each started together, listed in order
+                    ArrayNode at = steps.addObject().put("op", "parallel").putArray("steps");
+                    List<JsonNode> each = new ArrayList<>();
+                    step.path("steps").forEach(each::add);
+                    ExecutorService pool = Executors.newFixedThreadPool(each.size());
+                    try {
+                        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+                        List<java.util.concurrent.Future<ObjectNode>> done = new ArrayList<>();
+                        for (JsonNode e : each) {
+                            done.add(pool.submit(() -> { go.await(); return step(e); }));
+                        }
+                        go.countDown();
+                        for (var f : done) {
+                            at.add(f.get());
+                        }
+                    } finally {
+                        pool.shutdownNow();
                     }
-                    Files.deleteIfExists(summary);
+                    continue;
                 }
+                steps.add(step(step));
             }
             ObjectNode tables = r.putObject("tables");
             for (JsonNode d : job.path("dumps")) {

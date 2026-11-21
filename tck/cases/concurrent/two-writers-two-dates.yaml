@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# Two loaders write one table at once, each its own business date (no lock between them: --no-lock, as two machines on one
+# object store): both commits land, neither date is lost (Delta's conditional log writes, Iceberg's commit retry, the files log)
+not-on:
+  s3: >-
+    the S3 simulator (S3Mock 4.12.4) does not make a conditional PUT (If-None-Match) atomic between two requests in flight: of 50
+    races of two creates of one key, both won 48 (measured 2026-11-21); S3 and MinIO refuse the second (412/409), which is what the
+    Delta and Iceberg commits rely on. Runs on the local disk and the memory row.
+inputs:
+  a/pv.2026-10-27.jsonl: {pv: {n: 40, scenarios: 3, seed: 1}}
+  b/pv.2026-10-28.jsonl: {pv: {n: 30, scenarios: 3, seed: 2, start: '2026-10-28'}}
+configs:
+  a: |
+    source: {files: '${in}/a/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  b: |
+    source: {files: '${in}/b/pv.2026-10-28.jsonl', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+steps:
+  - load: {config: a}
+  - parallel:
+      - load: {config: a, args: [--no-lock]}
+      - load: {config: b, args: [--no-lock]}

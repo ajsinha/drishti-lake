@@ -155,4 +155,11 @@ Entries are written per release; unreleased work is listed first.
   undo, retention, the table walks and the dumps reach a custom endpoint as the loader does (they passed no settings before). Found
   and fixed: Kernel names `_last_checkpoint` with size 0, which an object store read as an empty file and Kernel retried for three
   seconds a snapshot (now the store is asked, a missing object is not found, as on local disk); the undo's Iceberg table root on S3.
+- **L9, fourth part: concurrent writers.** The kit's runner takes `parallel:` steps (writers started together); case
+  `concurrent/two-writers-two-dates`: two loaders (`--no-lock`) write one table at once, both commits land, on Delta, Iceberg, files and
+  the memory row. Not on the S3 row: S3Mock does not make a conditional PUT atomic between two requests in flight (both won 48 of 50
+  races, measured), which S3 and MinIO do; the case says so (`not-on`). Found and fixed in the files store: a writer moved its content
+  over the winner's `<n>.jsonl` before the number was won (rows lost or doubled), an append was built on the published day file, and two
+  writers shared `columns.json.tmp`; commits to one table now go one at a time under an operating-system lock (`commit.lock`), an append
+  is built on the date's newest version and rebuilt if another writer moved it, and the day file never goes back to an older version.
 - Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).
