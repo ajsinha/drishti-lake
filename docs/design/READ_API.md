@@ -447,3 +447,19 @@ Drishti is not touched; its adapter rewrite (rehearsal L1, 5 bd, Opus) starts at
 ## Decisions taken (lead, under the owner's delegation, 2026-11-21)
 
 RA-1 to RA-12 are **accepted as recommended** (including RA-3 the product applies deletes, RA-6 one stamp rule with Iceberg id-map files rebuilt once, RA-7 `VectorBatches` back to the adapter, RA-9 foreign-table shapes last, RA-10 the files store measured but not held to Parquet speed, no sidecar). Feature parity stays absolute (owner rule); speed parity is not required for the files store. The unverified points of section 10 are checked first in RA-S0.
+
+## Checked in RA-S0 (2026-11-21)
+
+- **Files store and `source.partition-by`**: accepted. `FilesWriter` writes each field as a typed column (`'p'`, text) of every line;
+  `DataFile.partition()` is empty for a files table (the values are in the lines). No change needed for P1 beyond the case.
+- **Delta deletes (D1)**: the Kernel 4.4.0 applies a file's deletion vector in `Scan.transformPhysicalData` (already used by `ids` and
+  `doc`, with a scan state for the narrow read schema); the product's Parquet reader (`ParquetBatches`) serves the `ROW_INDEX` metadata
+  column. D1 is sized as written: a file with a deletion vector goes through a narrow scan state, a file without one stays raw.
+- **Iceberg deletes (I1)**: the product's own reader applies position and equality deletes in every file read (`read/Deletes` in
+  `TaskReader`), and `KindTable.ids/columns/scan` and `IcebergVectors` all read through it: the table layer is already right; the
+  documents fallback was the adapter's. I1 is the case plus removing the fallback at G4.
+- **Call counts**: the adapters are host code (not compiled here); RA-S2/S3 compile the read API against the call list of section 3.
+- **Today's numbers** (`tools/bench/bench.py`, `ReadBench` over Drishti's plugins at `9ce7c3170` built in a scratch folder with their
+  own local repository, and the same shims over this build's table classes): `tck/bench/readbench-before-9ce7c3170.jsonl`. The table
+  is 10,000 positions x 509 scenarios in 13 files (the loader's runs), one date. At a machine load of about 15 the same code differs
+  between two JVMs by up to 40% on the reads under 20 ms (columns, ids): those rows are compared over repeated runs, not one.

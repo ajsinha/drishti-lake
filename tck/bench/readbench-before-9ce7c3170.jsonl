@@ -1,0 +1,28 @@
+{"measure": "ids", "ms": 13.143, "min_ms": 8.294, "rows": 10000, "rows_per_s": 760873, "bytes": 5597192, "bytes_per_row": 559.7, "store": "delta", "side": "ref"}
+{"measure": "ids.lookup-10000", "ms": 2.009, "min_ms": 1.683, "rows": 8978, "rows_per_s": 4468995, "bytes": 656, "bytes_per_row": 0.1, "store": "delta", "side": "ref"}
+{"measure": "vectors.1", "ms": 343.871, "min_ms": 252.043, "rows": 10000, "rows_per_s": 29081, "bytes": 349987320, "bytes_per_row": 34998.7, "store": "delta", "side": "ref"}
+{"measure": "vectors.4", "ms": 128.343, "min_ms": 93.98, "rows": 10000, "rows_per_s": 77916, "bytes": 401467240, "bytes_per_row": 40146.7, "store": "delta", "side": "ref"}
+{"measure": "columns", "ms": 17.025, "min_ms": 12.732, "rows": 10000, "rows_per_s": 587376, "bytes": 22752528, "bytes_per_row": 2275.3, "store": "delta", "side": "ref"}
+{"measure": "document", "p50_us": 172, "p99_us": 854, "bytes_per_doc": 279011, "store": "delta", "side": "ref"}
+{"measure": "vectorsOf.50", "ms": 20.694, "min_ms": 18.908, "rows": 50, "rows_per_s": 2416, "bytes": 38059048, "bytes_per_row": 761181.0, "store": "delta", "side": "ref"}
+{"measure": "ids", "ms": 16.995, "min_ms": 10.531, "rows": 10000, "rows_per_s": 588425, "bytes": 5597400, "bytes_per_row": 559.7, "store": "delta", "side": "internal"}
+{"measure": "ids.lookup-10000", "ms": 3.262, "min_ms": 2.588, "rows": 8978, "rows_per_s": 2752460, "bytes": 656, "bytes_per_row": 0.1, "store": "delta", "side": "internal"}
+{"measure": "vectors.1", "ms": 315.406, "min_ms": 204.12, "rows": 10000, "rows_per_s": 31705, "bytes": 349964720, "bytes_per_row": 34996.5, "store": "delta", "side": "internal"}
+{"measure": "vectors.4", "ms": 82.238, "min_ms": 70.929, "rows": 10000, "rows_per_s": 121599, "bytes": 404612128, "bytes_per_row": 40461.2, "store": "delta", "side": "internal"}
+{"measure": "columns", "ms": 10.28, "min_ms": 10.138, "rows": 10000, "rows_per_s": 972759, "bytes": 22752736, "bytes_per_row": 2275.3, "store": "delta", "side": "internal"}
+{"measure": "document", "p50_us": 174, "p99_us": 812, "bytes_per_doc": 280091, "store": "delta", "side": "internal"}
+{"measure": "vectorsOf.50", "ms": 22.167, "min_ms": 21.812, "rows": 50, "rows_per_s": 2256, "bytes": 38059080, "bytes_per_row": 761181.6, "store": "delta", "side": "internal"}
+{"measure": "ids", "ms": 8.848, "min_ms": 5.603, "rows": 10000, "rows_per_s": 1130171, "bytes": 5352768, "bytes_per_row": 535.3, "store": "iceberg", "side": "ref"}
+{"measure": "ids.lookup-10000", "ms": 1.591, "min_ms": 1.291, "rows": 8978, "rows_per_s": 5642336, "bytes": 2304, "bytes_per_row": 0.3, "store": "iceberg", "side": "ref"}
+{"measure": "vectors.1", "ms": 317.926, "min_ms": 242.657, "rows": 10000, "rows_per_s": 31454, "bytes": 351289936, "bytes_per_row": 35129.0, "store": "iceberg", "side": "ref"}
+{"measure": "vectors.4", "ms": 96.619, "min_ms": 84.242, "rows": 10000, "rows_per_s": 103500, "bytes": 402744400, "bytes_per_row": 40274.4, "store": "iceberg", "side": "ref"}
+{"measure": "columns", "ms": 9.992, "min_ms": 8.078, "rows": 10000, "rows_per_s": 1000816, "bytes": 11512320, "bytes_per_row": 1151.2, "store": "iceberg", "side": "ref"}
+{"measure": "document", "p50_us": 138, "p99_us": 441, "bytes_per_doc": 421107, "store": "iceberg", "side": "ref"}
+{"measure": "vectorsOf.50", "ms": 438.786, "min_ms": 376.783, "rows": 50, "rows_per_s": 114, "bytes": 691826024, "bytes_per_row": 13836520.5, "store": "iceberg", "side": "ref"}
+{"measure": "ids", "ms": 12.122, "min_ms": 8.949, "rows": 10000, "rows_per_s": 824953, "bytes": 5351480, "bytes_per_row": 535.1, "store": "iceberg", "side": "internal"}
+{"measure": "ids.lookup-10000", "ms": 2.632, "min_ms": 2.334, "rows": 8978, "rows_per_s": 3411637, "bytes": 2232, "bytes_per_row": 0.2, "store": "iceberg", "side": "internal"}
+{"measure": "vectors.1", "ms": 334.517, "min_ms": 200.203, "rows": 10000, "rows_per_s": 29894, "bytes": 351291088, "bytes_per_row": 35129.1, "store": "iceberg", "side": "internal"}
+{"measure": "vectors.4", "ms": 102.205, "min_ms": 84.604, "rows": 10000, "rows_per_s": 97842, "bytes": 401702032, "bytes_per_row": 40170.2, "store": "iceberg", "side": "internal"}
+{"measure": "columns", "ms": 21.214, "min_ms": 8.117, "rows": 10000, "rows_per_s": 471383, "bytes": 11729720, "bytes_per_row": 1173.0, "store": "iceberg", "side": "internal"}
+{"measure": "document", "p50_us": 158, "p99_us": 522, "bytes_per_doc": 419262, "store": "iceberg", "side": "internal"}
+{"measure": "vectorsOf.50", "ms": 307.87, "min_ms": 301.7, "rows": 50, "rows_per_s": 162, "bytes": 691748224, "bytes_per_row": 13834964.5, "store": "iceberg", "side": "internal"}
