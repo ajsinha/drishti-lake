@@ -89,6 +89,8 @@ public final class TckRunner {
     private static final ObjectMapper JSON = new ObjectMapper().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
 
     public static void main(String[] args) throws Exception {
+        String s3 = System.getProperty("tck.s3", "");   // lake-only: the matrix's S3 row: S3Mock in this JVM (lake-tck), its folder
+        if (!s3.isEmpty()) startS3(Path.of(s3));   // lake-only
         List<String> out = new ArrayList<>();
         for (String line : Files.readAllLines(Path.of(args[0]), StandardCharsets.UTF_8)) {
             if (!line.isBlank()) {
@@ -98,6 +100,21 @@ public final class TckRunner {
         Files.write(Path.of(args[1]), out, StandardCharsets.UTF_8);
         System.exit(0);
     }
+
+    /**   // lake-only
+     * Starts the S3 simulator (bucket {@code tck}) and points the runtime's S3 options at it ({@code lake.s3.*}, read when asked), with   // lake-only
+     * its keys in the AWS default chain: every step and dump reaches it only through the runtime, as a host's would.   // lake-only
+     */   // lake-only
+    static void startS3(Path dir) throws Exception {   // lake-only
+        Object server = Class.forName("com.ash.lake.tck.s3.S3MockServer").getMethod("start", Path.class, String[].class)   // lake-only
+                .invoke(null, dir, new String[] {"tck"});   // lake-only
+        Object e = server.getClass().getMethod("endpoint").invoke(server);   // lake-only
+        System.setProperty("lake.s3.endpoint", (String) e.getClass().getMethod("endpoint").invoke(e));   // lake-only
+        System.setProperty("lake.s3.region", "us-east-1");   // lake-only
+        System.setProperty("lake.s3.path-style", "true");   // lake-only
+        System.setProperty("aws.accessKeyId", (String) e.getClass().getMethod("accessKey").invoke(e));   // lake-only
+        System.setProperty("aws.secretAccessKey", (String) e.getClass().getMethod("secretKey").invoke(e));   // lake-only
+    }   // lake-only
 
     static ObjectNode run(JsonNode job) {
         ObjectNode r = JSON.createObjectNode().put("case", job.path("case").asText());
@@ -217,6 +234,7 @@ public final class TckRunner {
     /** Whether a Delta table is there (a folder with its log, or a memory table's log). */
     static boolean deltaTable(String table) throws Exception {
         if (table.startsWith("mem://")) return RT.storage(table).isDirectory(table + "/_delta_log");   // lake-only
+        if (table.startsWith("s3://")) try (var io = com.ash.lake.iceberg.io.FileAccess.local(RT)) { return io.storage(table).isDirectory(table + "/_delta_log"); }   // lake-only
         return Files.isDirectory(Path.of(table, "_delta_log"));
     }
 

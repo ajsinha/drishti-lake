@@ -144,9 +144,9 @@ public final class LakeWriter {
             return DefaultEngine.create(new LocalWriteFileIO(runtime, parquetConf(runtime)));
         }
         if (runtime.memoryOnly(table)) {
-            return DefaultEngine.create(new StorageWriteFileIO(runtime, com.ash.lake.io.S3Settings.from(Map.of()), memoryConf(runtime, settings)));
+            return DefaultEngine.create(new StorageWriteFileIO(runtime, com.ash.lake.io.S3Settings.from(runtime, Map.of()), memoryConf(runtime, settings)));
         }
-        return DefaultEngine.create(new StorageWriteFileIO(runtime, com.ash.lake.io.S3Settings.from(settings), parquetConf(runtime)));
+        return DefaultEngine.create(new StorageWriteFileIO(runtime, com.ash.lake.io.S3Settings.from(runtime, settings), parquetConf(runtime)));
     }
 
     /** Writes the manifest's parts; {@code partsDone} is told after each part. */

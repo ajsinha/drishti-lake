@@ -77,7 +77,7 @@ public final class FileAccess implements AutoCloseable {
 
     /** Local disk only, with no relocation (tests, tools). */
     public static FileAccess local(com.ash.lake.LakeRuntime runtime) {
-        return new FileAccess(runtime, S3Settings.from(Map.of()), Relocation.none(), null);
+        return new FileAccess(runtime, S3Settings.from(runtime, Map.of()), Relocation.none(), null);
     }
 
     /** The runtime this reads with. */

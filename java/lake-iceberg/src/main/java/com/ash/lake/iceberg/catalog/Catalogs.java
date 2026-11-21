@@ -51,7 +51,7 @@ public final class Catalogs {
         if (domain.contains("..") || domain.startsWith("/")) {
             throw new IllegalArgumentException("domain escapes the Iceberg root: " + domain);
         }
-        FileAccess io = new FileAccess(runtime, S3Settings.from(settings), relocate(settings.getOrDefault("relocate", "")), settings.get("lz4-decoder"));
+        FileAccess io = new FileAccess(runtime, S3Settings.from(runtime, settings), relocate(settings.getOrDefault("relocate", "")), settings.get("lz4-decoder"));
         Map<String, String> files = new LinkedHashMap<>();
         settings.forEach((k, v) -> {
             if (k.startsWith("metadata-location.") && !v.isBlank()) {

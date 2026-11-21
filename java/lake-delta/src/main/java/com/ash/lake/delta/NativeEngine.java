@@ -89,7 +89,7 @@ public final class NativeEngine implements Engine, AutoCloseable {
         if (lz4 != null) {
             conf.put(NativeCodecs.LZ4_DECODER, lz4);
         }
-        return new NativeEngine(new NativeFileIO(runtime, S3Settings.from(settings), conf));
+        return new NativeEngine(new NativeFileIO(runtime, S3Settings.from(runtime, settings), conf));
     }
 
     /** The TLS material of the S3 endpoint ({@code tls.*}), or null. */

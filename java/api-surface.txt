@@ -136,6 +136,7 @@ com.ash.lake.LakeOptions :: public java.lang.String com.ash.lake.LakeOptions.hom
 com.ash.lake.LakeOptions :: public java.lang.String com.ash.lake.LakeOptions.tmpDirSetting()
 com.ash.lake.LakeOptions :: public java.lang.String com.ash.lake.LakeOptions.value(java.lang.String)
 com.ash.lake.LakeOptions :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.LakeOptions.given()
+com.ash.lake.LakeOptions :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.LakeOptions.s3()
 com.ash.lake.LakeOptions :: public java.util.function.Function<java.lang.String, java.lang.String> com.ash.lake.LakeOptions.lookup()
 com.ash.lake.LakeOptions :: public long com.ash.lake.LakeOptions.footerCacheBytes()
 com.ash.lake.LakeOptions :: public long com.ash.lake.LakeOptions.icebergDeleteCacheRows()
@@ -161,6 +162,10 @@ com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.La
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.PAGE_KB
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.ROW_GROUP_KB
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.ROW_GROUP_MB
+com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.S3_ENDPOINT
+com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.S3_PATH_STYLE
+com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.S3_READ_BLOCK_KB
+com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.S3_REGION
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.TMP_DIR
 com.ash.lake.LakeOptions$Builder :: public com.ash.lake.LakeOptions com.ash.lake.LakeOptions$Builder.build()
 com.ash.lake.LakeOptions$Builder :: public com.ash.lake.LakeOptions$Builder com.ash.lake.LakeOptions$Builder.configDir(java.nio.file.Path)

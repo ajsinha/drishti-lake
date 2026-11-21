@@ -126,7 +126,7 @@ public final class FileRows {
     }
 
     private static FileAccess access(com.ash.lake.LakeRuntime runtime) throws IOException {
-        return new FileAccess(runtime, com.ash.lake.io.S3Settings.from(Map.of()), com.ash.lake.iceberg.io.Relocation.none(), null);
+        return new FileAccess(runtime, com.ash.lake.io.S3Settings.from(runtime, Map.of()), com.ash.lake.iceberg.io.Relocation.none(), null);
     }
 
     /** A file that is not an archive, decompressed by what its first bytes say. */

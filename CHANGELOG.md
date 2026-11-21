@@ -148,4 +148,11 @@ Entries are written per release; unreleased work is listed first.
   loader row's own date) that is after today is refused with the same words as a name's or a folder's, before anything is written
   (`FileDates.futureError`, one rule for every source). Parity case `load/future-date-refused`; shared case in
   `tck/fixtures/file-dates/names.json`.
+- **L9, third part: the S3 row of the matrix.** Every Delta and Iceberg case also runs with its lake on `s3://` (S3Mock in the
+  runner's JVM, from `lake-tck`, in a runner of its own so the simulator is on no other class path), `<case>@<store>~s3`, and must
+  equal the reference's local result. The runtime now carries the S3 store (`lake.s3.endpoint`, `lake.s3.region`, `lake.s3.path-style`,
+  `lake.s3.read-block-kb`; credentials from the AWS chain): every reader and writer is built with `S3Settings.from(runtime, own)`, so
+  undo, retention, the table walks and the dumps reach a custom endpoint as the loader does (they passed no settings before). Found
+  and fixed: Kernel names `_last_checkpoint` with size 0, which an object store read as an empty file and Kernel retried for three
+  seconds a snapshot (now the store is asked, a missing object is not found, as on local disk); the undo's Iceberg table root on S3.
 - Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).

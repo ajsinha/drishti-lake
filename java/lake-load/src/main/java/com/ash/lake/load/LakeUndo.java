@@ -174,7 +174,7 @@ public final class LakeUndo {
             return;
         }
         int slash = name.indexOf('/');
-        String at = runtime.supports(root) ? root : Path.of(root).toAbsolutePath().toString();
+        String at = runtime.supports(root) || !com.ash.lake.io.LocalPaths.isLocal(root) ? root : Path.of(root).toAbsolutePath().toString();
         var table = new com.ash.lake.spi.TableRef(at, name.substring(0, slash), name.substring(slash + 1));
         for (com.ash.lake.spi.DateChange c : Stores.of(runtime, format).undo(runtime, table, id, dryRun)) {
             out.add(new Tagged(format, new Done(name, c.date().toString(), c.removed(), c.restored(), c.restored() > 0, c.version())));
@@ -201,10 +201,13 @@ public final class LakeUndo {
         return out;
     }
 
-    /** The Delta tables under the lake root, {@code <domain>/<table>} with a {@code _delta_log}, on the local disk or a storage registered with the runtime. */
+    /**
+     * The Delta tables under the lake root, {@code <domain>/<table>} with a {@code _delta_log}: on the local disk, on S3 (the runtime's S3
+     * settings) or a storage registered with the runtime.
+     */
     static List<String> deltaTables(com.ash.lake.LakeRuntime runtime, String root) throws IOException {
         List<String> out = new ArrayList<>();
-        if (!runtime.supports(root)) {                               // a local folder
+        if (!runtime.supports(root) && com.ash.lake.io.LocalPaths.scheme(root).equals("file")) {      // a local folder
             Path base = Path.of(root);
             if (Files.isDirectory(base)) {
                 try (Stream<Path> domains = Files.list(base)) {
@@ -218,15 +221,17 @@ public final class LakeUndo {
             }
             return out;
         }
-        com.ash.lake.spi.Storage st = runtime.storage(root);         // a registered storage (mem://)
-        if (!st.isDirectory(root)) {
-            return out;
-        }
-        for (String d : st.directories(root)) {
-            String domain = LakeRetention.tablePath(root, d);
-            for (String t : st.directories(domain)) {
-                if (st.isDirectory(LakeRetention.tablePath(domain, t) + "/_delta_log")) {
-                    out.add(d + "/" + t);
+        try (com.ash.lake.iceberg.io.FileAccess io = com.ash.lake.iceberg.io.FileAccess.local(runtime)) {
+            com.ash.lake.spi.Storage st = io.storage(root);          // S3, or a registered storage (mem://)
+            if (!st.isDirectory(root)) {
+                return out;
+            }
+            for (String d : st.directories(root)) {
+                String domain = LakeRetention.tablePath(root, d);
+                for (String t : st.directories(domain)) {
+                    if (st.isDirectory(LakeRetention.tablePath(domain, t) + "/_delta_log")) {
+                        out.add(d + "/" + t);
+                    }
                 }
             }
         }

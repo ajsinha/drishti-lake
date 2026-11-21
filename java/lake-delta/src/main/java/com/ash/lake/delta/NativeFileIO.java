@@ -171,7 +171,9 @@ public final class NativeFileIO implements FileIO {
 
     @Override
     public InputFile newInputFile(String path, long fileSize) {
-        return new Streams.KernelFile(storage(path), path, fileSize);
+        // Kernel names a file it has not listed with size 0 (_last_checkpoint): ask the store, so a missing object is a
+        // FileNotFoundException, as on local disk, never an empty file Kernel retries for seconds
+        return new Streams.KernelFile(storage(path), path, fileSize > 0 ? fileSize : -1);
     }
 
     /** Parquet's view of the same file. */

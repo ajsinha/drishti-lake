@@ -41,7 +41,7 @@ import java.util.UUID;
 final class LocalWriteFileIO extends ReadingFileIO {
 
     LocalWriteFileIO(com.ash.lake.LakeRuntime runtime, Map<String, String> conf) {
-        super(new NativeFileIO(runtime, S3Settings.from(Map.of()), conf), conf);
+        super(new NativeFileIO(runtime, S3Settings.from(runtime, Map.of()), conf), conf);
     }
 
     /** The operating-system path of a path or {@code file:} URI, read as the reads read it ({@code LocalStorage#path}): Kernel's

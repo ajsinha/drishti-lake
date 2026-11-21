@@ -102,7 +102,7 @@ public final class DrishtiFileIO implements FileIO {
         if (Boolean.parseBoolean(given.getOrDefault("s3.remote-signing-enabled", "false"))) {
             throw new UnsupportedFeature("S3 remote signing (s3.remote-signing-enabled)");
         }
-        S3Settings s = S3Settings.from(given);
+        S3Settings s = S3Settings.from(runtime, given);
         if (given.containsKey("s3.access-key-id")) {
             s = s.withCredentials(given.get("s3.access-key-id"), given.getOrDefault("s3.secret-access-key", ""), given.getOrDefault("s3.session-token", ""));
         }

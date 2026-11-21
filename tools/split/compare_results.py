@@ -9,8 +9,8 @@ freeze commit, make_reference.py).
 Every case must give the same line, byte for byte, except those listed in known-differences.txt beside this script (each with the step
 that made it and why). Exit 0 when that holds and every case here ran (status ok); 1 otherwise. A listed case that no longer differs is
 reported, so the list stays true. A case of a store the host never had (BEYOND: its jars cannot run it, make_reference.py --stores) has no
-reference line, nor does a case added here: each must run here (status ok); check.py holds them stable over two runs. A case of the memory row (`<case>@<store>~mem`, its
-lake on mem://) must give the same line as the reference's local case, its name aside. A case of every other store (files, Iceberg, and their memory rows) must give the same
+reference line, nor does a case added here: each must run here (status ok); check.py holds them stable over two runs. A case of the memory or S3 row (`<case>@<store>~mem`, `~s3`, its
+lake on mem:// or s3://) must give the same line as the reference's local case, its name aside. A case of every other store (files, Iceberg, and their memory rows) must give the same
 answer as its Delta case here (the stores are feature-identical), its name and the dump's date form aside, unless tck/capabilities.yaml
 declares the gap and names the case."""
 import gzip, json, sys
@@ -25,7 +25,7 @@ def lines(p):
 
 
 BEYOND = {"files"}   # stores the host's jars at the freeze commit do not have
-MEM = "~mem"         # the memory row: compared with the local case of the reference
+ROWS = ("~mem", "~s3")  # the memory and S3 rows: each compared with the local case of the reference
 
 
 def declared_differences():
@@ -75,13 +75,13 @@ def main(argv):
             case, _, why = l.partition(" ")
             known[case] = why.strip()
     bad = 0
-    mem = {c: c[:-len(MEM)] for c in new if c.endswith(MEM)}
+    mem = {c: c[:-len(row)] for c in new for row in ROWS if c.endswith(row)}
     for c, local in mem.items():                                 # the memory row: the reference's local line under this name
         if local in ref:
             ref[c] = ref[local].replace(json.dumps(local)[1:-1], json.dumps(c)[1:-1], 1)
     cases_ref = {c.rpartition("@")[0] for c in ref}
     beyond = sorted(c for c in set(new) - set(ref)                 # a store, or a case, the host's kit never had
-                    if c.rpartition("@")[2] in BEYOND or c.split(MEM)[0].rpartition("@")[0] not in cases_ref)
+                    if c.rpartition("@")[2] in BEYOND or c.split("~")[0].rpartition("@")[0] not in cases_ref)
     only_here = sorted(set(new) - set(ref) - set(beyond))
     if set(ref) - set(new) or only_here:
         print(f"case sets differ: only in the reference {sorted(set(ref) - set(new))[:5]}, only here {only_here[:5]}")
@@ -103,10 +103,10 @@ def main(argv):
     declared = declared_differences()
     for c in sorted(new):                                         # every store equals the Delta store, case by case (the memory row too)
         name, _, store = c.partition("@")
-        base = store.split(MEM)[0]
+        base, tilde, row = store.partition("~")
         if base == "delta" or c in declared:
             continue
-        d = f"{name}@delta" + (MEM if store.endswith(MEM) else "")
+        d = f"{name}@delta" + tilde + row
         if d in new and same_rows(new[d], d) != same_rows(new[c], c):
             print(f"DIFFERS from its Delta case (undeclared in tck/capabilities.yaml): {c}\n  delta: {new[d][:400]}\n  {base}: {new[c][:400]}")
             bad += 1
@@ -114,7 +114,7 @@ def main(argv):
     if failed:
         print(f"not ok here: {failed}")
         bad += 1
-    print(f"{same} identical ({len(mem)} of them the memory row), {differ} different, {len(known)} known differences listed; "
+    print(f"{same} identical ({len(mem)} of them the memory and S3 rows), {differ} different, {len(known)} known differences listed; "
           f"{len(beyond)} beyond the reference (the {', '.join(sorted(BEYOND))} store, and cases added here)")
     return 1 if bad else 0
 

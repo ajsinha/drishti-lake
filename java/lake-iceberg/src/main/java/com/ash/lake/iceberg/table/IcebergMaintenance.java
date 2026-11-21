@@ -72,16 +72,18 @@ public final class IcebergMaintenance {
     private IcebergMaintenance() {
     }
 
-    /** The Iceberg tables ({@code domain/kind}) of the lake at {@code root}: a local folder or a registered storage's ({@code mem://}). */
+    /** The Iceberg tables ({@code domain/kind}) of the lake at {@code root}: a local folder, S3, or a registered storage's ({@code mem://}). */
     public static List<String> tables(com.ash.lake.LakeRuntime runtime, String root) throws Exception {
         List<String> out = new ArrayList<>();
         List<String> domains = new ArrayList<>();
-        if (runtime.supports(root)) {
-            com.ash.lake.spi.Storage st = runtime.storage(root);
-            if (st.isDirectory(root)) {
-                for (String d : st.directories(root)) {
-                    String name = d.replaceAll("/+$", "");
-                    domains.add(name.substring(name.lastIndexOf('/') + 1));
+        if (runtime.supports(root) || !com.ash.lake.io.LocalPaths.scheme(root).equals("file")) {
+            try (com.ash.lake.iceberg.io.FileAccess io = com.ash.lake.iceberg.io.FileAccess.local(runtime)) {
+                com.ash.lake.spi.Storage st = io.storage(root);      // S3 (the runtime's settings), or a registered storage (mem://)
+                if (st.isDirectory(root)) {
+                    for (String d : st.directories(root)) {
+                        String name = d.replaceAll("/+$", "");
+                        domains.add(name.substring(name.lastIndexOf('/') + 1));
+                    }
                 }
             }
         } else if (java.nio.file.Files.isDirectory(Path.of(root))) {

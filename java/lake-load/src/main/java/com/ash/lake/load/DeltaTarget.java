@@ -114,7 +114,7 @@ final class DeltaTarget implements TableWriter {
         this.rowGroup = spec.runtime().options().rowGroupBytes();
         this.page = spec.runtime().options().pageBytes();
         this.engine = LakeWriter.engineFor(spec.runtime(), path, s3);
-        this.io = new FileAccess(spec.runtime(), S3Settings.from(s3), com.ash.lake.iceberg.io.Relocation.none(), null);
+        this.io = new FileAccess(spec.runtime(), S3Settings.from(spec.runtime(), s3), com.ash.lake.iceberg.io.Relocation.none(), null);
         if (LocalPaths.isLocal(path)) {
             Files.createDirectories(Path.of(LocalPaths.toLocal(path, LocalPaths.WINDOWS)));
         }

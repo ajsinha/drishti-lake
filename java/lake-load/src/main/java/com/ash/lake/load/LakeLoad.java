@@ -72,7 +72,7 @@ public final class LakeLoad {
      */
     public static Map<String, java.util.SortedSet<java.time.LocalDate>> tarTables(com.ash.lake.LakeRuntime runtime, String path) throws java.io.IOException {
         Map<String, java.util.SortedSet<java.time.LocalDate>> out = new java.util.TreeMap<>();
-        try (com.ash.lake.iceberg.io.FileAccess io = new com.ash.lake.iceberg.io.FileAccess(runtime, com.ash.lake.io.S3Settings.from(Map.of()),
+        try (com.ash.lake.iceberg.io.FileAccess io = new com.ash.lake.iceberg.io.FileAccess(runtime, com.ash.lake.io.S3Settings.from(runtime, Map.of()),
                 com.ash.lake.iceberg.io.Relocation.none(), null)) {
             Archives.Plan p = Archives.plan(io, path, java.nio.file.Files.size(java.nio.file.Path.of(path)), null,
                     Archives.Limits.defaults(runtime.options().lookup()));

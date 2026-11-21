@@ -77,6 +77,20 @@ public record S3Settings(String endpoint, String accessKey, String secretKey, St
     /** The default smallest ranged GET: 1 MiB. */
     public static final int DEFAULT_READ_BLOCK = 1 << 20;
 
+    /**
+     * A call's settings over its runtime's ({@link com.ash.lake.LakeOptions#s3()}): what every reader and writer of {@code s3://} is built
+     * with, so undo, retention and the readers reach the store the loader does.
+     */
+    public static S3Settings from(com.ash.lake.LakeRuntime runtime, Map<String, String> settings) {
+        Map<String, String> s3 = runtime == null ? Map.of() : runtime.options().s3();
+        if (s3.isEmpty()) {
+            return from(settings);
+        }
+        Map<String, String> merged = new java.util.HashMap<>(s3);
+        merged.putAll(settings);
+        return from(merged);
+    }
+
     /** From connector settings ({@code s3.*}); {@code s3.read-block-kb} sets the smallest ranged GET. */
     public static S3Settings from(Map<String, String> settings) {
         String endpoint = settings.getOrDefault("s3.endpoint", "").trim();

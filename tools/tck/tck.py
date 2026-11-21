@@ -85,6 +85,8 @@ def subst(x, env):
 
 
 MEM = "~mem"   # the matrix's memory row: a case's lake on mem:// (its result must equal the local one's, paths aside)
+S3 = "~s3"     # the matrix's S3 row: a case's lake on s3:// (S3Mock in the runner, reached through the runtime's S3 settings)
+ROW = {"mem": MEM, "s3": S3}
 
 
 def jobs(cases, scratch, stores=None, storages=("local",)):
@@ -95,13 +97,14 @@ def jobs(cases, scratch, stores=None, storages=("local",)):
         for store in c.get("stores", ["delta", "iceberg", "files"]):
             if stores is not None and store not in stores:
                 continue
-            if storage == "mem" and (store not in ("delta", "iceberg") or c.get("local-only")):
-                continue                                             # the memory row: Delta and Iceberg tables in a memory store
-            cid = f"{name}@{store}" + (MEM if storage == "mem" else "")
+            if storage != "local" and (store not in ("delta", "iceberg") or c.get("local-only")):
+                continue                                             # the memory and S3 rows: Delta and Iceberg tables (files: local disk)
+            cid = f"{name}@{store}" + ROW.get(storage, "")
             work = scratch / cid.replace("/", "_").replace("~", "_")
             work.mkdir(parents=True)
             memory = f"tck{len(out)}" if storage == "mem" else ""
-            lake = f"mem://{memory}/lake" if memory else str(work / "lake")
+            remote = f"mem://{memory}" if memory else f"s3://tck/{len(out)}" if storage == "s3" else None
+            lake = f"{remote}/lake" if remote else str(work / "lake")
             env = {"work": str(work), "lake": lake, "in": str(work / "in"), "store": store}
             for n, spec in (c.get("inputs") or {}).items():
                 write_input(work / "in", n, spec)
@@ -130,7 +133,7 @@ def jobs(cases, scratch, stores=None, storages=("local",)):
             job = {"case": cid, "steps": steps, "dumps": dumps}
             if memory:
                 job["memory"] = memory
-            out.append((job, str(work), f"mem://{memory}" if memory else None))
+            out.append((job, str(work), remote, storage))
     return out
 
 
@@ -138,13 +141,20 @@ def product_classpath():
     """This repository's loader and its run-time class path, packaged here (never installed)."""
     java = ROOT / "java"
     env = dict(os.environ, JAVA_HOME=JAVA_HOME)
-    subprocess.run(["./mvnw", "-q", "-o", "package", "dependency:build-classpath", "-DskipTests", "-pl", "lake-load,lake-memory", "-am",
+    subprocess.run(["./mvnw", "-q", "-o", "package", "dependency:build-classpath", "-DskipTests", "-pl", "lake-load,lake-memory,lake-tck", "-am",
                     "-Dmdep.outputFile=target/tck-classpath.txt", "-Dmdep.includeScope=runtime"], cwd=java, env=env, check=True)
-    cp = []
-    for m in ("lake-load", "lake-memory"):
-        cp.append(str(next(j for j in sorted((java / m / "target").glob(m + "-*.jar")) if not j.name.endswith("-tests.jar"))))
-        cp += [p for p in (java / m / "target" / "tck-classpath.txt").read_text().strip().split(os.pathsep) if not p.endswith("-tests.jar")]
-    return os.pathsep.join(dict.fromkeys(cp))
+    return os.pathsep.join(dict.fromkeys(module_cp(java, "lake-load") + module_cp(java, "lake-memory")))
+
+
+def s3_classpath():
+    """The S3 row's addition: lake-tck (the S3 simulator, S3Mock, test support only), packaged with the rest by product_classpath()."""
+    return os.pathsep.join(module_cp(ROOT / "java", "lake-tck"))
+
+
+def module_cp(java, m):
+    jar = next(j for j in sorted((java / m / "target").glob(m + "-*.jar")) if not j.name.endswith("-tests.jar"))
+    return [str(jar)] + [p for p in (java / m / "target" / "tck-classpath.txt").read_text().strip().split(os.pathsep)
+                         if not p.endswith("-tests.jar")]
 
 
 def main(argv=None):
@@ -153,7 +163,8 @@ def main(argv=None):
     ap.add_argument("--classpath-file", help="the class path to run over (default: this repository's built modules)")
     ap.add_argument("--runner", default=str(ROOT / "tools" / "tck" / "TckRunner.java"))
     ap.add_argument("--only", help="run the cases whose name starts with this")
-    ap.add_argument("--storages", default="local,mem", help="local, mem or both (the reference: local; the host's kit has no memory row)")
+    ap.add_argument("--storages", default="local,mem,s3",
+                    help="local, mem, s3 (comma separated; the reference: local; the host's kit has no memory or S3 row)")
     ap.add_argument("--stores", help="run these stores only (comma separated; the reference: delta,iceberg); default every store a case names")
     a = ap.parse_args(argv)
     cases = sorted(CASES.rglob("*.yaml"))
@@ -163,25 +174,36 @@ def main(argv=None):
     scratch = Path(tempfile.mkdtemp(prefix="lake-tck-", dir=os.environ.get("LAKE_TCK_TMP")))   # the caller's scratch folder
     try:
         js = jobs(cases, scratch, set(a.stores.split(",")) if a.stores else None, a.storages.split(","))
-        jf, rf = scratch / "jobs.jsonl", scratch / "results.jsonl"
-        jf.write_text("".join(json.dumps(j) + "\n" for j, _, _ in js), encoding="utf-8")
         java = str(Path(JAVA_HOME) / "bin" / "java")
-        log = scratch / "runner.log"
-        with open(log, "w") as lf:
-            p = subprocess.run([java, "-Xmx2g", f"-Djava.io.tmpdir={scratch}", "-cp", cp, a.runner, str(jf), str(rf)], cwd=scratch,
-                               stdout=lf, stderr=subprocess.STDOUT)
-        if p.returncode != 0:
-            print("the runner failed:\n" + log.read_text()[-4000:], file=sys.stderr)
-            return 1
-        works = {j["case"]: (w, m) for j, w, m in js}
+        results = []
+        # one runner for the local and memory rows; the S3 row in its own, with the simulator's class path (never on the others')
+        for group in ("plain", "s3"):
+            mine = [j for j in js if (j[3] == "s3") == (group == "s3")]
+            if not mine:
+                continue
+            jf, rf, log = scratch / f"jobs-{group}.jsonl", scratch / f"results-{group}.jsonl", scratch / f"runner-{group}.log"
+            jf.write_text("".join(json.dumps(j) + "\n" for j, _, _, _ in mine), encoding="utf-8")
+            extra = []
+            run_cp = cp
+            if group == "s3":
+                run_cp = cp + os.pathsep + s3_classpath()
+                extra = [f"-Dtck.s3={scratch / 's3mock'}"]
+            with open(log, "w") as lf:
+                p = subprocess.run([java, "-Xmx2g", f"-Djava.io.tmpdir={scratch}"] + extra + ["-cp", run_cp, a.runner, str(jf), str(rf)],
+                                   cwd=scratch, stdout=lf, stderr=subprocess.STDOUT)
+            if p.returncode != 0:
+                print(f"the runner ({group}) failed:\n" + log.read_text()[-4000:], file=sys.stderr)
+                return 1
+            results += rf.read_text(encoding="utf-8").splitlines()
+        works = {j["case"]: (w, m) for j, w, m, _ in js}
         lines = {}
-        for l in rf.read_text(encoding="utf-8").splitlines():
+        for l in results:
             r = json.loads(l)
             text = json.dumps(r, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-            work, mem = works[r["case"]]
+            work, remote = works[r["case"]]
             text = text.replace(work, "${work}").replace(str(scratch), "${tmp}")
-            if mem:
-                text = text.replace(mem, "${work}")                  # a memory lake's root reads as the local one's
+            if remote:
+                text = text.replace(remote, "${work}")               # a memory or S3 lake's root reads as the local one's
             lines[r["case"]] = text
         Path(a.out).write_text("".join(lines[k] + "\n" for k in sorted(lines)), encoding="utf-8")
         bad = [k for k in sorted(lines) if json.loads(lines[k])["status"] != "ok"]
@@ -189,7 +211,6 @@ def main(argv=None):
         return 0
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
-
 
 if __name__ == "__main__":
     sys.exit(main())

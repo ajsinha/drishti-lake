@@ -66,10 +66,20 @@ public final class LakeOptions {
     public static final String ARCHIVE_MAX_RATIO = "lake.archive.max-ratio";
     public static final String ARCHIVE_MAX_MEMBERS = "lake.archive.max-members";
 
+    /**
+     * The S3 store a table on {@code s3://} is reached at when a call names none ({@code s3.endpoint}, {@code s3.region},
+     * {@code s3.path-style}, {@code s3.read-block-kb}): undo, retention, check and the readers use them as the loader does its
+     * {@code storage-options}; credentials come from the AWS default chain, never from options.
+     */
+    public static final String S3_ENDPOINT = "lake.s3.endpoint";
+    public static final String S3_REGION = "lake.s3.region";
+    public static final String S3_PATH_STYLE = "lake.s3.path-style";
+    public static final String S3_READ_BLOCK_KB = "lake.s3.read-block-kb";
+
     /** Every key above (a named lake's settings, {@code lake.<name>.*}, are not options). */
     private static final java.util.Set<String> KEYS = java.util.Set.of(HOME, CONFIG_DIR, DATA_DIR, CONNECTORS_DIR, LAKES_DIR, TMP_DIR,
             ROW_GROUP_KB, ROW_GROUP_MB, PAGE_KB, PAGE_INDEX, FOOTER_CACHE_MB, DELETE_CACHE_ROWS, MANIFEST_CACHE_BYTES, LOADER_TRACE,
-            ARCHIVE_MAX_MB, ARCHIVE_MAX_RATIO, ARCHIVE_MAX_MEMBERS, "lake.settings.file", "lake.repo.root", "lake.module.root");
+            ARCHIVE_MAX_MB, ARCHIVE_MAX_RATIO, ARCHIVE_MAX_MEMBERS, S3_ENDPOINT, S3_REGION, S3_PATH_STYLE, S3_READ_BLOCK_KB, "lake.settings.file", "lake.repo.root", "lake.module.root");
 
     /** Whether a key is one of the product's options (not a named lake's setting). */
     public static boolean isOption(String key) {
@@ -172,6 +182,18 @@ public final class LakeOptions {
     /** Whether a failed load prints its stack trace. */
     public boolean loaderTrace() {
         return Boolean.parseBoolean(value(LOADER_TRACE));
+    }
+
+    /** The S3 settings these options give ({@code s3.endpoint}, ... from {@code lake.s3.*}), only those set; a call's own win over them. */
+    public Map<String, String> s3() {
+        Map<String, String> out = new java.util.TreeMap<>();
+        for (String k : java.util.List.of(S3_ENDPOINT, S3_REGION, S3_PATH_STYLE, S3_READ_BLOCK_KB)) {
+            String v = value(k);
+            if (v != null) {
+                out.put(k.substring("lake.".length()), v);
+            }
+        }
+        return out;
     }
 
     /** These options as a lookup of the archive caps by key (null when unset). */
