@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
 # from: LakeLoadTest (flatten, the file layout, the loader's resources): two flattened fields from a list of objects, the layout's
-# sort, sizes and codecs, the readers, queue and sort buffer set; every store gives the same rows. Not here: partition-by beside
-# the date, which Iceberg refuses (a parity gap found 2026-11-21; its case comes with the fix)
+# sort, sizes and codecs, the readers, queue and sort buffer set; every store gives the same rows. Partition-by beside the date:
+# layout/partition-by-beside-the-date
 inputs:
   day/pv.2026-10-27.jsonl: {pv: {n: 60, scenarios: 4, seed: 7}}
 config: |

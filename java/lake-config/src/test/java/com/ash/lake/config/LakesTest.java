@@ -125,7 +125,6 @@ class LakesTest {
         assertRefused("lake: main\nformat: parquet\nroot: /x\n", "delta or iceberg");
         assertRefused("lake: main\nroot: s3://b\nstorage:\n  secret-key: abc\n", "a secret is never written");
         assertRefused("lake: other\nroot: /x\n", "differs from the file's name");
-        assertRefused("lake: main\nformat: iceberg\nroot: /x\ntables:\n  t.k:\n    partition-by: [A]\n", "partition-by is Delta's");
         assertRefused("lake: main\nroot: mem://feeds\n", "memory.max-mb");
         assertRefused("lake: main\nroot: s3://${NOT_SET}/x\n", "NOT_SET is not set");
         assertRefused("lake: main\nroot: /x\ntables:\n  nodot: {}\n", "<domain>.<kind>");

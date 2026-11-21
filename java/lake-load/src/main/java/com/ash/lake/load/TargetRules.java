@@ -87,8 +87,8 @@ final class TargetRules {
             case 't' -> Integer.valueOf(epochDay);
             case 'p' -> {
                 String v = r.partition(src.index());
-                if (v == null) {
-                    yield null;
+                if (v == null || v.isEmpty()) {
+                    yield null;                                  // empty is null, as Delta's partition values and the file's tuple
                 }
                 yield v.getBytes(StandardCharsets.UTF_8);
             }

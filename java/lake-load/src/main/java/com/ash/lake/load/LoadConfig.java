@@ -326,7 +326,8 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         if (sharing.size() < 2) {
             return src;
         }
-        List<String> columns = (format.equals("iceberg") ? src.promote() : src.partitionBy()).stream().map(RowPlan::column).toList();
+        List<String> columns = (format.equals("iceberg") ? java.util.stream.Stream.concat(src.partitionBy().stream(), src.promote().stream()).toList()
+                : src.partitionBy()).stream().map(RowPlan::column).toList();
         Map<String, String> slice = TargetRules.slice(src.set(), columns);
         if (slice.isEmpty() && !LakeTable.APPEND.equals(loadMode)) {
             throw new IllegalArgumentException("the table of connector " + connector + " is shared by " + String.join(", ", sharing.stream().sorted().toList())
@@ -506,10 +507,6 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         String batchId = r.text(t, "batch-id", null);
         if (batchId != null && batchId.isBlank()) {
             batchId = null;
-        }
-        if (tf.equals("iceberg") && !src.partitionBy().isEmpty()) {
-            throw new IllegalArgumentException("source.partition-by is Delta's: an Iceberg table of the layout is partitioned by business date alone "
-                    + "(keep the fields as promote: columns)");
         }
         src = withSlice(rt, src, packDir, r.text(s, "connector", null), r.text(t, "kind", null), r.text(t, "table", null), tf, loadMode);
         Map<String, String> targetStorage =t.has("storage-options") ? storage(r, t.path("storage-options"), "target.storage-options") : sourceStorage;

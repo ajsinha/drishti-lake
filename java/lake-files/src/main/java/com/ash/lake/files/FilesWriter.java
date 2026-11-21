@@ -161,7 +161,7 @@ final class FilesWriter implements TableWriter {
             Column c = columns.get(i);
             int k = index[i];
             Object v = switch (kind[i]) {
-                case 'p' -> row.partition(k);
+                case 'p' -> row.partition(k) == null || row.partition(k).isEmpty() ? null : row.partition(k);   // empty is null, as Delta's
                 case 'v' -> vector(row.vector(k));
                 case 'l' -> text(row.loadId());
                 case 's' -> text(row.sourceFile());

@@ -283,6 +283,59 @@ class IcebergSpecInteropTest {
         assertThat(got).containsExactlyElementsOf(want);
     }
 
+    /**
+     * A layout table partitioned by the business date and then a partition-by field (READ_API.md section 5): the layout's writer fans a
+     * day's sorted rows out by the field's value (an empty or missing value is the null partition); the Apache library reads every row
+     * with its partition values, and the files' tuples are the rows' values.
+     */
+    @Test
+    void aLayoutTablePartitionedByTheDateAndAFieldReadsInTheLibrary(@TempDir Path root) throws Exception {
+        var cols = List.of(com.ash.lake.iceberg.types.NestedField.required(1, "id", com.ash.lake.iceberg.types.Type.Primitive.STRING),
+                com.ash.lake.iceberg.types.NestedField.optional(2, "doc", com.ash.lake.iceberg.types.Type.Primitive.STRING),
+                com.ash.lake.iceberg.types.NestedField.required(3, "business_date", com.ash.lake.iceberg.types.Type.Primitive.DATE),
+                com.ash.lake.iceberg.types.NestedField.optional(4, "LEGAL_ENTITY", com.ash.lake.iceberg.types.Type.Primitive.STRING),
+                com.ash.lake.iceberg.types.NestedField.optional(5, "BASE_PV", com.ash.lake.iceberg.types.Type.Primitive.DOUBLE));
+        var spec = new com.ash.lake.iceberg.meta.PartitionSpec(0, List.of(
+                new com.ash.lake.iceberg.meta.PartitionSpec.Field(3, 1000, "business_date", com.ash.lake.iceberg.meta.Transform.Identity.INSTANCE),
+                new com.ash.lake.iceberg.meta.PartitionSpec.Field(4, 1001, "LEGAL_ENTITY", com.ash.lake.iceberg.meta.Transform.Identity.INSTANCE)));
+        String[] entities = {"LE-NY", "LE LDN/1", "", null};
+        java.time.LocalDate day = java.time.LocalDate.parse("2026-10-27");
+        try (var c = com.ash.lake.iceberg.catalog.Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Map.of("root", root.toString(), "domain", "x"))) {
+            var t = c.create("t", new com.ash.lake.iceberg.types.Schema(0, cols), spec,
+                    new com.ash.lake.iceberg.meta.SortOrder(1, List.of(new com.ash.lake.iceberg.meta.SortOrder.Field(1,
+                            com.ash.lake.iceberg.meta.Transform.Identity.INSTANCE, true, true))), Map.of("format-version", "2"));
+            List<IcebergLayout.Row> rows = new java.util.ArrayList<>();
+            java.util.Set<String> want = new java.util.HashSet<>();
+            for (int i = 0; i < 40; i++) {
+                String e = entities[i % entities.length];
+                Map<String, Object> v = new java.util.HashMap<>();
+                v.put("LEGAL_ENTITY", e);
+                v.put("BASE_PV", i * 1.5);
+                String id = String.format("P-%03d", i);
+                rows.add(new IcebergLayout.Row(id, "{\"id\":\"" + id + "\"}", v));
+                want.add(id + "|" + (e == null || e.isEmpty() ? null : e) + "|" + i * 1.5 + "|" + day);
+            }
+            var files = NativeLayout.writeDay(t, day, rows.iterator(), 7);
+            assertThat(files).hasSizeGreaterThanOrEqualTo(entities.length - 1);
+            for (var f : files) {
+                assertThat(f.partition()).hasSize(2);
+            }
+            NativeLayout.commitDays(t, Map.of(day, files));
+            Table lib = new HadoopTables(new Configuration()).load(t.metadata().location());
+            assertThat(lib.spec().fields()).hasSize(2);
+            java.util.Set<String> got = new java.util.HashSet<>();
+            try (CloseableIterable<Record> read = IcebergGenerics.read(lib).build()) {
+                read.forEach(r -> got.add(r.getField("id") + "|" + r.getField("LEGAL_ENTITY") + "|" + r.getField("BASE_PV") + "|" + r.getField("business_date")));
+            }
+            assertThat(got).isEqualTo(want);
+            java.util.Set<String> pruned = new java.util.HashSet<>();
+            try (CloseableIterable<Record> read = IcebergGenerics.read(lib).where(org.apache.iceberg.expressions.Expressions.equal("LEGAL_ENTITY", "LE-NY")).build()) {
+                read.forEach(r -> pruned.add(String.valueOf(r.getField("LEGAL_ENTITY"))));
+            }
+            assertThat(pruned).containsExactly("LE-NY");
+        }
+    }
+
     /** The other direction: Drishti writes through iceberg-core with its own FileIO and Parquet writer; the Apache library reads every partition. */
     @Test
     void drishtisTableWithEverySpecialPartitionValueReadsInTheLibrary(@TempDir Path root) throws Exception {
@@ -381,7 +434,7 @@ class IcebergSpecInteropTest {
         try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Map.of("root", root.toString(), "domain", "desk"))) {
             com.ash.lake.iceberg.Table d = c.load("trades").orElseThrow();
             assertThatThrownBy(() -> NativeLayout.writeDay(d, LocalDate.of(2026, 11, 6), Collections.emptyIterator(), 1000))
-                    .hasMessageContaining("bucket[8]").hasMessageContaining("partitioned by business_date alone");
+                    .hasMessageContaining("bucket[8]").hasMessageContaining("then by identity on the partition-by fields");
         }
     }
 }

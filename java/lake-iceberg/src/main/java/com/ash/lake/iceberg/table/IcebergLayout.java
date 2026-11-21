@@ -70,4 +70,31 @@ public final class IcebergLayout {
         }
         return out;
     }
+
+    /**
+     * The index of the {@code business_date} identity field in {@code spec}. The layout's spec is that field, then an identity field per
+     * {@code partition-by} field on a text column (READ_API.md section 5); a table another engine re-partitioned otherwise (another
+     * transform, no date) is refused: a file's partition tuple must hold every field's value, and only these are known to the writers.
+     */
+    public static int dateIndex(com.ash.lake.iceberg.meta.PartitionSpec spec, com.ash.lake.iceberg.types.Schema schema, String table) {
+        com.ash.lake.iceberg.types.NestedField date = schema.field(DATE);
+        int found = -1;
+        for (int i = 0; i < spec.fields().size(); i++) {
+            com.ash.lake.iceberg.meta.PartitionSpec.Field f = spec.fields().get(i);
+            com.ash.lake.iceberg.types.NestedField src = schema.field(f.sourceId());
+            boolean identity = f.transform() instanceof com.ash.lake.iceberg.meta.Transform.Identity;
+            if (found < 0 && date != null && f.sourceId() == date.id() && identity) {
+                found = i;
+            } else if (!(f.transform() instanceof com.ash.lake.iceberg.meta.Transform.Void)
+                    && !(identity && src != null && com.ash.lake.iceberg.types.Type.Primitive.STRING.equals(src.type()))) {
+                throw new IllegalStateException(table + " is not in the layout: its partition spec " + spec.specId() + " has the field '" + f.name()
+                        + "' (" + f.transform() + ") beside the identity partition on " + DATE + "; the layout's tables are partitioned by " + DATE
+                        + ", then by identity on the partition-by fields (write this table again so, or restore its spec)");
+            }
+        }
+        if (found < 0) {
+            throw new IllegalStateException(table + " is not in the layout: no identity partition on " + DATE);
+        }
+        return found;
+    }
 }

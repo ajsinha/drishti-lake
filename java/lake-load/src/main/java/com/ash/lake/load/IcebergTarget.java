@@ -66,6 +66,8 @@ final class IcebergTarget implements TableWriter {
     private Source[] sources;
     private Map<String, String> options;
     private int dateIndex;
+    /** Per field of the table's spec: the index of its partition-by field in the load's partition values, -1 for the date. */
+    private int[] partIndex;
     private Integer sortOrderId;
     private final List<String> leftOut = new ArrayList<>();
 
@@ -112,7 +114,13 @@ final class IcebergTarget implements TableWriter {
                 int id = next++;
                 fields.add(NestedField.optional(id, v, new Type.ListType(next++, false, Type.Primitive.DOUBLE)));
             }
-            PartitionSpec spec = new PartitionSpec(0, List.of(new PartitionSpec.Field(3, 1000, "business_date", Transform.Identity.INSTANCE)));
+            // the business date, then an identity field per partition-by field in the order given (READ_API.md section 5)
+            List<PartitionSpec.Field> parts = new ArrayList<>(List.of(new PartitionSpec.Field(3, 1000, "business_date", Transform.Identity.INSTANCE)));
+            for (String p : this.spec.partition()) {
+                NestedField src = fields.stream().filter(f -> f.name().equals(p)).findFirst().orElseThrow();
+                parts.add(new PartitionSpec.Field(src.id(), 1000 + parts.size(), p, Transform.Identity.INSTANCE));
+            }
+            PartitionSpec spec = new PartitionSpec(0, parts);
             SortOrder order = new SortOrder(1, List.of(new SortOrder.Field(1, Transform.Identity.INSTANCE, true, true)));
             try {
                 table = catalog.create(name, new Schema(0, fields), spec, order, properties());
@@ -142,6 +150,7 @@ final class IcebergTarget implements TableWriter {
         schema = table.metadata().schema();
         sources = TargetRules.sources(schema, spec);
         dateIndex = dateIndex(table);
+        partIndex = partIndex(table, spec.partition());
         sortOrderId = spec.sortedById() ? table.metadata().sortOrder().orderId() : 0;
         List<String> listCols = new ArrayList<>();
         for (NestedField f : schema.columns()) {
@@ -175,24 +184,31 @@ final class IcebergTarget implements TableWriter {
     }
 
     private static int dateIndex(Table t) {
+        return com.ash.lake.iceberg.table.IcebergLayout.dateIndex(t.metadata().spec(), t.metadata().schema(), t.name());
+    }
+
+    /**
+     * Where each field of the table's spec takes its value from: the load's partition-by fields must be the table's identity fields
+     * beside the date, the same and in the same order (no spec evolution), as Delta's partition columns must be the table's.
+     */
+    private static int[] partIndex(Table t, List<String> partitionBy) {
         PartitionSpec spec = t.metadata().spec();
-        NestedField date = t.metadata().schema().field("business_date");
-        int found = -1;
-        for (int i = 0; i < spec.fields().size(); i++) {
+        int[] out = new int[spec.fields().size()];
+        List<String> have = new ArrayList<>();
+        for (int i = 0; i < out.length; i++) {
             PartitionSpec.Field f = spec.fields().get(i);
-            if (found < 0 && date != null && f.sourceId() == date.id() && f.transform() instanceof Transform.Identity) {
-                found = i;
-            } else if (!(f.transform() instanceof Transform.Void)) {
-                // every file's partition tuple must hold each field's value (the Iceberg spec); only the date's is known here
-                throw new IllegalStateException(t.name() + " is not in the layout: its partition spec " + spec.specId() + " has the field '" + f.name()
-                        + "' (" + f.transform() + ") beside the identity partition on business_date; this writer writes only tables partitioned by "
-                        + "business_date alone (write this table again partitioned by business_date alone, or restore its spec)");
+            NestedField src = t.metadata().schema().field(f.sourceId());
+            String col = src == null ? f.name() : src.name();
+            out[i] = col.equals("business_date") ? -1 : partitionBy.indexOf(col);
+            if (!col.equals("business_date")) {
+                have.add(col);
             }
         }
-        if (found < 0) {
-            throw new IllegalStateException(t.name() + " is not in the layout: no identity partition on business_date");
+        if (!have.equals(partitionBy)) {
+            throw new IllegalStateException(t.name() + " is partitioned by " + have + " beside business_date, this load by " + partitionBy
+                    + " (give the table's partition-by, or write a new table)");
         }
-        return found;
+        return out;
     }
 
     private LocalDate dateOf(DataFile f) {
@@ -214,8 +230,18 @@ final class IcebergTarget implements TableWriter {
     public FileOut newFile(LocalDate date, String[] partitionValues, String fileName) throws IOException {
         PartitionSpec spec = table.metadata().spec();
         Object[] partition = new Object[spec.fields().size()];
-        partition[dateIndex] = (int) date.toEpochDay();
-        String path = table.metadata().location().replaceAll("/+$", "") + "/data/business_date=" + date + "/" + fileName;
+        StringBuilder dir = new StringBuilder(table.metadata().location().replaceAll("/+$", "")).append("/data/business_date=").append(date);
+        for (int i = 0; i < partition.length; i++) {
+            if (i == dateIndex) {
+                partition[i] = (int) date.toEpochDay();
+            } else {
+                String v = partitionValues[partIndex[i]];
+                partition[i] = v == null || v.isEmpty() ? null : v;                       // empty is null, as Delta's partition values
+                dir.append('/').append(spec.fields().get(i).name()).append('=').append(partition[i] == null ? "null"
+                        : java.net.URLEncoder.encode(v, java.nio.charset.StandardCharsets.UTF_8));
+            }
+        }
+        String path = dir + "/" + fileName;
         ParquetDataWriter w = new ParquetDataWriter(table.io(), path, schema, options, spec.specId(), partition, sortOrderId);
         return new ParquetOut(w, schema, sources, date, true, path, partitionValues, x -> {
             try {

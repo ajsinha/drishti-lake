@@ -44,4 +44,3 @@ ready:pack
 ready:rows
 ready:sha256
 ready:table
-config:source.partition-by

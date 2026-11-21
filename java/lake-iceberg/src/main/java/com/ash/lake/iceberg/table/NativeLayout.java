@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -156,24 +157,7 @@ final class NativeLayout {
 
     /** The index of the {@code business_date} identity field in the table's current spec. */
     static int dateIndex(PartitionSpec spec, Schema schema) {
-        NestedField date = schema.field(IcebergLayout.DATE);
-        int found = -1;
-        for (int i = 0; i < spec.fields().size(); i++) {
-            PartitionSpec.Field f = spec.fields().get(i);
-            if (found < 0 && date != null && f.sourceId() == date.id() && f.transform() instanceof Transform.Identity) {
-                found = i;
-            } else if (!(f.transform() instanceof Transform.Void)) {
-                // a file's partition tuple must hold every field's value (the spec): this writer computes only the date's, so a
-                // table another engine re-partitioned is refused rather than given files whose other values read as null
-                throw new IllegalStateException("not in the layout: the partition spec " + spec.specId() + " has the field '" + f.name() + "' ("
-                        + f.transform() + ") beside the identity partition on " + IcebergLayout.DATE + "; this writer writes only tables partitioned by "
-                        + IcebergLayout.DATE + " alone (restore its spec)");
-            }
-        }
-        if (found < 0) {
-            throw new IllegalStateException("not in the layout: no identity partition on " + IcebergLayout.DATE);
-        }
-        return found;
+        return IcebergLayout.dateIndex(spec, schema, "the table");
     }
 
     /** The business date of a data or delete file (null for another spec without the date). */
@@ -197,22 +181,17 @@ final class NativeLayout {
         Schema schema = table.metadata().schema();
         PartitionSpec spec = table.metadata().spec();
         int dateIndex = dateIndex(spec, schema);
-        Object[] partition = new Object[spec.fields().size()];
-        partition[dateIndex] = (int) date.toEpochDay();
         List<NestedField> cols = schema.columns();
         Map<String, String> props = table.metadata().properties();
         int sortOrder = table.metadata().sortOrder().orderId();
-        String dir = table.metadata().location().replaceAll("/+$", "") + "/data/" + IcebergLayout.DATE + "=" + date + "/";
+        String base = table.metadata().location().replaceAll("/+$", "") + "/data/" + IcebergLayout.DATE + "=" + date;
+        // one open file per partition tuple (the date, then the partition-by fields' values), each its own run of the sorted rows
+        Map<List<Object>, ParquetDataWriter> open = new LinkedHashMap<>();
+        Map<List<Object>, long[]> counts = new java.util.HashMap<>();
         List<DataFile> files = new ArrayList<>();
-        ParquetDataWriter w = null;
-        long rows = 0;
         try {
             while (sorted.hasNext()) {
                 Row row = sorted.next();
-                if (w == null) {
-                    String name = date + "-" + String.format("%05d", files.size()) + "-" + UUID.randomUUID() + ".parquet";
-                    w = new ParquetDataWriter(table.io(), dir + name, schema, props, spec.specId(), partition, sortOrder);
-                }
                 Object[] values = new Object[cols.size()];
                 for (int i = 0; i < cols.size(); i++) {
                     NestedField f = cols.get(i);
@@ -226,13 +205,35 @@ final class NativeLayout {
                         }
                     };
                 }
+                Object[] partition = new Object[spec.fields().size()];
+                StringBuilder dir = new StringBuilder(base);
+                for (int i = 0; i < partition.length; i++) {
+                    if (i == dateIndex) {
+                        partition[i] = (int) date.toEpochDay();
+                    } else {
+                        int at = cols.indexOf(schema.field(spec.fields().get(i).sourceId()));
+                        Object v = at < 0 ? null : values[at];
+                        partition[i] = v == null || v.toString().isEmpty() ? null : v.toString();
+                        if (at >= 0) {
+                            values[at] = partition[i];                     // empty is null, in the tuple and the column alike
+                        }
+                        dir.append('/').append(spec.fields().get(i).name()).append('=').append(partition[i] == null ? "null"
+                                : java.net.URLEncoder.encode(partition[i].toString(), java.nio.charset.StandardCharsets.UTF_8));
+                    }
+                }
+                List<Object> key = Arrays.asList(partition);
+                ParquetDataWriter w = open.get(key);
+                if (w == null) {
+                    String name = date + "-" + String.format("%05d", files.size() + open.size()) + "-" + UUID.randomUUID() + ".parquet";
+                    w = new ParquetDataWriter(table.io(), dir + "/" + name, schema, props, spec.specId(), partition, sortOrder);
+                    open.put(key, w);
+                }
                 w.write(values);
-                if (++rows % fileRows == 0) {
-                    files.add(w.finish());
-                    w = null;
+                if (++counts.computeIfAbsent(key, k -> new long[1])[0] % fileRows == 0) {
+                    files.add(open.remove(key).finish());
                 }
             }
-            if (w != null) {
+            for (ParquetDataWriter w : open.values()) {
                 files.add(w.finish());
             }
         } catch (IOException e) {

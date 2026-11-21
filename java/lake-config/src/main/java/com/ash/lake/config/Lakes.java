@@ -402,10 +402,6 @@ public final class Lakes {
         if (partition.size() > MAX_PARTITIONS) {
             throw new IllegalArgumentException(at + ".partition-by: at most " + MAX_PARTITIONS + " columns after business_date (got " + partition + ")");
         }
-        if (format.equals("iceberg") && !partition.isEmpty()) {
-            throw new IllegalArgumentException(at + ".partition-by is Delta's: an Iceberg table of the layout is partitioned by business date "
-                    + "alone (keep the fields as promote: columns)");
-        }
         String mode = v.text(pick.apply("load-mode"), LakeTable.REPLACE).toLowerCase(Locale.ROOT);
         if (!mode.equals(LakeTable.REPLACE) && !mode.equals(LakeTable.APPEND)) {
             throw new IllegalArgumentException(at + ".load-mode " + mode + ": replace (each business date of a load replaced, the default) or "

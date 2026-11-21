@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# source.partition-by beside the business date (READ_API.md section 5, P1): Delta's partition columns, Iceberg's identity fields after
+# the date, the files store's typed columns; the field is filled in the rows, the read API's columns and its vectors' texts; a replace
+# of one date takes out that date's files of every value and leaves the other date; every store gives the same rows
+inputs:
+  day/pv.2026-10-27.jsonl: {pv: {n: 40, scenarios: 3, seed: 11}}
+  day/pv.2026-10-28.jsonl: {pv: {n: 30, scenarios: 3, seed: 12, start: '2026-10-28'}}
+  again/pv.2026-10-27.jsonl: {pv: {n: 12, scenarios: 3, seed: 13}}
+configs:
+  main: |
+    source: {files: '${in}/day', id: POSITION_ID, partition-by: [LEGAL_ENTITY], promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  again: |
+    source: {files: '${in}/again', id: POSITION_ID, partition-by: [LEGAL_ENTITY], promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+steps:
+  - load: []
+  - store: [read-days, '${store}', '${lake}', risk, scenario-pv]
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'LEGAL_ENTITY:t', 'DESK:t', 'BASE_PV:n']
+  - store: [read-vectors, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', SCENARIO_PV, LEGAL_ENTITY, DESK]
+  - load: {config: again}
+  - store: [read-days, '${store}', '${lake}', risk, scenario-pv]
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'LEGAL_ENTITY:t', 'DESK:t']
