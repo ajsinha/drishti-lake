@@ -36,7 +36,7 @@ public enum Capability {
     DELETE_DATES,
     /** Undo one load by its load id ({@link TableStore#undo}). */
     UNDO,
-    /** Read the table as it was at an earlier commit. */
+    /** Read the table as it was at an earlier commit ({@link TableStore#versions}, {@link ScanRequest#asOf}). */
     TIME_TRAVEL,
     /** A reader never sees a date half written: one commit per date, all or nothing. */
     ATOMIC_COMMIT,

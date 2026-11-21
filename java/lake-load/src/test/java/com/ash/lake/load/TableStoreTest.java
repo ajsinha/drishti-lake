@@ -117,12 +117,26 @@ class TableStoreTest {
         assertThat((long) some.size()).isLessThan(dates.get(D1));
         assertThatThrownBy(() -> store.scan(rt, t, ScanRequest.all().columns("NOPE"))).isInstanceOf(IllegalArgumentException.class);
 
+        List<com.ash.lake.spi.TableVersion> before = store.versions(rt, t);
+        assertThat(before).isNotEmpty();
+        assertThat(store.versions(rt, new TableRef(t.root(), "risk", "absent"))).isEmpty();
+
         List<DateChange> dry = store.deleteDates(rt, t, Set.of(D1), true);
         assertThat(dry).extracting(DateChange::date).containsExactly(D1);
         assertThat(store.dates(rt, t).keySet()).containsExactly(D1, D2);
         store.deleteDates(rt, t, Set.of(D1), false);
         assertThat(store.dates(rt, t).keySet()).containsExactly(D2);
         assertThat(all(store.scan(rt, t, ScanRequest.all().dates(D1)))).isEmpty();
+
+        com.ash.lake.spi.TableVersion loaded = before.get(before.size() - 1);    // time travel: the rows before the delete, by version and time
+        assertThat(store.versions(rt, t)).hasSizeGreaterThan(before.size()).startsWith(before.toArray(new com.ash.lake.spi.TableVersion[0]));
+        assertThat(all(store.scan(rt, t, ScanRequest.all().asOf(com.ash.lake.spi.AsOf.version(loaded.version()))))).hasSize(rows.size());
+        assertThat(all(store.scan(rt, t, ScanRequest.all().dates(D1).asOf(com.ash.lake.spi.AsOf.time(loaded.committed())))))
+                .hasSize(dates.get(D1).intValue());
+        assertThatThrownBy(() -> store.scan(rt, t, ScanRequest.all().asOf(com.ash.lake.spi.AsOf.version(-1)))).isInstanceOf(IOException.class)
+                .hasMessageContaining("no version -1");
+        assertThatThrownBy(() -> store.scan(rt, t, ScanRequest.all().asOf(com.ash.lake.spi.AsOf.time(before.get(0).committed().minusSeconds(86400)))))
+                .isInstanceOf(IOException.class).hasMessageContaining("no version committed at or before");
 
         if (caps.supports(Capability.UNDO)) {
             String loadId = (String) all(store.scan(rt, t, ScanRequest.all().columns("_load_id"))).get(0).get(0);
@@ -205,6 +219,11 @@ class TableStoreTest {
         @Override
         public SortedMap<LocalDate, Long> dates(LakeRuntime rt, TableRef t) throws IOException {
             return d.dates(rt, t);
+        }
+
+        @Override
+        public List<com.ash.lake.spi.TableVersion> versions(LakeRuntime rt, TableRef t) throws IOException {
+            return d.versions(rt, t);
         }
 
         @Override

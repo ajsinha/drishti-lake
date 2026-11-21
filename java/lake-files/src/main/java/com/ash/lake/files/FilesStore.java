@@ -17,7 +17,7 @@ package com.ash.lake.files;
 
 import com.ash.lake.LakeRuntime;
 import com.ash.lake.spi.Capabilities;
-import com.ash.lake.spi.Capability;
+import com.ash.lake.spi.AsOf;
 import com.ash.lake.spi.Column;
 import com.ash.lake.spi.ColumnType;
 import com.ash.lake.spi.Columns;
@@ -27,11 +27,10 @@ import com.ash.lake.spi.RowScan;
 import com.ash.lake.spi.ScanRequest;
 import com.ash.lake.spi.TableRef;
 import com.ash.lake.spi.TableStore;
+import com.ash.lake.spi.TableVersion;
 import com.ash.lake.spi.TableWriter;
 import com.ash.lake.spi.WriteSpec;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -63,8 +62,7 @@ public final class FilesStore implements TableStore {
     public static final Columns BASE = Columns.of(List.of(new Column("id", ColumnType.STRING), new Column("business_date", ColumnType.DATE),
             new Column("doc", ColumnType.STRING)));
 
-    private static final Capabilities CAPABILITIES = Capabilities.allBut(
-            Capability.TIME_TRAVEL, "no operation of the store reads an earlier version yet (the log keeps every version)");
+    private static final Capabilities CAPABILITIES = Capabilities.all();
 
     private FilesStore() {
     }
@@ -161,9 +159,69 @@ public final class FilesStore implements TableStore {
         }
     }
 
+    /** The log's commits, oldest first: a commit's number and when it was committed (a table without a log: none). */
+    @Override
+    public List<TableVersion> versions(LakeRuntime runtime, TableRef table) throws IOException {
+        List<TableVersion> out = new ArrayList<>();
+        for (FilesLog.Commit c : new FilesLog(domainDir(table), table.table()).commits()) {
+            out.add(new TableVersion(c.version(), java.time.Instant.ofEpochMilli(c.at())));
+        }
+        return out;
+    }
+
     /**
-     * The rows of the request: each line's id, its day and its document. A line that cannot be read (not a JSON object, no id) is
-     * skipped, as the file connector skips it.
+     * The table's days as of {@code asOf}, oldest first, each read by {@link #readDay}: the day files (the newest version), or each date's
+     * content at the commit the log names (a date whose newest commit then removed it is absent).
+     */
+    private static SortedMap<LocalDate, Object> daysAsOf(TableRef table, AsOf asOf) throws IOException {
+        SortedMap<LocalDate, Object> out = new TreeMap<>();
+        if (asOf.latest()) {
+            out.putAll(days(table));
+            return out;
+        }
+        FilesLog log = new FilesLog(domainDir(table), table.table());
+        List<FilesLog.Commit> commits = log.commits();
+        List<TableVersion> versions = new ArrayList<>();
+        commits.forEach(c -> versions.add(new TableVersion(c.version(), java.time.Instant.ofEpochMilli(c.at()))));
+        TableVersion at = asOf.resolve(versions);
+        if (at == null) {
+            throw new IOException(asOf.missing(domainDir(table) + "/" + table.table()));
+        }
+        java.util.Set<LocalDate> dates = new java.util.TreeSet<>();
+        commits.forEach(c -> dates.add(c.date()));
+        for (LocalDate d : dates) {
+            FilesLog.Commit c = log.at(commits, d, at.version());
+            if (c != null && c.content() != null) {
+                out.put(d, log.lines(c));
+            }
+        }
+        return out;
+    }
+
+    /** A line of a day, read in order. */
+    private interface LineSink {
+        void line(String line) throws IOException;
+    }
+
+    /** Hands each line of a day to {@code sink}: its day file, read as a stream, or the lines a commit held. */
+    @SuppressWarnings("unchecked")
+    private static void readDay(Object day, LineSink sink) throws IOException {
+        if (day instanceof Path p) {
+            try (java.io.BufferedReader r = Files.newBufferedReader(p, StandardCharsets.UTF_8)) {
+                for (String line = r.readLine(); line != null; line = r.readLine()) {
+                    sink.line(line);
+                }
+            }
+            return;
+        }
+        for (String line : (List<String>) day) {
+            sink.line(line);
+        }
+    }
+
+    /**
+     * The rows of the request, of the version it names: each line's id, its day and its document. A line that cannot be read (not a JSON
+     * object, no id) is skipped, as the file connector skips it.
      */
     @Override
     public RowScan scan(LakeRuntime runtime, TableRef table, ScanRequest request) throws IOException {
@@ -174,37 +232,34 @@ public final class FilesStore implements TableStore {
             picks[i] = all.indexOf(out.get(i).name());
         }
         List<Row> rows = new ArrayList<>();
-        for (Map.Entry<LocalDate, Path> e : days(table).entrySet()) {
+        for (Map.Entry<LocalDate, Object> e : daysAsOf(table, request.asOf()).entrySet()) {
             if (!request.wants(e.getKey())) {
                 continue;
             }
-            try (InputStream in = Files.newInputStream(e.getValue());
-                 BufferedReader r = new BufferedReader(new java.io.InputStreamReader(in, StandardCharsets.UTF_8), 1 << 16)) {
-                String line;
-                while ((line = r.readLine()) != null) {
-                    if (line.isBlank()) {
-                        continue;
-                    }
-                    JsonlDay.Line l;
-                    try {
-                        l = JsonlDay.line(line.getBytes(StandardCharsets.UTF_8), "id", JsonlFormat.DEFAULT);
-                    } catch (IOException bad) {
-                        continue;
-                    }
-                    if (l.id() == null) {
-                        continue;
-                    }
-                    Row whole = new Row(all, values(all, l.id(), e.getKey(), new String(l.doc(), StandardCharsets.UTF_8), line));
-                    if (!request.where().test(whole)) {
-                        continue;
-                    }
-                    Object[] v = new Object[picks.length];
-                    for (int i = 0; i < picks.length; i++) {
-                        v[i] = whole.get(picks[i]);
-                    }
-                    rows.add(new Row(out, v));
+            LocalDate date = e.getKey();
+            readDay(e.getValue(), line -> {
+                if (line.isBlank()) {
+                    return;
                 }
-            }
+                JsonlDay.Line l;
+                try {
+                    l = JsonlDay.line(line.getBytes(StandardCharsets.UTF_8), "id", JsonlFormat.DEFAULT);
+                } catch (IOException bad) {
+                    return;
+                }
+                if (l.id() == null) {
+                    return;
+                }
+                Row whole = new Row(all, values(all, l.id(), date, new String(l.doc(), StandardCharsets.UTF_8), line));
+                if (!request.where().test(whole)) {
+                    return;
+                }
+                Object[] v = new Object[picks.length];
+                for (int i = 0; i < picks.length; i++) {
+                    v[i] = whole.get(picks[i]);
+                }
+                rows.add(new Row(out, v));
+            });
         }
         return RowScan.of(out, rows);
     }

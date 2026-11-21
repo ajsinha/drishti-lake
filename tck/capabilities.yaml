@@ -1,12 +1,10 @@
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
 # What each built-in store cannot do (design section 4, LK-8): the capability, the reason the store states, and the parity-kit case
 # that shows the refusal or the difference (none: no operation of the SPI asks for it yet; the matrix of L9 adds one).
+# Every gap is closed (2026-11-21): the three stores are feature-identical (owner rule, storage parity).
 # Equal to the stores' own declarations (StoreCapabilitiesTest); the list is reviewed and ONLY SHRINKS before v1.0.0.
 # The memory storage (mem://, lake-memory) is a storage, not a format: Delta and Iceberg tables in a memory store run every case as the
 # parity kit's memory row (<case>@<store>~mem), equal to the local results; it declares no gap.
 delta: {}
 iceberg: {}
-files:
-  TIME_TRAVEL:
-    reason: "no operation of the store reads an earlier version yet (the log keeps every version)"
-    case: none
+files: {}

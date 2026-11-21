@@ -17,6 +17,7 @@ package com.ash.lake.load;
 
 import com.ash.lake.LakeRuntime;
 import com.ash.lake.delta.write.LakeWriter;
+import com.ash.lake.spi.AsOf;
 import com.ash.lake.spi.Capabilities;
 import com.ash.lake.spi.Column;
 import com.ash.lake.spi.ColumnType;
@@ -26,6 +27,7 @@ import com.ash.lake.spi.RowScan;
 import com.ash.lake.spi.ScanRequest;
 import com.ash.lake.spi.TableRef;
 import com.ash.lake.spi.TableStore;
+import com.ash.lake.spi.TableVersion;
 import com.ash.lake.spi.TableWriter;
 import com.ash.lake.spi.WriteSpec;
 import io.delta.kernel.Scan;
@@ -101,6 +103,67 @@ public final class DeltaStore implements TableStore {
         }
     }
 
+    /**
+     * The snapshot {@code asOf} names, through the Kernel's snapshot at a version or a timestamp (a time at or after the newest commit
+     * reads the newest; a version the log no longer holds, or a time before the first commit, is refused).
+     */
+    private static Optional<Snapshot> snapshot(LakeRuntime runtime, TableRef t, AsOf asOf, Engine[] engine) throws IOException {
+        Optional<Snapshot> latest = snapshot(runtime, t, engine);
+        if (latest.isEmpty() || asOf.latest()) {
+            return latest;
+        }
+        Table table = Table.forPath(engine[0], t.location());
+        try {
+            if (asOf.version() != null) {
+                return asOf.version() == latest.get().getVersion() ? latest : Optional.of(table.getSnapshotAsOfVersion(engine[0], asOf.version()));
+            }
+            long ms = asOf.time().toEpochMilli();
+            return ms >= latest.get().getTimestamp(engine[0]) ? latest : Optional.of(table.getSnapshotAsOfTimestamp(engine[0], ms));
+        } catch (io.delta.kernel.exceptions.KernelException | IllegalArgumentException e) {
+            throw new IOException(asOf.missing(t.location()), e);
+        }
+    }
+
+    /**
+     * The versions the log holds, oldest first, with their commit times: the Kernel's commit range from the oldest version it still
+     * reads (0, else the newest checkpoint's) to the newest.
+     */
+    @Override
+    public List<TableVersion> versions(LakeRuntime runtime, TableRef table) throws IOException {
+        Engine[] e = new Engine[1];
+        Optional<Snapshot> latest = snapshot(runtime, table, e);
+        List<TableVersion> out = new ArrayList<>();
+        if (latest.isEmpty()) {
+            return out;
+        }
+        long end = latest.get().getVersion();
+        long checkpoint = latest.get().getLogSegment().getCheckpointVersionOpt().orElse(0L);
+        for (long start : new long[] {0, checkpoint}) {
+            try {
+                io.delta.kernel.CommitRange range = io.delta.kernel.TableManager.loadCommitRange(table.location(),
+                        io.delta.kernel.CommitRangeBuilder.CommitBoundary.atVersion(start))
+                        .withEndBoundary(io.delta.kernel.CommitRangeBuilder.CommitBoundary.atVersion(end)).build(e[0]);
+                try (CloseableIterator<io.delta.kernel.CommitActions> commits = range.getCommitActions(e[0],
+                        Set.of(io.delta.kernel.internal.DeltaLogActionUtils.DeltaAction.COMMITINFO))) {
+                    while (commits.hasNext()) {
+                        try (io.delta.kernel.CommitActions c = commits.next()) {
+                            out.add(new TableVersion(c.getVersion(), java.time.Instant.ofEpochMilli(c.getTimestamp())));
+                        } catch (IOException | RuntimeException x) {
+                            throw x;
+                        } catch (Exception x) {
+                            throw new IOException(x.getMessage(), x);
+                        }
+                    }
+                }
+                return out;
+            } catch (io.delta.kernel.exceptions.KernelException | IllegalArgumentException older) {
+                out.clear();                                    // the oldest commits are gone (log retention): from the checkpoint on
+            }
+        }
+        out.add(new TableVersion(end, java.time.Instant.ofEpochMilli(latest.get().getTimestamp(e[0]))));
+        return out;
+    }
+
     @Override
     public boolean exists(LakeRuntime runtime, TableRef table) {
         return snapshot(runtime, table, new Engine[1]).isPresent();
@@ -161,7 +224,7 @@ public final class DeltaStore implements TableStore {
     @Override
     public RowScan scan(LakeRuntime runtime, TableRef table, ScanRequest request) throws IOException {
         Engine[] e = new Engine[1];
-        Optional<Snapshot> found = snapshot(runtime, table, e);
+        Optional<Snapshot> found = snapshot(runtime, table, request.asOf(), e);
         if (found.isEmpty()) {
             return RowScan.of(Columns.of(List.of()), List.of());
         }

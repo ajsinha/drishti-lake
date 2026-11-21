@@ -46,11 +46,14 @@ final class FilesLog {
 
     static final ObjectMapper JSON = new ObjectMapper();
 
-    /** One commit: the version, the date, {@code replace|append|delete|undo|retention}, the load ids, the batch, the rows, the content file. */
-    record Commit(long version, LocalDate date, String op, List<String> loads, String batch, long rows, String content) {
+    /**
+     * One commit: the version, the date, {@code replace|append|delete|undo|retention}, the load ids, the batch, the rows, the content file
+     * and when it was committed (epoch milliseconds; 0 when the commit does not say, then the time of its file).
+     */
+    record Commit(long version, LocalDate date, String op, List<String> loads, String batch, long rows, String content, long at) {
 
         ObjectNode json() {
-            ObjectNode o = JSON.createObjectNode().put("version", version).put("date", date.toString()).put("op", op);
+            ObjectNode o = JSON.createObjectNode().put("version", version).put("date", date.toString()).put("op", op).put("at", at);
             ArrayNode l = o.putArray("loads");
             loads.forEach(l::add);
             if (batch != null) {
@@ -67,7 +70,8 @@ final class FilesLog {
             List<String> loads = new ArrayList<>();
             o.path("loads").forEach(n -> loads.add(n.asText()));
             return new Commit(o.path("version").asLong(), LocalDate.parse(o.path("date").asText()), o.path("op").asText(), List.copyOf(loads),
-                    o.hasNonNull("batch") ? o.get("batch").asText() : null, o.path("rows").asLong(), o.hasNonNull("content") ? o.get("content").asText() : null);
+                    o.hasNonNull("batch") ? o.get("batch").asText() : null, o.path("rows").asLong(), o.hasNonNull("content") ? o.get("content").asText() : null,
+                    o.path("at").asLong(0));
         }
     }
 
@@ -126,7 +130,9 @@ final class FilesLog {
         }
         try (Stream<Path> s = Files.list(dir)) {
             for (Path p : s.filter(p -> p.getFileName().toString().matches("\\d+\\.json")).toList()) {
-                out.add(Commit.of(JSON.readTree(p.toFile())));
+                Commit c = Commit.of(JSON.readTree(p.toFile()));
+                out.add(c.at() > 0 ? c : new Commit(c.version(), c.date(), c.op(), c.loads(), c.batch(), c.rows(), c.content(),
+                        Files.getLastModifiedTime(p).toMillis()));
             }
         }
         out.sort(java.util.Comparator.comparingLong(Commit::version));
@@ -164,7 +170,7 @@ final class FilesLog {
             if (content != null) {
                 Files.move(content, dir.resolve(name), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             }
-            Commit c = new Commit(n, date, op, List.copyOf(loads), batch, rows, name);
+            Commit c = new Commit(n, date, op, List.copyOf(loads), batch, rows, name, System.currentTimeMillis());
             try {
                 Files.write(dir.resolve(n + ".json"), JSON.writeValueAsBytes(c.json()), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             } catch (FileAlreadyExistsException taken) {                // another writer took the number: the content moves on with us

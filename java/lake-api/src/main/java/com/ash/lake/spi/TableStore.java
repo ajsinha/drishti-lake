@@ -47,7 +47,16 @@ public interface TableStore {
     /** The business dates the table holds, with their rows ({@code -1}: not stated without reading). */
     SortedMap<LocalDate, Long> dates(LakeRuntime runtime, TableRef table) throws IOException;
 
-    /** The rows the request names (an absent table: no rows). */
+    /**
+     * The table's versions a scan can read ({@link ScanRequest#asOf}), oldest first: the versions the store still holds (an absent table:
+     * none).
+     */
+    List<TableVersion> versions(LakeRuntime runtime, TableRef table) throws IOException;
+
+    /**
+     * The rows the request names, of the version it names (an absent table: no rows; a version the table does not hold: an
+     * {@link IOException} naming it).
+     */
     RowScan scan(LakeRuntime runtime, TableRef table, ScanRequest request) throws IOException;
 
     /** The loader's writer for one load. */

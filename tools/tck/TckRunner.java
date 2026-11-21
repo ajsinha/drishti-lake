@@ -314,6 +314,8 @@ public final class TckRunner {
                 case "undo" -> store.undo(RT, t, a[5], false);   // lake-only
                 case "delete" -> store.deleteDates(RT, t, java.util.Set.of(LocalDate.parse(a[5])), false);   // lake-only
                 case "dates" -> store.dates(RT, t);   // lake-only
+                case "versions" -> store.versions(RT, t).size() + " versions";   // lake-only
+                case "scan-at" -> scanAt(store, t, a[5], a.length > 6 && a[6].equals("time"));   // lake-only
                 default -> throw new IllegalArgumentException("unknown store op " + a[0]);   // lake-only
             };   // lake-only
             out.println(done);   // lake-only
@@ -322,6 +324,25 @@ public final class TckRunner {
             out.println(e.getMessage());   // lake-only
             return 1;   // lake-only
         }   // lake-only
+    }   // lake-only
+
+    /**   // lake-only
+     * Time travel through the SPI: the table as of its version at {@code index} in {@link com.ash.lake.spi.TableStore#versions} (a store's   // lake-only
+     * own numbers differ: Iceberg's are snapshot ids), by that version or by its commit time; a negative index names version {@code index}   // lake-only
+     * itself (none holds it). The rows' dates and ids, in order.   // lake-only
+     */   // lake-only
+    static String scanAt(com.ash.lake.spi.TableStore store, com.ash.lake.spi.TableRef t, String index, boolean byTime) throws java.io.IOException {   // lake-only
+        int i = Integer.parseInt(index);   // lake-only
+        var versions = store.versions(RT, t);   // lake-only
+        var asOf = i < 0 ? com.ash.lake.spi.AsOf.version(i) : byTime ? com.ash.lake.spi.AsOf.time(versions.get(i).committed())   // lake-only
+                : com.ash.lake.spi.AsOf.version(versions.get(i).version());   // lake-only
+        Map<String, List<String>> ids = new TreeMap<>();   // lake-only
+        try (var rows = store.scan(RT, t, com.ash.lake.spi.ScanRequest.all().columns("id", "business_date").asOf(asOf))) {   // lake-only
+            rows.forEachRemaining(r -> ids.computeIfAbsent(String.valueOf(r.get(1)), k -> new ArrayList<>()).add(String.valueOf(r.get(0))));   // lake-only
+        }   // lake-only
+        StringBuilder out = new StringBuilder();   // lake-only
+        ids.forEach((d, l) -> { java.util.Collections.sort(l); out.append(d).append(": ").append(l.size()).append(' ').append(l).append('\n'); });   // lake-only
+        return out.toString().strip();   // lake-only
     }   // lake-only
 
     /** A files table's rows through the files store. */   // lake-only

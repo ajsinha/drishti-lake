@@ -43,8 +43,8 @@ runtime to every call (`LakeLoad.run(runtime, ..)`, `DataLoadSettings`, `Catalog
 
 ## Next steps
 
-1. The files store's last gap, `TIME_TRAVEL` (an SPI read of an earlier version for all three stores, and its parity case); then
-   L9 to L14. Five gaps are closed (owner, 2026-11-21: Delta, Iceberg and files feature-identical): the files store keeps a log per table
+1. Every declared gap is closed: time travel (`TableStore.versions`, `ScanRequest.asOf`) on all three stores with its parity case
+   (`time-travel/versions-and-earlier-rows`); then L9 to L14. The files store's other five gaps are closed (owner, 2026-11-21: Delta, Iceberg and files feature-identical): the files store keeps a log per table
    (`<root>/<domain>/_log/<table>/`: `columns.json`, `<n>.json` per commit, `<n>.jsonl` the date's content at that version; the day file
    published from it), its lines carry the typed columns (promoted, `list<string>`, vectors, load columns; one rule with Delta's,
    `PromotedValues`), an append's batch is committed once, undo goes through the store (`LakeUndo` finds files tables), deletes and row

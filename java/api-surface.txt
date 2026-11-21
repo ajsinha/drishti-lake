@@ -76,6 +76,7 @@ class public final record com.ash.lake.inbox.ReadyCheck
 class public final record com.ash.lake.inbox.ReadyForm
 class public final record com.ash.lake.inbox.ReadyNote
 class public final record com.ash.lake.memory.MemoryLakeSettings
+class public final record com.ash.lake.spi.AsOf
 class public final record com.ash.lake.spi.Column
 class public final record com.ash.lake.spi.Columns
 class public final record com.ash.lake.spi.DateChange
@@ -83,6 +84,7 @@ class public final record com.ash.lake.spi.FileEntry
 class public final record com.ash.lake.spi.Row
 class public final record com.ash.lake.spi.ScanRequest
 class public final record com.ash.lake.spi.TableRef
+class public final record com.ash.lake.spi.TableVersion
 class public final record com.ash.lake.spi.WriteSpec
 class public static final class com.ash.lake.LakeOptions$Builder
 class public static final class com.ash.lake.LakeRuntime$Builder
@@ -729,6 +731,7 @@ com.ash.lake.load.DeltaStore :: public com.ash.lake.spi.TableWriter com.ash.lake
 com.ash.lake.load.DeltaStore :: public java.lang.String com.ash.lake.load.DeltaStore.format()
 com.ash.lake.load.DeltaStore :: public java.util.List<com.ash.lake.spi.DateChange> com.ash.lake.load.DeltaStore.deleteDates(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef,java.util.Set<java.time.LocalDate>,boolean) throws java.io.IOException
 com.ash.lake.load.DeltaStore :: public java.util.List<com.ash.lake.spi.DateChange> com.ash.lake.load.DeltaStore.undo(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef,java.lang.String,boolean) throws java.io.IOException
+com.ash.lake.load.DeltaStore :: public java.util.List<com.ash.lake.spi.TableVersion> com.ash.lake.load.DeltaStore.versions(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
 com.ash.lake.load.DeltaStore :: public java.util.SortedMap<java.time.LocalDate, java.lang.Long> com.ash.lake.load.DeltaStore.dates(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
 com.ash.lake.load.DeltaStore :: public static com.ash.lake.load.DeltaStore com.ash.lake.load.DeltaStore.create()
 com.ash.lake.load.DeltaStore :: public static final java.lang.String com.ash.lake.load.DeltaStore.FORMAT
@@ -749,6 +752,7 @@ com.ash.lake.load.IcebergStore :: public com.ash.lake.spi.TableWriter com.ash.la
 com.ash.lake.load.IcebergStore :: public java.lang.String com.ash.lake.load.IcebergStore.format()
 com.ash.lake.load.IcebergStore :: public java.util.List<com.ash.lake.spi.DateChange> com.ash.lake.load.IcebergStore.deleteDates(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef,java.util.Set<java.time.LocalDate>,boolean) throws java.io.IOException
 com.ash.lake.load.IcebergStore :: public java.util.List<com.ash.lake.spi.DateChange> com.ash.lake.load.IcebergStore.undo(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef,java.lang.String,boolean) throws java.io.IOException
+com.ash.lake.load.IcebergStore :: public java.util.List<com.ash.lake.spi.TableVersion> com.ash.lake.load.IcebergStore.versions(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
 com.ash.lake.load.IcebergStore :: public java.util.SortedMap<java.time.LocalDate, java.lang.Long> com.ash.lake.load.IcebergStore.dates(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
 com.ash.lake.load.IcebergStore :: public static com.ash.lake.load.IcebergStore com.ash.lake.load.IcebergStore.create()
 com.ash.lake.load.IcebergStore :: public static final java.lang.String com.ash.lake.load.IcebergStore.FORMAT
@@ -1001,6 +1005,18 @@ com.ash.lake.memory.store.MemoryStores :: public static com.ash.lake.memory.stor
 com.ash.lake.memory.store.MemoryStores :: public static final int com.ash.lake.memory.store.MemoryStores.DEFAULT_CHUNK_BYTES
 com.ash.lake.memory.store.MemoryStores :: public static java.lang.String com.ash.lake.memory.store.MemoryStores.storeName(java.lang.String)
 com.ash.lake.memory.store.MemoryStores :: public void com.ash.lake.memory.store.MemoryStores.remove(java.lang.String)
+com.ash.lake.spi.AsOf :: public boolean com.ash.lake.spi.AsOf.latest()
+com.ash.lake.spi.AsOf :: public com.ash.lake.spi.AsOf(java.lang.Long,java.time.Instant)
+com.ash.lake.spi.AsOf :: public com.ash.lake.spi.TableVersion com.ash.lake.spi.AsOf.resolve(java.util.List<com.ash.lake.spi.TableVersion>)
+com.ash.lake.spi.AsOf :: public final boolean com.ash.lake.spi.AsOf.equals(java.lang.Object)
+com.ash.lake.spi.AsOf :: public final int com.ash.lake.spi.AsOf.hashCode()
+com.ash.lake.spi.AsOf :: public final java.lang.String com.ash.lake.spi.AsOf.toString()
+com.ash.lake.spi.AsOf :: public java.lang.Long com.ash.lake.spi.AsOf.version()
+com.ash.lake.spi.AsOf :: public java.lang.String com.ash.lake.spi.AsOf.missing(java.lang.String)
+com.ash.lake.spi.AsOf :: public java.time.Instant com.ash.lake.spi.AsOf.time()
+com.ash.lake.spi.AsOf :: public static com.ash.lake.spi.AsOf com.ash.lake.spi.AsOf.time(java.time.Instant)
+com.ash.lake.spi.AsOf :: public static com.ash.lake.spi.AsOf com.ash.lake.spi.AsOf.version(long)
+com.ash.lake.spi.AsOf :: public static final com.ash.lake.spi.AsOf com.ash.lake.spi.AsOf.LATEST
 com.ash.lake.spi.Capabilities :: public boolean com.ash.lake.spi.Capabilities.supports(com.ash.lake.spi.Capability)
 com.ash.lake.spi.Capabilities :: public java.lang.String com.ash.lake.spi.Capabilities.toString()
 com.ash.lake.spi.Capabilities :: public java.util.Map<com.ash.lake.spi.Capability, java.lang.String> com.ash.lake.spi.Capabilities.missing()
@@ -1179,11 +1195,14 @@ com.ash.lake.spi.RowSource$Served :: public java.lang.String com.ash.lake.spi.Ro
 com.ash.lake.spi.RowSource$Served :: public java.lang.String com.ash.lake.spi.RowSource$Served.root()
 com.ash.lake.spi.RowSource$Served :: public java.util.List<java.lang.String> com.ash.lake.spi.RowSource$Served.kinds()
 com.ash.lake.spi.ScanRequest :: public boolean com.ash.lake.spi.ScanRequest.wants(java.time.LocalDate)
+com.ash.lake.spi.ScanRequest :: public com.ash.lake.spi.AsOf com.ash.lake.spi.ScanRequest.asOf()
 com.ash.lake.spi.ScanRequest :: public com.ash.lake.spi.Expr com.ash.lake.spi.ScanRequest.where()
+com.ash.lake.spi.ScanRequest :: public com.ash.lake.spi.ScanRequest com.ash.lake.spi.ScanRequest.asOf(com.ash.lake.spi.AsOf)
 com.ash.lake.spi.ScanRequest :: public com.ash.lake.spi.ScanRequest com.ash.lake.spi.ScanRequest.columns(java.lang.String...)
 com.ash.lake.spi.ScanRequest :: public com.ash.lake.spi.ScanRequest com.ash.lake.spi.ScanRequest.dates(java.time.LocalDate...)
 com.ash.lake.spi.ScanRequest :: public com.ash.lake.spi.ScanRequest com.ash.lake.spi.ScanRequest.where(com.ash.lake.spi.Expr)
 com.ash.lake.spi.ScanRequest :: public com.ash.lake.spi.ScanRequest(java.util.Set<java.time.LocalDate>,java.util.List<java.lang.String>,com.ash.lake.spi.Expr)
+com.ash.lake.spi.ScanRequest :: public com.ash.lake.spi.ScanRequest(java.util.Set<java.time.LocalDate>,java.util.List<java.lang.String>,com.ash.lake.spi.Expr,com.ash.lake.spi.AsOf)
 com.ash.lake.spi.ScanRequest :: public final boolean com.ash.lake.spi.ScanRequest.equals(java.lang.Object)
 com.ash.lake.spi.ScanRequest :: public final int com.ash.lake.spi.ScanRequest.hashCode()
 com.ash.lake.spi.ScanRequest :: public final java.lang.String com.ash.lake.spi.ScanRequest.toString()
@@ -1222,7 +1241,14 @@ com.ash.lake.spi.TableStore :: public abstract com.ash.lake.spi.TableWriter com.
 com.ash.lake.spi.TableStore :: public abstract java.lang.String com.ash.lake.spi.TableStore.format()
 com.ash.lake.spi.TableStore :: public abstract java.util.List<com.ash.lake.spi.DateChange> com.ash.lake.spi.TableStore.deleteDates(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef,java.util.Set<java.time.LocalDate>,boolean) throws java.io.IOException
 com.ash.lake.spi.TableStore :: public abstract java.util.List<com.ash.lake.spi.DateChange> com.ash.lake.spi.TableStore.undo(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef,java.lang.String,boolean) throws java.io.IOException
+com.ash.lake.spi.TableStore :: public abstract java.util.List<com.ash.lake.spi.TableVersion> com.ash.lake.spi.TableStore.versions(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
 com.ash.lake.spi.TableStore :: public abstract java.util.SortedMap<java.time.LocalDate, java.lang.Long> com.ash.lake.spi.TableStore.dates(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
+com.ash.lake.spi.TableVersion :: public com.ash.lake.spi.TableVersion(long,java.time.Instant)
+com.ash.lake.spi.TableVersion :: public final boolean com.ash.lake.spi.TableVersion.equals(java.lang.Object)
+com.ash.lake.spi.TableVersion :: public final int com.ash.lake.spi.TableVersion.hashCode()
+com.ash.lake.spi.TableVersion :: public final java.lang.String com.ash.lake.spi.TableVersion.toString()
+com.ash.lake.spi.TableVersion :: public java.time.Instant com.ash.lake.spi.TableVersion.committed()
+com.ash.lake.spi.TableVersion :: public long com.ash.lake.spi.TableVersion.version()
 com.ash.lake.spi.TableWriter :: public abstract boolean com.ash.lake.spi.TableWriter.appended(java.time.LocalDate) throws java.io.IOException
 com.ash.lake.spi.TableWriter :: public abstract com.ash.lake.spi.TableWriter$FileOut com.ash.lake.spi.TableWriter.newFile(java.time.LocalDate,java.lang.String[],java.lang.String) throws java.io.IOException
 com.ash.lake.spi.TableWriter :: public abstract java.util.List<java.lang.String> com.ash.lake.spi.TableWriter.leftOut()

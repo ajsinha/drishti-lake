@@ -98,4 +98,9 @@ Entries are written per release; unreleased work is listed first.
   date deleted); the runner's `store` step calls the SPI; `make_reference.py` runs the reference's stores only (`--stores
   delta,iceberg`) and `compare_results.py` accepts cases of a store the host never had (they must run, stable over two runs): 32
   identical, 5 beyond the reference.
+- **Time travel, the last declared gap closed.** `TableStore.versions` (a table's versions oldest first: `TableVersion`, the store's
+  number and commit time) and `ScanRequest.asOf` (`AsOf`: the newest, a version, or the newest committed at or before a time) on all
+  three stores: Delta through the Kernel's snapshot at a version or timestamp and its commit range, Iceberg through its snapshot log
+  (snapshot id or time), files through its log (each commit now records when it was committed). `tck/capabilities.yaml` is empty for
+  every store; parity case `time-travel/versions-and-earlier-rows` equal on Delta, Iceberg and files (and the memory row).
 - Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).

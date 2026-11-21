@@ -2,7 +2,7 @@
   Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved.
   Drishti Lake. Proprietary: see LICENSE.
 
-  Lake install release: the jars into the local Maven repository (~/.m2/repository/com/ash/lake) for Drishti.
+  Lake install release: the jars into the local Maven repository (~/.m2/repository/com/ash/lake) for a host product.
   Use it when: ONLY on a checkout of a release tag (decision R-1), never on a branch or a snapshot.
   TAG-ONLY: do not run this on a working branch.
   Shared, so it is in git: copy the configuration (Ctrl+D) to change it; a pull overwrites this file.
