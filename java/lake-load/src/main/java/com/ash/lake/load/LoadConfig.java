@@ -470,8 +470,8 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         if (entry != null) {
             agree(entry, "format", tf, entry.format());
         }
-        if (!tf.equals("delta") && !tf.equals("iceberg")) {
-            throw new IllegalArgumentException("target.format " + tf + ": delta or iceberg");
+        if (!Stores.isBuiltIn(tf) && r.runtime().store(tf).isEmpty()) {
+            throw new IllegalArgumentException("target.format " + tf + ": delta, iceberg, files or a format whose store the runtime registers");
         }
         // the load mode (docs/guides/DATA_LAKE_GUIDE.md section 5): target.mode (--mode, a .ready file's mode:), else the lake file's
         // entry (the table's default), else target.default-mode (the data inbox's default-mode), else append; replace (overwrite-dates)

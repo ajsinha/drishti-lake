@@ -21,4 +21,6 @@ python3 tools/split/l3_rename_packages.py java tck          # the rename commit
 | `l3_rename.py` | the filename callback: each path's module and package here, over every path it had in the host's history |
 | `l3_rename_packages.py` | the rename commit: packages, host types to `hostcompat`, the header line |
 
-Later moves (L7, L8, L10, L11) get an allow-list of their own here, as Rachana's A9 and A13 did.
+Later moves get an allow-list of their own here, as Rachana's A9 and A13 did: `l7-paths.txt` (L7, the Delta lake opener, the L3
+callback), `l8-paths.txt` with `l8_rename.py` (L8, the files store). `make_reference.py` runs the reference's stores only
+(`--stores delta,iceberg`); `compare_results.py` accepts the cases of a store the host never had (`BEYOND`).

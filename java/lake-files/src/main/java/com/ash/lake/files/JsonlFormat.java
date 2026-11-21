@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,9 +13,8 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.file;
+package com.ash.lake.files;
 
-import com.ash.drishti.api.DataNode;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
@@ -111,56 +110,5 @@ final class JsonlFormat {
         }
         p.skipChildren();
         return null;
-    }
-
-    /** A document as a tree, with this format's limits; a number that is not finite is null. */
-    DataNode read(byte[] doc) throws IOException {
-        try (JsonParser p = parser(doc)) {
-            JsonToken t = p.nextToken();
-            return t == null ? DataNode.missing() : node(p, t);
-        } catch (com.fasterxml.jackson.core.exc.StreamConstraintsException e) {
-            throw new IOException(e.getMessage() + " (max-document-mb " + maxDocumentMb + ", max-nesting-depth " + maxNestingDepth + ")", e);
-        }
-    }
-
-    private static DataNode node(JsonParser p, JsonToken t) throws IOException {
-        switch (t) {
-            case START_OBJECT -> {
-                Map<String, DataNode> fields = new LinkedHashMap<>();
-                while (p.nextToken() == JsonToken.FIELD_NAME) {
-                    String name = p.currentName();
-                    fields.put(name, node(p, p.nextToken()));
-                }
-                return new DataNode.Obj(fields);
-            }
-            case START_ARRAY -> {
-                List<DataNode> items = new ArrayList<>();
-                JsonToken n;
-                while ((n = p.nextToken()) != JsonToken.END_ARRAY) {
-                    items.add(node(p, n));
-                }
-                return new DataNode.Arr(items);
-            }
-            case VALUE_STRING -> {
-                return new DataNode.Val(p.getText());
-            }
-            case VALUE_NUMBER_INT -> {
-                return new DataNode.Val(p.getNumberType() == JsonParser.NumberType.BIG_INTEGER ? p.getBigIntegerValue() : (Object) p.getLongValue());
-            }
-            case VALUE_NUMBER_FLOAT -> {
-                double d = p.getDoubleValue();
-                return Double.isFinite(d) ? new DataNode.Val(d) : DataNode.nullValue();
-            }
-            case VALUE_TRUE -> {
-                return new DataNode.Val(Boolean.TRUE);
-            }
-            case VALUE_FALSE -> {
-                return new DataNode.Val(Boolean.FALSE);
-            }
-            case VALUE_NULL -> {
-                return DataNode.nullValue();
-            }
-            default -> throw new IOException("unexpected token " + t + " at " + p.currentLocation());
-        }
     }
 }

@@ -1,0 +1,9 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# Step L8, the files store: the JSON-lines day reader, its line format and the writer (MOVE_ALLOWLIST section 3; the file
+# connector's SourcePlugin half, FileDatedIndex, FileSet and CsvReader stay in the host, its tests with them).
+plugins/drishti-connectors/src/main/java/com/ash/drishti/plugin/file/JsonlDay.java
+plugins/drishti-connectors/src/main/java/com/ash/drishti/plugin/file/JsonlFormat.java
+plugins/drishti-connectors/src/main/java/com/ash/drishti/plugin/file/JsonlLoader.java
+plugins/drishti-plugin-file/src/main/java/com/ash/drishti/plugin/file/JsonlDay.java
+plugins/drishti-plugin-file/src/main/java/com/ash/drishti/plugin/file/JsonlFormat.java
+plugins/drishti-plugin-file/src/main/java/com/ash/drishti/plugin/file/JsonlLoader.java

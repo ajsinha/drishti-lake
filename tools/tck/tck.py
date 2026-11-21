@@ -84,12 +84,14 @@ def subst(x, env):
     return x
 
 
-def jobs(cases, scratch):
+def jobs(cases, scratch, stores=None):
     out = []
     for f in cases:
         c = yaml.safe_load(f.read_text(encoding="utf-8"))
         name = str(f.relative_to(CASES).with_suffix(""))
         for store in c.get("stores", ["delta", "iceberg"]):
+            if stores is not None and store not in stores:
+                continue
             cid = f"{name}@{store}"
             work = scratch / cid.replace("/", "_")
             work.mkdir(parents=True)
@@ -140,6 +142,7 @@ def main(argv=None):
     ap.add_argument("--classpath-file", help="the class path to run over (default: this repository's built modules)")
     ap.add_argument("--runner", default=str(ROOT / "tools" / "tck" / "TckRunner.java"))
     ap.add_argument("--only", help="run the cases whose name starts with this")
+    ap.add_argument("--stores", help="run these stores only (comma separated; the reference: delta,iceberg); default every store a case names")
     a = ap.parse_args(argv)
     cases = sorted(CASES.rglob("*.yaml"))
     if a.only:
@@ -147,7 +150,7 @@ def main(argv=None):
     cp = Path(a.classpath_file).read_text().strip() if a.classpath_file else product_classpath()
     scratch = Path(tempfile.mkdtemp(prefix="lake-tck-", dir=os.environ.get("LAKE_TCK_TMP")))   # the caller's scratch folder
     try:
-        js = jobs(cases, scratch)
+        js = jobs(cases, scratch, set(a.stores.split(",")) if a.stores else None)
         jf, rf = scratch / "jobs.jsonl", scratch / "results.jsonl"
         jf.write_text("".join(json.dumps(j) + "\n" for j, _ in js), encoding="utf-8")
         java = str(Path(JAVA_HOME) / "bin" / "java")

@@ -16,12 +16,13 @@ retired from Drishti in G4, so `LakeStore` comes here with the native path only 
 | L5 | configuration divided | **done** | `LakeCatalog` SPI (`com.ash.lake.spi`, in `lake-api`); named lake settings the product's own (`NamedLakeSettings`); the 12 pack and module types of hostcompat gone (41 → 6), `lake-config` no longer needs hostcompat; one parked check returned (2 → 1); every lake file of the host's `config/lakes` and `config/lakes.examples` reads to the same model as the reference (`tools/split/lake_models.py`: 15 of 15, the host's shipped lakes now its catalog's); kit 30/30 |
 | L6 | per-instance runtime | **done** | `LakeRuntime` replaces `LakeOptions.current()`, `LakeCatalog.current()`, `StorageProviders` (`ServiceLoader`), `Lakes.useProperties`, `NamedLakeSettings.useView` and the static caches; no static registry, `ServiceLoader` or hidden system-property read left in main code; `TwoRuntimesTest`; `StartOnFewCoresTest` green; kit 30/30 |
 | L7 | table layer | **done** | `LakeCheck` (now `lake-load`) and `LakeUndo` read Delta through the Kernel (snapshot, commit range) and Iceberg through iceberg-core: official-libraries list empty; hostcompat 6 → 0 (`com.ash.lake.rows`, module gone); persisted names written `lake.*`, read both; TCK 15 → 16 cases, kit 32/32. part 2: `LakeStore`, `NativeLake`, `NamedTables`, `NewTables` moved with history, native path only (`engine: hadoop` refused, LK-9), `LakeStoreTest`; Hadoop on the class path reviewed (until L12). part 3: the `TableStore` SPI (`com.ash.lake.spi`, product types only), the loader writes through `Stores.of(runtime, format)`; `java/api-surface.txt` + `ApiSurfaceTest` (no library type in a public signature; any API change rewrites the file in the same commit) |
-| L8 to L14 | stores, TCK, Python, contracts, API, docs, release | not started | |
+| L8 | stores | **part 1 done** | the files store moved (`JsonlDay`, `JsonlFormat`, `JsonlLoader`, 10 commits) into `lake-files`; `FilesStore` a full `TableStore`, its gaps declared (`tck/capabilities.yaml`, `StoreCapabilitiesTest`) and shown by 5 parity-kit capability cases (beyond the reference: the host has no files store; stable over two runs). Part 2 open: the memory lake (`lake-memory`, `RowSource`) |
+| L9 to L14 | TCK, Python, contracts, API, docs, release | not started | |
 
 ## What the move left for later (each listed with its step)
 
-- **Not moved yet** (MOVE_ALLOWLIST section 3): the memory lake (`memlake`, `memlake.store`: L8, behind `RowSource`; `MemoryLake`
-  takes a `ReplenishSource` over the host's connector registry); the files store (L8); `tools/lake` (L10); `tools/contracts.py` (L11);
+- **Not moved yet** (MOVE_ALLOWLIST section 3): the memory lake (`memlake`, `memlake.store`: L8 part 2, behind `RowSource`; `MemoryLake`
+  takes a `ReplenishSource` over the host's connector registry); `tools/lake` (L10); `tools/contracts.py` (L11);
   `LoaderRows`, `MinioServer`, `ConditionalWrites` and the Python path's Delta-feature fixtures (with the TCK cases that use them).
 - **Moved but owing the host** ([SPLIT_EXEMPTIONS](../java/SPLIT_EXEMPTIONS.md)): 41 host types in `hostcompat` (L4: settings, TLS,
   proxy, errors, small utilities; L5: packs and modules; L7: row and column types); 79 files with a host word; 2 parked checks; the
@@ -43,7 +44,9 @@ runtime to every call (`LakeLoad.run(runtime, ..)`, `DataLoadSettings`, `Catalog
 
 ## Next steps
 
-1. **L8**: the files store as a `TableStore` (`lake-files`) and the memory lake (`lake-memory`, `RowSource`); then L9 to L14.
+1. **L8 part 2**: the memory lake (`lake-memory`, host rows through `RowSource`, `MemoryStores` per runtime); then L9 to L14. `JsonlLoader`
+   (rows already wrapped with domain and kind) is a second writer of the files store beside the loader's `FilesWriter`: L10 folds it
+   into the loader (one way per job).
 2. The parity kit grows toward the 60% harvest as each step goes (child tables, list columns, promoted columns, flatten, latest-by,
    `.ready`, relocate, maintenance).
 3. The owner names when `v0.9.0` may be tagged.

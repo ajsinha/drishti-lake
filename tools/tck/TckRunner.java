@@ -117,6 +117,7 @@ public final class TckRunner {
                     case "load" -> LakeLoad.run(argv, ps);
                     case "undo" -> LakeUndo.run(argv, ps);
                     case "retention" -> LakeRetention.run(argv, ps);
+                    case "store" -> store(argv, ps);   // lake-only
                     default -> throw new IllegalArgumentException("unknown op " + op);
                 };
                 ObjectNode s = steps.addObject().put("op", op).put("exit", code);
@@ -126,6 +127,7 @@ public final class TckRunner {
                 if (!text.isEmpty() && (code != 0 || !op.equals("load"))) {
                     s.put("said", text);                    // a refusal's reason, an upkeep's answer (paths become ${work})
                 }
+                if (code != 0 && op.equals("load") && "files".equals(job.path("dumps").path(0).path("format").asText())) s.put("refused", said.toString(StandardCharsets.UTF_8).replaceAll("(?s).*error=\"([^\"]*)\".*", "$1").strip());   // lake-only: a capability case's reason
                 if (summary != null) {
                     if (Files.size(summary) > 0) {
                         s.set("summary", stable(JSON.readTree(summary.toFile())));
@@ -135,6 +137,7 @@ public final class TckRunner {
             }
             ObjectNode tables = r.putObject("tables");
             for (JsonNode d : job.path("dumps")) {
+                if (d.path("format").asText().equals("files")) { tables.set(d.path("name").asText(), JSON.valueToTree(files(d))); continue; }   // lake-only
                 Map<String, Map<String, Object>> rows = d.path("format").asText().equals("delta") ? delta(d.path("path").asText())
                         : iceberg(d.path("root").asText(), d.path("domain").asText(), d.path("table").asText());
                 tables.set(d.path("name").asText(), JSON.valueToTree(rows));
@@ -290,6 +293,39 @@ public final class TckRunner {
         }
         return v;
     }
+
+    /** A store operation through the TableStore SPI: {@code <op> <format> <root> <domain> <table> [arg]} (a capability case's refusal). */   // lake-only
+    static int store(String[] a, PrintStream out) {   // lake-only
+        var store = com.ash.lake.load.Stores.of(RT, a[1]);   // lake-only
+        var t = new com.ash.lake.spi.TableRef(a[2], a[3], a[4]);   // lake-only
+        try {   // lake-only
+            Object done = switch (a[0]) {   // lake-only
+                case "undo" -> store.undo(RT, t, a[5], false);   // lake-only
+                case "delete" -> store.deleteDates(RT, t, java.util.Set.of(LocalDate.parse(a[5])), false);   // lake-only
+                case "dates" -> store.dates(RT, t);   // lake-only
+                default -> throw new IllegalArgumentException("unknown store op " + a[0]);   // lake-only
+            };   // lake-only
+            out.println(done);   // lake-only
+            return 0;   // lake-only
+        } catch (UnsupportedOperationException | java.io.IOException e) {   // lake-only
+            out.println(e.getMessage());   // lake-only
+            return 1;   // lake-only
+        }   // lake-only
+    }   // lake-only
+
+    /** A files table's rows through the files store. */   // lake-only
+    static Map<String, Map<String, Object>> files(JsonNode d) throws Exception {   // lake-only
+        Map<String, Map<String, Object>> out = new TreeMap<>();   // lake-only
+        var t = new com.ash.lake.spi.TableRef(d.path("root").asText(), d.path("domain").asText(), d.path("table").asText());   // lake-only
+        try (var rows = com.ash.lake.load.Stores.builtIn("files").scan(RT, t, com.ash.lake.spi.ScanRequest.all())) {   // lake-only
+            rows.forEachRemaining(r -> {   // lake-only
+                Map<String, Object> row = new TreeMap<>(r.asMap());   // lake-only
+                row.put("business_date", row.get("business_date").toString());   // lake-only
+                put(out, row);   // lake-only
+            });   // lake-only
+        }   // lake-only
+        return out;   // lake-only
+    }   // lake-only
 
     /** Keyed {@code date|id}; rows that share a key are numbered {@code #1, #2} in the order of their text, never of reading. */
     private static void put(Map<String, Map<String, Object>> out, Map<String, Object> row) {

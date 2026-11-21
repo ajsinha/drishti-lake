@@ -253,41 +253,7 @@ public final class LakeRetention {
     /** A files store: the dates' day files ({@code <root>/<domain>/<date>/<kind>.jsonl}) deleted. */
     static Map<String, Object> filesDates(String root, String table, java.util.function.Predicate<String> wanted, boolean dryRun) throws IOException {
         int slash = table.indexOf('/');
-        String domain = slash < 0 ? "" : table.substring(0, slash);
-        String kind = table.substring(slash + 1);
-        Path base = domain.isEmpty() ? Path.of(root) : Path.of(root).resolve(domain);
-        List<String> held = new ArrayList<>();
-        List<Map<String, Object>> lines = new ArrayList<>();
-        List<Path> gone = new ArrayList<>();
-        if (Files.isDirectory(base)) {
-            try (Stream<Path> days = Files.list(base)) {
-                for (Path d : days.filter(Files::isDirectory).sorted().toList()) {
-                    Path f = d.resolve(kind + ".jsonl");
-                    if (!Files.isRegularFile(f)) {
-                        continue;
-                    }
-                    String date = d.getFileName().toString();
-                    held.add(date);
-                    if (wanted.test(date)) {
-                        long n;
-                        try (Stream<String> ls = Files.lines(f, StandardCharsets.UTF_8)) {
-                            n = ls.filter(l -> !l.isBlank()).count();
-                        }
-                        line(lines, date, n, n);
-                        gone.add(f);
-                    }
-                }
-            }
-        }
-        if (!dryRun) {
-            for (Path f : gone) {
-                Files.delete(f);                                       // a reader sees the whole day or none of it
-            }
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("held", held);
-        out.put("dates", lines);
-        return out;
+        return com.ash.lake.files.FilesStore.dropDates(root, slash < 0 ? "" : table.substring(0, slash), table.substring(slash + 1), wanted, dryRun);
     }
 
     /** An Iceberg table, by the Iceberg maintenance: whole partitions deleted, one commit. */

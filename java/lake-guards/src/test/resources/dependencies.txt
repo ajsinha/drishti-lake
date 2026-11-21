@@ -24,6 +24,8 @@ lake-iceberg software.amazon.awssdk:sts
 lake-iceberg software.amazon.awssdk:auth
 lake-iceberg software.amazon.awssdk:http-auth-aws
 lake-iceberg org.slf4j:slf4j-api
+lake-files com.ash.lake:lake-io
+lake-files com.fasterxml.jackson.core:jackson-core
 lake-io com.ash.lake:lake-api
 lake-io com.fasterxml.jackson.core:jackson-databind
 lake-io com.fasterxml.jackson.dataformat:jackson-dataformat-yaml
@@ -39,6 +41,7 @@ lake-io software.amazon.awssdk:s3
 lake-io software.amazon.awssdk:apache5-client
 lake-io org.slf4j:slf4j-api
 lake-load com.ash.lake:lake-io
+lake-load com.ash.lake:lake-files
 lake-load com.ash.lake:lake-config
 lake-load com.ash.lake:lake-delta
 lake-load com.ash.lake:lake-iceberg

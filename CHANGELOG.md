@@ -84,4 +84,16 @@ Entries are written per release; unreleased work is listed first.
   the built-in `DeltaStore`/`IcebergStore`), its row is a `LoadRow`. `ApiSurfaceTest` (as Rachana's CG5): `java/api-surface.txt` is the
   public API of `com.ash.lake`, `.spi`, `.config`, `.load`, `.inbox`, any change fails until the file is rewritten in the same commit,
   and no line may name a Delta Kernel, Iceberg, Parquet or Hadoop type (none does). `TableStoreTest`. Parity kit equal (32/32).
-- Not moved yet, on purpose (each with its step): the memory lake (L8), the files store (L8), the Python path (L10), the contracts tool (L11).
+- **L8, part 1: the files store, a full `TableStore` (LK-8).** `JsonlDay`, `JsonlFormat` and `JsonlLoader` moved with their history
+  (10 commits, `tools/split/l8-paths.txt`, `l8_rename.py`) into the new module `lake-files` (`com.ash.lake.files`; the file connector's
+  `SourcePlugin` half and its document tree stay in the host). `FilesStore` (`<root>/<domain>/<date>/<table>.jsonl`, rows `id`,
+  `business_date`, `doc`): exists, columns, dates, scan, delete dates (the lake's delete of a files table now goes through it), and
+  the loader's `FilesWriter` (part files joined and moved onto the day in one atomic rename; replace, or append without a batch). Its
+  gaps are declared with their reasons (`APPEND_BATCH_ONCE`, `UNDO`, `TIME_TRAVEL`, `SCHEMA_EVOLUTION`, `PROMOTED_COLUMNS`,
+  `TYPED_LIST_COLUMNS`) and listed in `tck/capabilities.yaml` (`StoreCapabilitiesTest`: equal to the stores' declarations, only
+  shrinks). `files` is a built-in format beside `delta` and `iceberg` (`Stores`). Parity kit: five capability cases
+  (`tck/cases/capabilities`, store `files`: load and read, append without a batch, a batch refused with its reason, undo refused, a
+  date deleted); the runner's `store` step calls the SPI; `make_reference.py` runs the reference's stores only (`--stores
+  delta,iceberg`) and `compare_results.py` accepts cases of a store the host never had (they must run, stable over two runs): 32
+  identical, 5 beyond the reference.
+- Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).

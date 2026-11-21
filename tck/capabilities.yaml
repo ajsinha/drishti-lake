@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# What each built-in store cannot do (design section 4, LK-8): the capability, the reason the store states, and the parity-kit case
+# that shows the refusal or the difference (none: no operation of the SPI asks for it yet; the matrix of L9 adds one).
+# Equal to the stores' own declarations (StoreCapabilitiesTest); the list is reviewed and ONLY SHRINKS before v1.0.0.
+delta: {}
+iceberg: {}
+files:
+  APPEND_BATCH_ONCE:
+    reason: "a day file records no batch: an append could not be told from its retry (append without a batch id)"
+    case: capabilities/files-append-batch-refused
+  UNDO:
+    reason: "a day file records neither the load that wrote it nor the day before it: a load cannot be taken out"
+    case: capabilities/files-undo-refused
+  TIME_TRAVEL:
+    reason: "a day file is replaced whole: no earlier version is kept"
+    case: none
+  SCHEMA_EVOLUTION:
+    reason: "a record is its document: there are no columns to add"
+    case: none
+  PROMOTED_COLUMNS:
+    reason: "a record is its document: promoted fields are read from it, not kept beside it"
+    case: capabilities/files-load-and-read
+  TYPED_LIST_COLUMNS:
+    reason: "a record is its document: lists and vectors stay inside it"
+    case: capabilities/files-load-and-read

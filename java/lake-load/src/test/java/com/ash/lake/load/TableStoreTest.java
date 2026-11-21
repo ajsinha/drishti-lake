@@ -20,7 +20,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ash.lake.LakeOptions;
 import com.ash.lake.LakeRuntime;
+import com.ash.lake.files.FilesStore;
 import com.ash.lake.spi.Capabilities;
+import com.ash.lake.spi.Capability;
 import com.ash.lake.spi.ColumnType;
 import com.ash.lake.spi.Columns;
 import com.ash.lake.spi.DateChange;
@@ -79,34 +81,40 @@ class TableStoreTest {
         return out;
     }
 
+    /**
+     * The same load and the same questions for every store; what a store declares it cannot do is asked too and must be refused with its
+     * reason (a capability case, never a skip).
+     */
     @ParameterizedTest
-    @ValueSource(strings = {"delta", "iceberg"})
+    @ValueSource(strings = {"delta", "iceberg", "files"})
     void readsDeletesAndUndoesThroughTheSpi(String format) throws IOException {
         LakeRuntime rt = runtime();
         TableRef t = load(rt, format);
         TableStore store = Stores.of(rt, format);
+        Capabilities caps = store.capabilities();
         assertThat(store.format()).isEqualTo(format);
-        assertThat(store.capabilities().missing()).isEmpty();
         assertThat(store.exists(rt, t)).isTrue();
         assertThat(store.exists(rt, new TableRef(t.root(), "risk", "absent"))).isFalse();
 
         Columns cols = store.columns(rt, t);
-        assertThat(cols.types()).containsEntry("id", ColumnType.STRING).containsEntry("business_date", ColumnType.DATE)
-                .containsEntry("QUANTITY", ColumnType.DOUBLE).containsEntry("SCENARIO_PV", ColumnType.DOUBLE_LIST);
+        assertThat(cols.types()).containsEntry("id", ColumnType.STRING).containsEntry("business_date", ColumnType.DATE);
+        if (caps.supports(Capability.PROMOTED_COLUMNS)) {
+            assertThat(cols.types()).containsEntry("QUANTITY", ColumnType.DOUBLE).containsEntry("SCENARIO_PV", ColumnType.DOUBLE_LIST);
+        } else {
+            assertThat(cols.names()).containsExactly("id", "business_date", "doc");
+        }
 
         SortedMap<LocalDate, Long> dates = store.dates(rt, t);
         assertThat(dates.keySet()).containsExactly(D1, D2);
         List<Row> rows = all(store.scan(rt, t, ScanRequest.all()));
         assertThat((long) rows.size()).isEqualTo(dates.values().stream().mapToLong(Long::longValue).sum());
         assertThat(rows.get(0).get("business_date")).isInstanceOf(LocalDate.class);
-        assertThat(rows.get(0).get("SCENARIO_PV")).isInstanceOf(List.class);
 
-        List<Row> fx = all(store.scan(rt, t, ScanRequest.all().dates(D1).columns("id", "DESK").where(Expr.eq("DESK", "DESK-FX"))));
-        assertThat(fx).isNotEmpty().allSatisfy(r -> {
-            assertThat(r.columns().names()).containsExactly("id", "DESK");
-            assertThat(r.get("DESK")).isEqualTo("DESK-FX");
-        });
-        assertThat((long) fx.size()).isLessThan(dates.get(D1));
+        String column = caps.supports(Capability.PROMOTED_COLUMNS) ? "DESK" : "id";
+        Object value = rows.stream().filter(r -> D1.equals(r.get("business_date"))).findFirst().orElseThrow().get(column);
+        List<Row> some = all(store.scan(rt, t, ScanRequest.all().dates(D1).columns("id", column).where(Expr.eq(column, value))));
+        assertThat(some).isNotEmpty().allSatisfy(r -> assertThat(r.get(column)).isEqualTo(value));
+        assertThat((long) some.size()).isLessThan(dates.get(D1));
         assertThatThrownBy(() -> store.scan(rt, t, ScanRequest.all().columns("NOPE"))).isInstanceOf(IllegalArgumentException.class);
 
         List<DateChange> dry = store.deleteDates(rt, t, Set.of(D1), true);
@@ -116,10 +124,22 @@ class TableStoreTest {
         assertThat(store.dates(rt, t).keySet()).containsExactly(D2);
         assertThat(all(store.scan(rt, t, ScanRequest.all().dates(D1)))).isEmpty();
 
-        String loadId = (String) all(store.scan(rt, t, ScanRequest.all().columns("_load_id"))).get(0).get(0);
-        List<DateChange> undone = store.undo(rt, t, loadId, false);
-        assertThat(undone).extracting(DateChange::date).contains(D2);
-        assertThat(all(store.scan(rt, t, ScanRequest.all().where(Expr.eq("_load_id", loadId))))).isEmpty();
+        if (caps.supports(Capability.UNDO)) {
+            String loadId = (String) all(store.scan(rt, t, ScanRequest.all().columns("_load_id"))).get(0).get(0);
+            List<DateChange> undone = store.undo(rt, t, loadId, false);
+            assertThat(undone).extracting(DateChange::date).contains(D2);
+            assertThat(all(store.scan(rt, t, ScanRequest.all().where(Expr.eq("_load_id", loadId))))).isEmpty();
+        } else {
+            assertThatThrownBy(() -> store.undo(rt, t, "any", true)).isInstanceOf(UnsupportedOperationException.class)
+                    .hasMessageContaining(caps.missing().get(Capability.UNDO));
+        }
+        if (!caps.supports(Capability.APPEND_BATCH_ONCE)) {
+            Path cfg = Files.writeString(tmp.resolve("append.yaml"), PvData.config(tmp.resolve("in") + "/*", t.root(), format, "  mode: append",
+                    "  batch-id: b1"));
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            assertThat(LakeLoad.run(rt, new String[] {"--config", cfg.toString(), "-q"}, new PrintStream(out))).isNotEqualTo(LakeLoad.OK);
+            assertThat(out.toString()).contains(caps.missing().get(Capability.APPEND_BATCH_ONCE));
+        }
     }
 
     @Test
@@ -146,7 +166,8 @@ class TableStoreTest {
     void refusesWhatTheSpiDoesNotAllow() {
         assertThatThrownBy(() -> new TableRef("relative/lake", "risk", "pv")).hasMessageContaining("absolute");
         assertThatThrownBy(() -> new TableRef("/lake", "risk/x", "pv")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> Stores.builtIn("files")).hasMessageContaining("register");
+        assertThatThrownBy(() -> Stores.builtIn("parquet-folders")).hasMessageContaining("register");
+        assertThat(Stores.builtIn("files")).isInstanceOf(FilesStore.class);
         assertThatThrownBy(() -> runtime(Stores.builtIn("delta"), DeltaStore.create())).hasMessageContaining("two table stores");
         Capabilities c = Capabilities.allBut(com.ash.lake.spi.Capability.TIME_TRAVEL, "plain files keep one version");
         assertThatThrownBy(() -> c.require("files", com.ash.lake.spi.Capability.TIME_TRAVEL)).hasMessageContaining("one version");

@@ -805,6 +805,7 @@ com.ash.lake.load.LakeUndo$Done :: public java.lang.String com.ash.lake.load.Lak
 com.ash.lake.load.LakeUndo$Done :: public long com.ash.lake.load.LakeUndo$Done.removed()
 com.ash.lake.load.LakeUndo$Done :: public long com.ash.lake.load.LakeUndo$Done.restored()
 com.ash.lake.load.LakeUndo$Done :: public long com.ash.lake.load.LakeUndo$Done.version()
+com.ash.lake.load.Stores :: public static boolean com.ash.lake.load.Stores.isBuiltIn(java.lang.String)
 com.ash.lake.load.Stores :: public static com.ash.lake.spi.TableStore com.ash.lake.load.Stores.builtIn(java.lang.String)
 com.ash.lake.load.Stores :: public static com.ash.lake.spi.TableStore com.ash.lake.load.Stores.of(com.ash.lake.LakeRuntime,java.lang.String)
 com.ash.lake.load.TableDateRows :: public static com.ash.lake.load.TableDateRows$Counts com.ash.lake.load.TableDateRows.count(com.ash.lake.LakeRuntime,java.lang.String,java.lang.String,java.util.List<java.lang.String>) throws java.io.IOException
@@ -824,6 +825,7 @@ com.ash.lake.spi.Capabilities :: public static com.ash.lake.spi.Capabilities com
 com.ash.lake.spi.Capabilities :: public void com.ash.lake.spi.Capabilities.require(java.lang.String,com.ash.lake.spi.Capability)
 com.ash.lake.spi.Capability :: public static com.ash.lake.spi.Capability com.ash.lake.spi.Capability.valueOf(java.lang.String)
 com.ash.lake.spi.Capability :: public static com.ash.lake.spi.Capability[] com.ash.lake.spi.Capability.values()
+com.ash.lake.spi.Capability :: public static final com.ash.lake.spi.Capability com.ash.lake.spi.Capability.APPEND_BATCH_ONCE
 com.ash.lake.spi.Capability :: public static final com.ash.lake.spi.Capability com.ash.lake.spi.Capability.ATOMIC_COMMIT
 com.ash.lake.spi.Capability :: public static final com.ash.lake.spi.Capability com.ash.lake.spi.Capability.COLUMNS
 com.ash.lake.spi.Capability :: public static final com.ash.lake.spi.Capability com.ash.lake.spi.Capability.DATES

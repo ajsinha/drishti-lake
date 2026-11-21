@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.file;
+package com.ash.lake.files;
 
-import com.ash.drishti.api.ColumnSet;
+import com.ash.lake.rows.ColumnSet;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -486,7 +486,7 @@ final class JsonlDay implements AutoCloseable {
             while (pos < to) {
                 block.clear();
                 block.limit((int) Math.min(BLOCK, to - pos));
-                int got = com.ash.drishti.api.ChannelIo.read(ch, block, pos);   // 4 MB into a heap buffer: chunked, no 4 MB direct buffer
+                int got = com.ash.lake.common.ChannelIo.read(ch, block, pos);   // 4 MB into a heap buffer: chunked, no 4 MB direct buffer
                 if (got <= 0) {
                     break;
                 }

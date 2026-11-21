@@ -22,8 +22,10 @@ package com.ash.lake.spi;
 public enum Capability {
     /** Load whole business dates, each replacing that date's earlier rows in one commit. */
     LOAD_REPLACE,
-    /** Load by appending, a named batch committed once per date. */
+    /** Load by appending rows to a date's rows. */
     LOAD_APPEND,
+    /** An append that names its batch is committed once per date: a retry of the same batch is skipped. */
+    APPEND_BATCH_ONCE,
     /** Read rows ({@link TableStore#scan}). */
     SCAN,
     /** The table's columns and types ({@link TableStore#columns}). */
