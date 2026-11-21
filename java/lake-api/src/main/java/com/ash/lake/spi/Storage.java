@@ -58,6 +58,22 @@ public interface Storage {
     /** Whether {@code path} is an existing directory (for an object store: a prefix with objects under it). */
     boolean isDirectory(String path) throws IOException;
 
+    /**
+     * The files directly in the directory {@code dir} (not in its sub-directories), sorted by name; empty when it does not exist. The
+     * default lists from the lowest printable name ({@link #listFrom}).
+     */
+    default List<FileEntry> files(String dir) throws IOException {
+        String d = dir.endsWith("/") ? dir.substring(0, dir.length() - 1) : dir;
+        if (!isDirectory(d)) {
+            return List.of();
+        }
+        try {
+            return listFrom(d + "/ ");
+        } catch (FileNotFoundException gone) {
+            return List.of();
+        }
+    }
+
     /** The whole file (metadata JSON, a manifest, a version hint). */
     default byte[] readAll(String path) throws IOException {
         try (RangeReader r = open(path, -1)) {
@@ -103,6 +119,27 @@ public interface Storage {
      */
     default boolean exclusiveCreates() throws IOException {
         return false;
+    }
+
+    /**
+     * Makes {@code to} a copy of the file {@code from}, replacing it, as one step for a reader: it sees the old {@code to} or the whole
+     * new one, never a part (a day file published from a log's content). The default streams {@code from} into {@link #create}, which
+     * an object store and memory make visible whole when the stream closes; local disk overrides it (a link or a copy, then a rename).
+     */
+    default void publish(String from, String to) throws IOException {
+        try (RangeReader r = open(from, -1); OutputStream out = create(to)) {
+            long n = r.length();
+            java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate((int) Math.min(Math.max(n, 1), 1 << 20));
+            for (long at = 0; at < n; ) {
+                b.clear();
+                if (n - at < b.capacity()) {
+                    b.limit((int) (n - at));
+                }
+                r.readFully(at, b);
+                out.write(b.array(), 0, b.position());
+                at += b.position();
+            }
+        }
     }
 
     /** Deletes {@code path}; false when there was no such file. */

@@ -142,7 +142,7 @@ public final class TckRunner {
         String text = said.toString(StandardCharsets.UTF_8).lines()
                 .filter(l -> !l.matches("\\d{4}-\\d{2}-\\d{2}T\\S+ lake-build .*"))   // the run log's line: a time and a run id
                 .collect(java.util.stream.Collectors.joining("\n")).strip();
-        if (!text.isEmpty()) {
+        if (!text.isEmpty() && (code != 0 || !op.equals("load"))) {
             s.put("said", text);                    // a refusal's reason, an upkeep's answer (paths become ${work})
         }
         if (summary != null) {
@@ -826,12 +826,11 @@ final class DeleteRow {   // lake-only
         String format = a[1], root = a[2], domain = a[3], table = a[4], id = a[6];   // lake-only
         LocalDate date = LocalDate.parse(a[5]);   // lake-only
         if (format.equals("files")) {   // lake-only
-            Path day = Path.of(root, domain, date.toString(), table + ".jsonl");   // lake-only
             List<String> keep = new ArrayList<>();   // lake-only
-            for (String l : Files.readAllLines(day, StandardCharsets.UTF_8)) {   // lake-only
-                if (!l.isBlank() && !l.contains("\"id\":\"" + id + "\"")) keep.add(l);   // lake-only
+            for (String l : com.ash.lake.files.FilesStore.dayLines(TckRunner.RT, root, domain, table, date)) {   // lake-only
+                if (!l.contains("\"id\":\"" + id + "\"")) keep.add(l);   // lake-only
             }   // lake-only
-            com.ash.lake.files.FilesStore.rewriteDay(root, domain, table, date, keep, "delete");   // lake-only
+            com.ash.lake.files.FilesStore.rewriteDay(TckRunner.RT, root, domain, table, date, keep, "delete");   // lake-only
             return "deleted one row";   // lake-only
         }   // lake-only
         if (!format.equals("delta")) throw new UnsupportedOperationException("no row delete for " + format + " in the kit");   // lake-only

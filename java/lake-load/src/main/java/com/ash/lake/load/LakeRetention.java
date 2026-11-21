@@ -118,7 +118,7 @@ public final class LakeRetention {
     public static Map<String, Object> apply(com.ash.lake.LakeRuntime runtime, String root, String format, String table, RowRetention r, Instant now, boolean dryRun) throws Exception {
         List<Map<String, Object>> dates = switch (format) {
             case "delta" -> delta(runtime, root, table, r, now, dryRun);
-            case "files" -> files(root, table, r, now, dryRun);
+            case "files" -> files(runtime, root, table, r, now, dryRun);
             case "iceberg" -> iceberg(runtime, root, table, r, dryRun);
             default -> throw new IllegalArgumentException("format " + format + " is delta, iceberg or files");
         };
@@ -169,7 +169,7 @@ public final class LakeRetention {
             throws Exception {
         Map<String, Object> got = switch (format) {
             case "delta" -> deltaDates(runtime, root, table, wanted, dryRun);
-            case "files" -> filesDates(root, table, wanted, dryRun);
+            case "files" -> filesDates(runtime, root, table, wanted, dryRun);
             case "iceberg" -> icebergDates(runtime, root, table, wanted, dryRun);
             default -> throw new IllegalArgumentException("format " + format + " is delta, iceberg or files");
         };
@@ -259,9 +259,10 @@ public final class LakeRetention {
     }
 
     /** A files store: the dates' day files ({@code <root>/<domain>/<date>/<kind>.jsonl}) deleted. */
-    static Map<String, Object> filesDates(String root, String table, java.util.function.Predicate<String> wanted, boolean dryRun) throws IOException {
+    static Map<String, Object> filesDates(com.ash.lake.LakeRuntime runtime, String root, String table, java.util.function.Predicate<String> wanted,
+            boolean dryRun) throws IOException {
         int slash = table.indexOf('/');
-        return com.ash.lake.files.FilesStore.dropDates(root, slash < 0 ? "" : table.substring(0, slash), table.substring(slash + 1), wanted, dryRun);
+        return com.ash.lake.files.FilesStore.dropDates(runtime, root, slash < 0 ? "" : table.substring(0, slash), table.substring(slash + 1), wanted, dryRun);
     }
 
     /** An Iceberg table, by the Iceberg maintenance: whole partitions deleted, one commit. */
@@ -334,44 +335,31 @@ public final class LakeRetention {
         return out;
     }
 
-    /** A files store: each day file holding a dropped row is rewritten through a temporary file moved over it. */
-    static List<Map<String, Object>> files(String root, String table, RowRetention r, Instant now, boolean dryRun) throws IOException {
+    /** A files store (on any storage): each day holding a dropped row is rewritten in one commit of the table's log. */
+    static List<Map<String, Object>> files(com.ash.lake.LakeRuntime runtime, String root, String table, RowRetention r, Instant now, boolean dryRun)
+            throws IOException {
         List<Map<String, Object>> out = new ArrayList<>();
         int slash = table.indexOf('/');
         String domain = slash < 0 ? "" : table.substring(0, slash);
         String kind = table.substring(slash + 1);
-        Path base = domain.isEmpty() ? Path.of(root) : Path.of(root).resolve(domain);
-        if (!Files.isDirectory(base)) {
+        java.util.List<java.time.LocalDate> dates = com.ash.lake.files.FilesStore.dayDates(runtime, root, domain, kind);
+        if (dates.isEmpty() || !r.active()) {
             return out;
         }
-        Map<String, Path> where = new TreeMap<>();
-        try (Stream<Path> days = Files.list(base)) {
-            for (Path d : days.filter(Files::isDirectory).sorted().toList()) {
-                Path f = d.resolve(kind + ".jsonl");
-                if (Files.isRegularFile(f)) {
-                    where.put(d.getFileName().toString(), f);
-                }
-            }
-        }
-        if (!r.active()) {
-            return out;
-        }
-        // one day file at a time: the ages of the rows are read as a stream (only when max-rows needs the table-wide cut), then each day
-        // file is judged and rewritten alone
+        // one day at a time: the ages of the rows are read (only when max-rows needs the table-wide cut), then each day is judged and
+        // rewritten alone
         List<Instant> ages = new ArrayList<>();
         if (r.maxRows() != null) {
-            for (Map.Entry<String, Path> e : where.entrySet()) {
-                Instant start = RowRetention.dayStart(e.getKey());
-                try (Stream<String> ls = Files.lines(e.getValue(), StandardCharsets.UTF_8)) {
-                    ls.filter(l -> !l.isBlank()).forEach(l -> ages.add(r.ageOfLine(l, start)));
-                }
+            for (java.time.LocalDate d : dates) {
+                Instant start = RowRetention.dayStart(d.toString());
+                com.ash.lake.files.FilesStore.dayLines(runtime, root, domain, kind, d).forEach(l -> ages.add(r.ageOfLine(l, start)));
             }
         }
         RowRetention.Judge judge = r.judge(ages, now);
         ages.clear();
-        for (Map.Entry<String, Path> e : where.entrySet()) {
-            Instant start = RowRetention.dayStart(e.getKey());
-            List<String> ls = Files.readAllLines(e.getValue(), StandardCharsets.UTF_8).stream().filter(l -> !l.isBlank()).toList();
+        for (java.time.LocalDate d : dates) {
+            Instant start = RowRetention.dayStart(d.toString());
+            List<String> ls = com.ash.lake.files.FilesStore.dayLines(runtime, root, domain, kind, d);
             List<String> keep = new ArrayList<>();
             for (String l : ls) {
                 if (judge.keeps(r.ageOfLine(l, start))) {
@@ -381,12 +369,12 @@ public final class LakeRetention {
             if (keep.size() == ls.size()) {
                 continue;
             }
-            line(out, e.getKey(), ls.size(), ls.size() - keep.size());
+            line(out, d.toString(), ls.size(), ls.size() - keep.size());
             if (dryRun) {
                 continue;
             }
             // one commit of the table's log (a day left empty: its day file goes); a running server never reads half a day
-            com.ash.lake.files.FilesStore.rewriteDay(root, domain, kind, java.time.LocalDate.parse(e.getKey()), keep, "retention");
+            com.ash.lake.files.FilesStore.rewriteDay(runtime, root, domain, kind, d, keep, "retention");
         }
         return out;
     }

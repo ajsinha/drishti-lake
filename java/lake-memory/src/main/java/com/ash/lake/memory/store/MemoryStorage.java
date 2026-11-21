@@ -231,6 +231,23 @@ public final class MemoryStorage implements Storage {
     }
 
     @Override
+    public List<FileEntry> files(String dir) throws IOException {
+        String k = key(dir.endsWith("/") ? dir.substring(0, dir.length() - 1) : dir);
+        String prefix = k.isEmpty() ? "" : k + "/";
+        List<FileEntry> out = new ArrayList<>();
+        for (Map.Entry<String, MemFile> e : files.tailMap(prefix, true).entrySet()) {
+            String key = e.getKey();
+            if (!key.startsWith(prefix)) {
+                break;
+            }
+            if (key.indexOf('/', prefix.length()) < 0) {
+                out.add(new FileEntry(full(key), e.getValue().length, e.getValue().modified));
+            }
+        }
+        return out;
+    }
+
+    @Override
     public boolean isDirectory(String path) throws IOException {
         String k = key(path);
         return k.isEmpty() ? !files.isEmpty() : exists(k + "/");

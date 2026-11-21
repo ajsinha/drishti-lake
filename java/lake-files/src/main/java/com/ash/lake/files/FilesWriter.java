@@ -57,7 +57,7 @@ final class FilesWriter implements TableWriter {
     /** The log's newest version when the load began (-1: none): a replace of a date committed since is lost (TableWriter). */
     private final long base;
 
-    FilesWriter(WriteSpec spec, Path root) throws IOException {
+    FilesWriter(WriteSpec spec, Place root) throws IOException {
         this.spec = spec;
         this.log = new FilesLog(root.resolve(spec.domain()), spec.table());
         this.base = log.head();
@@ -121,7 +121,7 @@ final class FilesWriter implements TableWriter {
 
     @Override
     public FileOut newFile(LocalDate date, String[] partitionValues, String name) throws IOException {
-        Path part = log.newContent();
+        Path part = com.ash.lake.common.TempFiles.of(spec.runtime()).createFile("files-part-", ".jsonl");   // the writer's own, local
         byte[] head = ("{\"domain\":" + quote(spec.domain()) + ",\"kind\":" + quote(spec.table()) + ",\"id\":").getBytes(StandardCharsets.UTF_8);
         byte[] dated = (",\"date\":\"" + date + "\",\"doc\":").getBytes(StandardCharsets.UTF_8);
         byte[] cols = ",\"columns\":".getBytes(StandardCharsets.UTF_8);
@@ -210,22 +210,22 @@ final class FilesWriter implements TableWriter {
         }
         boolean append = spec.appends();
         Map<String, String> slice = spec.slice();
-        if (files.isEmpty() && (append || !Files.isRegularFile(log.day(date)))) {
+        if (files.isEmpty() && (append || !log.day(date).isFile())) {
             return -1;                                             // nothing to add, or nothing to remove
         }
         FilesLog.Commit c;
         while (true) {                                             // an append is built on the date's newest version, again if another writer moved it
             FilesLog.Commit latest = append || !slice.isEmpty() ? log.latest(date) : null;
-            Path before = latest != null ? log.content(latest)                    // a day file without a log (written before it): its lines
-                    : (append || !slice.isEmpty()) && Files.isRegularFile(log.day(date)) ? log.day(date) : null;
-            Path content = null;
+            Place before = latest != null ? log.content(latest)                   // a day file without a log (written before it): its lines
+                    : (append || !slice.isEmpty()) && log.day(date).isFile() ? log.day(date) : null;
+            Place content = null;
             long rows = 0;
             if (!files.isEmpty() || before != null && !slice.isEmpty()) {
                 content = log.newContent();
-                try (OutputStream out = Files.newOutputStream(content)) {
+                try (OutputStream out = new BufferedOutputStream(content.out(), 1 << 16)) {
                     if (before != null && append) {
-                        rows += FilesStore.count(before);
-                        Files.copy(before, out);
+                        rows += before.countLines();
+                        before.copyTo(out);
                     } else if (before != null) {
                         rows += otherSlices(before, slice, out);  // a shared table: the other loads' slices of the date stay
                     }
@@ -235,7 +235,7 @@ final class FilesWriter implements TableWriter {
                     }
                 }
                 if (rows == 0) {
-                    Files.deleteIfExists(content);
+                    content.delete();
                     content = null;                                // nothing left of the date
                 }
             }
@@ -246,7 +246,7 @@ final class FilesWriter implements TableWriter {
                 break;
             }
             if (content != null) {
-                Files.deleteIfExists(content);
+                content.delete();
             }
             if (!append) {
                 for (WrittenFile f : files) {
@@ -262,9 +262,9 @@ final class FilesWriter implements TableWriter {
     }
 
     /** Copies the lines of {@code day} outside the slice (a line whose columns hold every value of the slice is in it); their count. */
-    private static long otherSlices(Path day, Map<String, String> slice, OutputStream out) throws IOException {
+    private static long otherSlices(Place day, Map<String, String> slice, OutputStream out) throws IOException {
         long n = 0;
-        try (java.io.BufferedReader r = Files.newBufferedReader(day, StandardCharsets.UTF_8)) {
+        try (java.io.BufferedReader r = day.reader()) {
             for (String line = r.readLine(); line != null; line = r.readLine()) {
                 if (line.isBlank() || inSlice(FilesLog.JSON.readTree(line).path("columns"), slice)) {
                     continue;

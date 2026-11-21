@@ -26,7 +26,7 @@ def lines(p):
     return {json.loads(l)["case"]: l for l in text.splitlines() if l.strip()}
 
 
-BEYOND = {"files"}   # stores the host's jars at the freeze commit do not have
+BEYOND = {"files"}   # stores the host's jars at the freeze commit do not have (on every row: local, memory, S3)
 PYTHON = "^python"   # the Python row: no reference (the host's kit ran its Java loader only), held to the Delta case here
 ROWS = ("~mem", "~s3")  # the memory and S3 rows: each compared with the local case of the reference
 
@@ -84,7 +84,8 @@ def main(argv):
             ref[c] = ref[local].replace(json.dumps(local)[1:-1], json.dumps(c)[1:-1], 1)
     cases_ref = {c.rpartition("@")[0] for c in ref}
     beyond = sorted(c for c in set(new) - set(ref)                 # a store, a case or a loader the host's kit never had
-                    if c.rpartition("@")[2] in BEYOND or c.split("~")[0].rpartition("@")[0] not in cases_ref or c.endswith(PYTHON))
+                    if c.rpartition("@")[2].split("~")[0] in BEYOND or c.split("~")[0].rpartition("@")[0] not in cases_ref
+                    or c.endswith(PYTHON))
     only_here = sorted(set(new) - set(ref) - set(beyond))
     if set(ref) - set(new) or only_here:
         print(f"case sets differ: only in the reference {sorted(set(ref) - set(new))[:5]}, only here {only_here[:5]}")

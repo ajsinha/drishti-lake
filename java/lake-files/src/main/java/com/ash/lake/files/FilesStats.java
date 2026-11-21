@@ -24,9 +24,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -68,7 +65,7 @@ final class FilesStats {
     }
 
     /** The statistics of a content file of {@code cols} (the lines' {@code id} and their {@code columns}' text columns). */
-    static JsonNode of(Path content, Columns cols) throws IOException {
+    static JsonNode of(Place content, Columns cols) throws IOException {
         Map<String, One> by = new LinkedHashMap<>();
         by.put("id", new One());
         for (var c : cols.all()) {
@@ -77,7 +74,7 @@ final class FilesStats {
             }
         }
         long rows = 0;
-        try (BufferedReader r = Files.newBufferedReader(content, StandardCharsets.UTF_8)) {
+        try (BufferedReader r = content.reader()) {
             for (String line = r.readLine(); line != null; line = r.readLine()) {
                 if (line.isBlank()) {
                     continue;

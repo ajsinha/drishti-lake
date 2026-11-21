@@ -18,29 +18,26 @@ package com.ash.lake.files;
 import com.ash.lake.spi.Column;
 import com.ash.lake.spi.ColumnType;
 import com.ash.lake.spi.Columns;
-import com.ash.tools.files.TempFolder;
+import com.ash.lake.spi.FileEntry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.stream.Stream;
 
 /**
- * A files table's log, {@code <root>/<domain>/_log/<table>/}, beside its day files (visible names only): {@code columns.json} (the
- * table's columns and types, fixed by its first load; the load columns added later as Delta adds them), and per commit, numbered from 0,
- * {@code <n>.json} (the commit: its date, operation, load ids, batch, rows and content) with {@code <n>.jsonl} (the date's whole content
- * at that version). A commit is the creation of its {@code <n>.json} (create-new: two writers never take one number); the day file
- * {@code <root>/<domain>/<date>/<table>.jsonl} is then published as that content (a link, else a copy, moved into place atomically), so
- * the file connector reads the newest day and the store reads any version (time travel, undo, a batch's retry).
+ * A files table's log, {@code <root>/<domain>/_log/<table>/}, beside its day files (visible names only), on the storage the lake lives on
+ * (local disk, S3, memory: {@link Place}): {@code columns.json} (the table's columns and types, fixed by its first load; the load columns
+ * added later as Delta adds them), and per commit, numbered from 0, {@code <n>.json} (the commit: its date, operation, load ids, batch,
+ * rows and the name of its content file, {@code <uuid>.jsonl}: the date's whole content at that version). A commit is the exclusive
+ * creation of its {@code <n>.json} (two writers never take one number; the loser reads the log again and checks what it was built on, as
+ * Delta's log does), so the log needs no lock on any storage. The day file {@code <root>/<domain>/<date>/<table>.jsonl} is then published
+ * as the date's newest content, whole (Storage#publish), so the file connector reads the newest day and the store reads any version (time
+ * travel, undo, a batch's retry).
  */
 final class FilesLog {
 
@@ -83,91 +80,82 @@ final class FilesLog {
         }
     }
 
-    private final Path dir;
-    private final Path domainDir;
+    private final Place dir;
+    private final Place domainDir;
     private final String table;
 
-    /** One temporary folder per log, inside the log (the same file system as the files it is moved to: the move is atomic). */
-    private static final java.util.concurrent.ConcurrentHashMap<Path, TempFolder> PARTS = new java.util.concurrent.ConcurrentHashMap<>();
-
-    private TempFolder parts() {
-        TempFolder t = PARTS.computeIfAbsent(dir.toAbsolutePath().normalize(), d -> TempFolder.of(d, "part-", "lake-temp-folder.txt"));
-        if (t.made() && !Files.isDirectory(t.root())) {
-            t.cleanUp();                                    // the log was removed (an undo, a dropped table) and is written again: made anew
-        }
-        return t;
-    }
-
-    FilesLog(Path domainDir, String table) {
+    FilesLog(Place domainDir, String table) {
         this.domainDir = domainDir;
         this.table = table;
         this.dir = domainDir.resolve("_log").resolve(table);
     }
 
     /** Whether the table has a log (a table written before the log, or by hand, has day files only). */
-    boolean exists() {
-        return Files.isRegularFile(dir.resolve("columns.json"));
+    boolean exists() throws IOException {
+        return dir.resolve("columns.json").isFile();
     }
 
-    Path dir() {
+    Place dir() {
         return dir;
     }
 
     /** The day file of {@code date}. */
-    Path day(LocalDate date) {
+    Place day(LocalDate date) {
         return domainDir.resolve(date.toString()).resolve(table + ".jsonl");
     }
 
     /** The table's columns, or null without a log. */
     Columns columns() throws IOException {
-        if (!exists()) {
+        JsonNode o = columnsFile();
+        if (o == null) {
             return null;
         }
         List<Column> out = new ArrayList<>();
-        for (JsonNode c : JSON.readTree(dir.resolve("columns.json").toFile()).path("columns")) {
+        for (JsonNode c : o.path("columns")) {
             out.add(new Column(c.path("name").asText(), ColumnType.valueOf(c.path("type").asText().toUpperCase(Locale.ROOT))));
         }
         return Columns.of(out);
     }
 
-    /** Writes the table's columns (a new table, or the load columns added), moved into place whole. */
-    /** The table's id ({@code columns.json}'s {@code id}, written at creation and by the first commit after), or null (F2). */
-    String id() throws IOException {
-        if (!exists()) {
+    private JsonNode columnsFile() throws IOException {
+        Place f = dir.resolve("columns.json");
+        try {
+            return JSON.readTree(f.readAll());
+        } catch (java.io.FileNotFoundException | java.nio.file.NoSuchFileException none) {
             return null;
         }
-        JsonNode id = JSON.readTree(dir.resolve("columns.json").toFile()).get("id");
+    }
+
+    /** The table's id ({@code columns.json}'s {@code id}, written at creation and by the first commit after), or null (F2). */
+    String id() throws IOException {
+        JsonNode o = columnsFile();
+        JsonNode id = o == null ? null : o.get("id");
         return id == null || id.isNull() ? null : id.asText();
     }
 
+    /** Writes the table's columns (a new table, or the load columns added), whole: its id kept, or a new one. */
     void columns(Columns cols) throws IOException {
-        Path tmp = columnsFile(cols);
-        locked(() -> Files.move(tmp, dir.resolve("columns.json"), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE));
-    }
-
-    /** {@code columns.json} for {@code cols} written beside it (its id kept, or a new one), to be moved into place. */
-    private Path columnsFile(Columns cols) throws IOException {
-        Files.createDirectories(dir);
         String id = id();
         ObjectNode o = JSON.createObjectNode().put("id", id == null ? java.util.UUID.randomUUID().toString() : id);
         ArrayNode a = o.putArray("columns");
         cols.all().forEach(c -> a.addObject().put("name", c.name()).put("type", c.type().name().toLowerCase(Locale.ROOT)));
-        Path tmp = parts().createFile("columns-", ".part");             // one per writer: two writers never share a temporary file
-        JSON.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), o);
-        return tmp;
+        dir.resolve("columns.json").put(JSON.writerWithDefaultPrettyPrinter().writeValueAsBytes(o));
     }
 
     List<Commit> commits() throws IOException {
         List<Commit> out = new ArrayList<>();
-        if (!Files.isDirectory(dir)) {
-            return out;
-        }
-        try (Stream<Path> s = Files.list(dir)) {
-            for (Path p : s.filter(p -> p.getFileName().toString().matches("\\d+\\.json")).toList()) {
-                Commit c = Commit.of(JSON.readTree(p.toFile()));
-                out.add(c.at() > 0 ? c : new Commit(c.version(), c.date(), c.op(), c.loads(), c.batch(), c.rows(), c.content(),
-                        Files.getLastModifiedTime(p).toMillis(), c.stats()));
+        for (FileEntry e : dir.storage().files(dir.path())) {
+            String name = e.path().substring(e.path().lastIndexOf('/') + 1);
+            if (!name.matches("\\d+\\.json")) {
+                continue;
             }
+            Commit c;
+            try {
+                c = Commit.of(JSON.readTree(dir.resolve(name).readAll()));
+            } catch (java.io.FileNotFoundException | java.nio.file.NoSuchFileException gone) {
+                continue;                                         // removed while listing (a dropped table)
+            }
+            out.add(c.at() > 0 ? c : new Commit(c.version(), c.date(), c.op(), c.loads(), c.batch(), c.rows(), c.content(), e.modified(), c.stats()));
         }
         out.sort(java.util.Comparator.comparingLong(Commit::version));
         return out;
@@ -189,7 +177,7 @@ final class FilesLog {
         if (c == null || c.content() == null) {
             return List.of();
         }
-        return Files.readAllLines(dir.resolve(c.content()), java.nio.charset.StandardCharsets.UTF_8).stream().filter(l -> !l.isBlank()).toList();
+        return dir.resolve(c.content()).lines();
     }
 
     /** A commit that does not check the date's version it was built on (a replace, a delete, an undo's rewrite). */
@@ -201,33 +189,31 @@ final class FilesLog {
     }
 
     /** The content file of a commit, or null for a commit that removed the date. */
-    Path content(Commit c) {
+    Place content(Commit c) {
         return c == null || c.content() == null ? null : dir.resolve(c.content());
     }
 
     /**
-     * Commits {@code content} (a file written beside the log, moved in; null: the date removed) as the date's next version and publishes the
-     * day file. Returns the commit.
+     * Commits {@code content} (a file of this log from {@link #newContent}, filled; null: the date removed) as the date's next version and
+     * publishes the day file. Returns the commit.
      */
-    Commit commit(LocalDate date, String op, List<String> loads, String batch, long rows, Path content) throws IOException {
+    Commit commit(LocalDate date, String op, List<String> loads, String batch, long rows, Place content) throws IOException {
         return commit(date, op, loads, batch, rows, content, ANY);
     }
 
     /**
-     * As {@link #commit(LocalDate, String, List, String, long, Path)}, when {@code date}'s newest version is still {@code base} (-1: the
+     * As {@link #commit(LocalDate, String, List, String, long, Place)}, when {@code date}'s newest version is still {@code base} (-1: the
      * date had none): null when another writer committed the date since (an append built on older content: the caller builds it again).
-     * Writers of one table, in this process or another, commit one at a time ({@link #locked}): the number taken, the content and the
-     * commit written and the day file published together, so a day file never goes back to an older version.
      */
-    Commit commit(LocalDate date, String op, List<String> loads, String batch, long rows, Path content, long base) throws IOException {
+    Commit commit(LocalDate date, String op, List<String> loads, String batch, long rows, Place content, long base) throws IOException {
         return commit(date, op, loads, batch, rows, content, now -> base == ANY || (now == null ? -1 : now.version()) == base);
     }
 
     /**
-     * As {@link #commit(LocalDate, String, List, String, long, Path)}, when no commit of {@code date} came after the log's version
+     * As {@link #commit(LocalDate, String, List, String, long, Place)}, when no commit of {@code date} came after the log's version
      * {@code since} (-1: the log had none): null when one did (a replace that lost to another writer).
      */
-    Commit commitSince(LocalDate date, String op, List<String> loads, String batch, long rows, Path content, long since) throws IOException {
+    Commit commitSince(LocalDate date, String op, List<String> loads, String batch, long rows, Place content, long since) throws IOException {
         return commit(date, op, loads, batch, rows, content, now -> now == null || now.version() <= since);
     }
 
@@ -236,90 +222,59 @@ final class FilesLog {
         return commits().stream().mapToLong(Commit::version).max().orElse(-1);
     }
 
-    private Commit commit(LocalDate date, String op, List<String> loads, String batch, long rows, Path content,
+    /**
+     * Takes the log's next number by creating {@code <n>.json} exclusively, while what the date's newest commit is still passes
+     * {@code builtOn}; a number another writer took first makes it read the log again (and check again). The content and its statistics
+     * are written before; the day file is published after.
+     */
+    private Commit commit(LocalDate date, String op, List<String> loads, String batch, long rows, Place content,
             java.util.function.Predicate<Commit> builtOn) throws IOException {
-        return locked(() -> {
+        Columns cols = columns();
+        if (cols != null && id() == null) {
+            columns(cols);                                   // a table written before ids: its next commit gives it one (F2)
+        }
+        JsonNode stats = content == null || cols == null ? null : FilesStats.of(content, cols);
+        while (true) {
             List<Commit> all = commits();
             if (!builtOn.test(at(all, date, Long.MAX_VALUE))) {
                 return null;
             }
             long n = all.stream().mapToLong(Commit::version).max().orElse(-1) + 1;
-            String name = content == null ? null : n + ".jsonl";
-            if (content != null) {
-                Files.move(content, dir.resolve(name), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            Commit c = new Commit(n, date, op, List.copyOf(loads), batch, rows, content == null ? null : content.name(), System.currentTimeMillis(),
+                    stats);
+            if (dir.resolve(n + ".json").createIfAbsent(JSON.writeValueAsBytes(c.json()))) {
+                publish(date);
+                return c;
             }
-            Columns cols = columns();
-            if (cols != null && id() == null) {
-                Files.move(columnsFile(cols), dir.resolve("columns.json"), StandardCopyOption.REPLACE_EXISTING,   // a table written
-                        StandardCopyOption.ATOMIC_MOVE);                // before ids: its next commit gives it one (F2), under the lock held
-            }
-            JsonNode stats = name == null || cols == null ? null : FilesStats.of(dir.resolve(name), cols);
-            Commit c = new Commit(n, date, op, List.copyOf(loads), batch, rows, name, System.currentTimeMillis(), stats);
-            Files.write(dir.resolve(n + ".json"), JSON.writeValueAsBytes(c.json()), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            publish(c);
-            return c;
-        });
-    }
-
-    private interface LogWork<T> {
-        T run() throws IOException;
+        }
     }
 
     /**
-     * {@code work} holding the table's commit lock ({@code commit.lock} in its log folder: an operating-system file lock, released by the
-     * system if the process dies; a second thread of this process waits for the first).
+     * The day file made the date's newest content (or removed), again until what it was made from is still the newest: writers that
+     * commit at once each publish after their commit, so the last to look leaves the newest version, and a day file never stays older.
      */
-    private <T> T locked(LogWork<T> work) throws IOException {
-        Files.createDirectories(dir);
-        try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(dir.resolve("commit.lock"), StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE)) {
-            java.nio.channels.FileLock lock = null;
-            long wait = 1;
-            while (lock == null) {
-                try {
-                    lock = ch.tryLock();
-                } catch (java.nio.channels.OverlappingFileLockException heldHere) {
-                    lock = null;                                     // another thread of this process holds it
-                }
-                if (lock == null) {
-                    try {
-                        Thread.sleep(wait);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        throw new java.io.InterruptedIOException("waiting for the commit lock of " + table);
-                    }
-                    wait = Math.min(50, wait * 2);
-                }
+    private void publish(LocalDate date) throws IOException {
+        Place day = day(date);
+        for (int round = 0; round < 100; round++) {
+            Commit newest = latest(date);
+            if (newest == null) {
+                return;
             }
-            try {
-                return work.run();
-            } finally {
-                lock.release();
+            if (newest.content() == null) {
+                day.delete();
+            } else {
+                day.publish(dir.resolve(newest.content()));
+            }
+            Commit after = latest(date);
+            if (after == null || after.version() == newest.version()) {
+                return;
             }
         }
+        throw new IOException("the day file of " + date + " of " + table + " was moved by other writers 100 times while it was published");
     }
 
-    /** The day file made the commit's content (or removed). */
-    private void publish(Commit c) throws IOException {
-        Path day = day(c.date());
-        if (c.content() == null) {
-            Files.deleteIfExists(day);
-            return;
-        }
-        Files.createDirectories(day.getParent());
-        Path tmp = day.resolveSibling(day.getFileName() + ".publish");
-        Files.deleteIfExists(tmp);
-        try {
-            Files.createLink(tmp, dir.resolve(c.content()));
-        } catch (IOException | UnsupportedOperationException noLinks) {
-            Files.copy(dir.resolve(c.content()), tmp, StandardCopyOption.REPLACE_EXISTING);
-        }
-        Files.move(tmp, day, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-    }
-
-    /** A new content file beside the log, to be filled and committed. */
-    Path newContent() throws IOException {
-        Files.createDirectories(dir);
-        return parts().createFile("content-", ".part");
+    /** A new content file of this log ({@code <uuid>.jsonl}), to be filled and committed (removed by the caller when it is not). */
+    Place newContent() {
+        return dir.resolve(java.util.UUID.randomUUID() + ".jsonl");
     }
 }

@@ -29,8 +29,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import com.ash.lake.spi.FileEntry;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -41,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -57,57 +55,60 @@ final class FilesForeign implements ForeignSource {
     private static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
     private static final int SAMPLE = 1000;
 
-    private final Path dir;
+    private final Place dir;
 
-    FilesForeign(Path dir) {
+    FilesForeign(Place dir) {
         this.dir = dir;
     }
 
     @Override
     public String missing() {
-        return "no folder " + dir.toAbsolutePath() + " of JSON Lines files";
+        return "no folder " + dir + " of JSON Lines files";
     }
 
     @Override
     public TableIdentity identity() {
-        String where = dir.toAbsolutePath().toString();
+        String where = dir.path();
         return new TableIdentity("location", where, where);
     }
 
-    private List<Path> files() throws IOException {
-        List<Path> out = new ArrayList<>();
-        try (Stream<Path> s = Files.list(dir)) {
-            s.filter(Files::isRegularFile).filter(p -> {
-                String n = p.getFileName().toString();
-                return !n.startsWith(".") && (n.endsWith(".jsonl") || n.endsWith(".jsonl.gz") || n.endsWith(".json") || n.endsWith(".json.gz"));
-            }).forEach(out::add);
+    private List<FileEntry> files() throws IOException {
+        List<FileEntry> out = new ArrayList<>();
+        for (FileEntry e : dir.storage().files(dir.path())) {
+            String n = name(e);
+            if (!n.startsWith(".") && (n.endsWith(".jsonl") || n.endsWith(".jsonl.gz") || n.endsWith(".json") || n.endsWith(".json.gz"))) {
+                out.add(e);
+            }
         }
-        out.sort(null);
         return out;
+    }
+
+    private static String name(FileEntry e) {
+        return e.path().substring(e.path().lastIndexOf('/') + 1);
     }
 
     @Override
     public Optional<ForeignSource.Version> version(AsOf asOf) throws IOException {
-        if (!Files.isDirectory(dir)) {
+        if (!dir.isDirectory()) {
             return Optional.empty();
         }
         if (!asOf.latest()) {
             throw new IOException(dir + " is a folder of plain files: it keeps no earlier versions (" + asOf.missing(dir.toString()) + ")");
         }
-        List<Path> files = files();
+        List<FileEntry> files = files();
         long hash = 1125899906842597L;
         long newest = 0;
-        for (Path p : files) {
-            long m = Files.getLastModifiedTime(p).toMillis();
-            hash = 31 * hash + (p.getFileName() + ":" + Files.size(p) + ":" + m).hashCode();
+        for (FileEntry p : files) {
+            long m = p.modified();
+            hash = 31 * hash + (name(p) + ":" + p.size() + ":" + m).hashCode();
             newest = Math.max(newest, m);
         }
         return Optional.of(new Version(files, hash & Long.MAX_VALUE, newest));
     }
 
-    private static InputStream open(Path p) throws IOException {
-        InputStream in = Files.newInputStream(p);
-        return p.getFileName().toString().endsWith(".gz") ? new GZIPInputStream(in, 1 << 16) : in;
+    private InputStream open(FileEntry p) throws IOException {
+        InputStream in = dir.resolve(name(p)).in();
+        return name(p).endsWith(".gz") ? new GZIPInputStream(in, 1 << 16) : in;
     }
 
     @FunctionalInterface
@@ -115,7 +116,7 @@ final class FilesForeign implements ForeignSource {
         boolean line(JsonNode n);           // false: stop
     }
 
-    private static void lines(Path p, Lines sink) throws IOException {
+    private void lines(FileEntry p, Lines sink) throws IOException {
         try (BufferedReader r = new BufferedReader(new InputStreamReader(open(p), StandardCharsets.UTF_8), 1 << 16)) {
             for (String l = r.readLine(); l != null; l = r.readLine()) {
                 if (l.isBlank()) {
@@ -229,18 +230,18 @@ final class FilesForeign implements ForeignSource {
 
     /** The folder's present state. */
     private final class Version implements ForeignSource.Version {
-        private final List<Path> files;
+        private final List<FileEntry> files;
         private final long version;
         private final long newest;
         private final List<ShapeField> columns = new ArrayList<>();
 
-        Version(List<Path> files, long version, long newest) throws IOException {
+        Version(List<FileEntry> files, long version, long newest) throws IOException {
             this.files = files;
             this.version = version;
             this.newest = newest;
             Map<String, ShapeField> seen = new LinkedHashMap<>();
             int[] left = {SAMPLE};
-            for (Path p : files) {
+            for (FileEntry p : files) {
                 if (left[0] <= 0) {
                     break;
                 }
@@ -288,8 +289,8 @@ final class FilesForeign implements ForeignSource {
 
         @Override
         public boolean fileNameDates() {
-            for (Path p : files) {
-                if (FileDates.of(p.getFileName().toString(), LocalDate.MAX) != null) {
+            for (FileEntry p : files) {
+                if (FileDates.of(name(p), LocalDate.MAX) != null) {
                     return true;
                 }
             }
@@ -299,9 +300,9 @@ final class FilesForeign implements ForeignSource {
         @Override
         public List<ForeignSource.File> files() throws IOException {
             List<ForeignSource.File> out = new ArrayList<>();
-            for (Path p : files) {
-                LocalDate d = FileDates.of(p.getFileName().toString(), LocalDate.MAX);
-                DataFile api = new DataFile(p.toAbsolutePath().toString(), Files.size(p), FileFormat.JSONL, -1, false, Map.of(), Map.of());
+            for (FileEntry p : files) {
+                LocalDate d = FileDates.of(name(p), LocalDate.MAX);
+                DataFile api = new DataFile(p.path(), p.size(), FileFormat.JSONL, -1, false, Map.of(), Map.of());
                 out.add(new ForeignSource.File(api, d == null ? Map.of() : Map.of("", (int) d.toEpochDay()), Map.of(), p));
             }
             return out;
@@ -310,7 +311,7 @@ final class FilesForeign implements ForeignSource {
         @Override
         public void read(ForeignSource.File file, int[] cols, Map<Integer, Object> equal, ForeignSource.Rows sink) throws IOException {
             Object[] out = new Object[cols.length];
-            lines((Path) file.handle(), n -> {
+            lines((FileEntry) file.handle(), n -> {
                 for (int i = 0; i < cols.length; i++) {
                     ShapeField f = columns.get(cols[i]);
                     out[i] = value(f, n.get(f.name()));

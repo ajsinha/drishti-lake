@@ -965,6 +965,7 @@ com.ash.lake.memory.store.MemoryStorage :: public java.lang.String com.ash.lake.
 com.ash.lake.memory.store.MemoryStorage :: public java.lang.String com.ash.lake.memory.store.MemoryStorage.lastRefusal()
 com.ash.lake.memory.store.MemoryStorage :: public java.lang.String com.ash.lake.memory.store.MemoryStorage.name()
 com.ash.lake.memory.store.MemoryStorage :: public java.lang.String com.ash.lake.memory.store.MemoryStorage.qualify(java.lang.String) throws java.io.IOException
+com.ash.lake.memory.store.MemoryStorage :: public java.util.List<com.ash.lake.spi.FileEntry> com.ash.lake.memory.store.MemoryStorage.files(java.lang.String) throws java.io.IOException
 com.ash.lake.memory.store.MemoryStorage :: public java.util.List<com.ash.lake.spi.FileEntry> com.ash.lake.memory.store.MemoryStorage.filesIn(java.lang.String) throws java.io.IOException
 com.ash.lake.memory.store.MemoryStorage :: public java.util.List<com.ash.lake.spi.FileEntry> com.ash.lake.memory.store.MemoryStorage.listFrom(java.lang.String) throws java.io.IOException
 com.ash.lake.memory.store.MemoryStorage :: public java.util.List<java.lang.String> com.ash.lake.memory.store.MemoryStorage.directories(java.lang.String) throws java.io.IOException
@@ -1419,6 +1420,8 @@ com.ash.lake.spi.Storage :: public default boolean com.ash.lake.spi.Storage.dele
 com.ash.lake.spi.Storage :: public default boolean com.ash.lake.spi.Storage.exclusiveCreates() throws java.io.IOException
 com.ash.lake.spi.Storage :: public default byte[] com.ash.lake.spi.Storage.readAll(java.lang.String) throws java.io.IOException
 com.ash.lake.spi.Storage :: public default java.io.OutputStream com.ash.lake.spi.Storage.create(java.lang.String) throws java.io.IOException
+com.ash.lake.spi.Storage :: public default java.util.List<com.ash.lake.spi.FileEntry> com.ash.lake.spi.Storage.files(java.lang.String) throws java.io.IOException
+com.ash.lake.spi.Storage :: public default void com.ash.lake.spi.Storage.publish(java.lang.String,java.lang.String) throws java.io.IOException
 com.ash.lake.spi.Storage :: public default void com.ash.lake.spi.Storage.put(java.lang.String,byte[]) throws java.io.IOException
 com.ash.lake.spi.StorageProvider :: public abstract com.ash.lake.spi.Storage com.ash.lake.spi.StorageProvider.storage(java.lang.String)
 com.ash.lake.spi.StorageProvider :: public abstract java.lang.String com.ash.lake.spi.StorageProvider.scheme()

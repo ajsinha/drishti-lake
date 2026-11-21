@@ -240,6 +240,29 @@ public final class S3Storage implements Storage, AutoCloseable {
     }
 
     @Override
+    public List<FileEntry> files(String dir) throws IOException {
+        Location l = Location.parse(dir.endsWith("/") ? dir.substring(0, dir.length() - 1) : dir);
+        List<FileEntry> out = new ArrayList<>();
+        try {
+            for (ListObjectsV2Response page : client.listObjectsV2Paginator(b -> b.bucket(l.bucket()).prefix(l.prefix()).delimiter("/"))) {
+                for (S3Object o : page.contents()) {
+                    if (!o.key().equals(l.prefix())) {
+                        out.add(new FileEntry(l.uri(o.key()), o.size(), o.lastModified().toEpochMilli()));
+                    }
+                }
+            }
+        } catch (NoSuchKeyException e) {
+            return List.of();
+        } catch (S3Exception e) {
+            if (e.statusCode() == 404) {
+                return List.of();
+            }
+            throw io(dir, e);
+        }
+        return out;                                              // S3 lists keys in order
+    }
+
+    @Override
     public boolean isDirectory(String path) throws IOException {
         Location l = Location.parse(path);
         try {

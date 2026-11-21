@@ -5,8 +5,9 @@
 # Equal to the stores' own declarations (StoreCapabilitiesTest); the list is reviewed and ONLY SHRINKS before v1.0.0.
 # The gate (tools/split/compare_results.py, L9): every case of every store, memory row included, gives its Delta case's answer; a gap
 # declared here as {<capability>: {reason: ..., case: <area>/<name>}} is the only way a case may differ.
-# The memory storage (mem://, lake-memory) is a storage, not a format: Delta and Iceberg tables in a memory store run every case as the
-# parity kit's memory row (<case>@<store>~mem), equal to the local results; it declares no gap.
+# The storages are not formats: Delta, Iceberg and files tables on memory (mem://, lake-memory) and on S3 run every case as the parity
+# kit's memory and S3 rows (<case>@<store>~mem, ~s3), equal to the local results (a case the kit can only set up on the local disk says
+# so with its reason: local-only, not-on); no store declares a storage gap.
 delta: {}
 iceberg: {}
 files: {}

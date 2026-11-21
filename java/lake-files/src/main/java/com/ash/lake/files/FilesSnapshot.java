@@ -39,8 +39,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -65,7 +63,7 @@ import java.util.concurrent.ConcurrentHashMap;
 final class FilesSnapshot implements TableSnapshot {
 
     /** A date's content: its file, the rows its commit states ({@code -1}: none), the commit's statistics (null: none). */
-    record Day(Path file, long rows, JsonNode stats) {}
+    record Day(Place file, long rows, JsonNode stats) {}
 
     private static final JsonFactory FACTORY = new JsonFactory();
 
@@ -152,7 +150,7 @@ final class FilesSnapshot implements TableSnapshot {
         if (d == null) {
             return;
         }
-        try (BufferedReader r = Files.newBufferedReader(d.file(), StandardCharsets.UTF_8)) {
+        try (BufferedReader r = d.file().reader()) {
             int i = 0;
             for (String line = r.readLine(); line != null; line = r.readLine()) {
                 if (!line.isBlank()) {
@@ -291,7 +289,7 @@ final class FilesSnapshot implements TableSnapshot {
                             b.hasNonNull("max") ? b.get("max").asText() : null, b.hasNonNull("nulls") ? b.get("nulls").asLong() : null));
                 });
             }
-            DataFile f = new DataFile(d.file().toAbsolutePath().toString(), Files.size(d.file()), FileFormat.JSONL, rows, false, Map.of(), bounds);
+            DataFile f = new DataFile(d.file().path(), d.file().size(), FileFormat.JSONL, rows, false, Map.of(), bounds);
             return DayFiles.of(x, List.of(f));
         })));
     }

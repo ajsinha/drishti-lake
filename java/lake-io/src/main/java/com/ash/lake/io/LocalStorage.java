@@ -131,6 +131,55 @@ public final class LocalStorage implements Storage {
     }
 
     @Override
+    public List<FileEntry> files(String dir) throws IOException {
+        String d = dir.endsWith("/") ? dir.substring(0, dir.length() - 1) : dir;
+        Path p = path(d);
+        if (!Files.isDirectory(p)) {
+            return List.of();
+        }
+        List<FileEntry> out = new ArrayList<>();
+        try (DirectoryStream<Path> files = Files.newDirectoryStream(p)) {
+            for (Path f : files) {
+                BasicFileAttributes a;
+                try {
+                    a = Files.readAttributes(f, BasicFileAttributes.class);
+                } catch (NoSuchFileException e) {
+                    continue;                                    // removed while listing
+                }
+                if (a.isRegularFile()) {
+                    out.add(new FileEntry(d + "/" + f.getFileName(), a.size(), a.lastModifiedTime().toMillis()));
+                }
+            }
+        } catch (NoSuchFileException | NotDirectoryException e) {
+            return List.of();
+        }
+        out.sort(Comparator.comparing(FileEntry::path));
+        return out;
+    }
+
+    /** A hard link of {@code from} beside {@code to} (a copy where links are not made), then a rename over {@code to}. */
+    @Override
+    public void publish(String from, String to) throws IOException {
+        Path target = path(to);
+        Files.createDirectories(target.getParent());
+        Path temp = target.resolveSibling(target.getFileName() + "." + java.util.UUID.randomUUID() + ".publish");
+        try {
+            try {
+                Files.createLink(temp, path(from));
+            } catch (IOException | UnsupportedOperationException noLinks) {
+                Files.copy(path(from), temp);
+            }
+            try {
+                Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temp);
+        }
+    }
+
+    @Override
     public java.io.OutputStream create(String path) throws IOException {
         Path p = path(path);
         Files.createDirectories(p.getParent());

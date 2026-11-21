@@ -34,7 +34,7 @@ Author: Ashutosh Sinha. Proprietary. All rights reserved (see [LICENSE](LICENSE)
 | `lake-api` | the facade (`LakeRuntime`, `LakeOptions`), the SPI (`TableStore`, `StorageProvider`, `LakeCatalog`, `Capabilities`) and the read API (`LakeReader`, `TableSnapshot`) |
 | `lake-io` | storage (local disk, S3 with TLS and proxies), ranged reads, cached Parquet footers, codecs |
 | `lake-config` | the lake file: tables, roots, partitions, locations, checks |
-| `lake-delta`, `lake-iceberg`, `lake-files` | the three stores; Iceberg catalogs: files, REST, S3 Tables, Glue |
+| `lake-delta`, `lake-iceberg`, `lake-files` | the three stores, each on local disk, S3 and memory; Iceberg catalogs: files, REST, S3 Tables, Glue |
 | `lake-load` | the loader (archives, child kinds, modes, rejects), undo, retention, check, and the inbox (`.ready` hand-over, ledger, routes) |
 | `lake-memory` | the in-memory lake (`mem://`) with a hard cap, retention and a replenish source |
 | `lake-contracts` | data contracts: the reader and the row checker |

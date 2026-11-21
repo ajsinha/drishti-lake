@@ -438,8 +438,8 @@ files, row groups pruned by an id; `DeltaForeign`: the Kernel, partition values 
 `<domain>/<table>/*.jsonl[.gz]`, the date in the name by the loader's rule, column kinds from the values, no earlier versions). A shape the
 table cannot answer is `LK-1001` in the plugin's words. Where it applies: tables on local disk and object stores through each store's
 reader (Delta, Iceberg: catalogs and S3 Tables through the reader's settings; a `namespace.table` opens that namespace); a memory lake
-holds no other engine's tables, so the case runs on the local rows only (`local-only`); the files store reads local disk only (as its
-layout reader). Differences, stated: the files store's version is its folder's present state (no time travel), and its text values that
+holds no other engine's tables, so the case runs on the local rows only (`local-only`); the files store reads the storage its lake lives
+on (local disk, S3, memory), as its layout reader does. Differences, stated: the files store's version is its folder's present state (no time travel), and its text values that
 are ISO dates or instants with a zone read as dates and timestamps (rendered back in the one form: `...Z`, UTC). `IcebergExternalPlugin`'s
 `Shape`, `KindConfig`, `ExternalTable` (and the moved copies in `lake-iceberg`, deleted) map to `TableShape`, `LakeReader.foreign` and
 `TableSnapshot`; its `IdIndex`, caches, refresh and links stay in the adapter (G4).

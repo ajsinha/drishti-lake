@@ -24,13 +24,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
-import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.BasicFileAttributes;
+import com.ash.lake.spi.FileEntry;
+import com.ash.lake.spi.RangeReader;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,7 +35,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -109,11 +105,10 @@ final class JsonlDay implements AutoCloseable {
         }
     }
 
-    private final Path file;
-    private final Object fileKey;
+    private final Place file;
     private final long size;
     private final long modified;
-    private final FileChannel channel;                  // null when the file could not be opened
+    private final RangeReader channel;                  // null when the file could not be opened
     private final String idField;
     private final JsonlFormat format;
     private final String[] ids;                         // sorted, unique
@@ -122,12 +117,11 @@ final class JsonlDay implements AutoCloseable {
     private final ColumnSet columns;
     private final Report report;
 
-    private JsonlDay(Path file, BasicFileAttributes at, FileChannel channel, String idField, JsonlFormat format, String[] ids, long[] offsets,
+    private JsonlDay(Place file, FileEntry at, RangeReader channel, String idField, JsonlFormat format, String[] ids, long[] offsets,
             int[] lengths, ColumnSet columns, Report report) {
         this.file = file;
-        this.fileKey = at.fileKey();
         this.size = at.size();
-        this.modified = at.lastModifiedTime().toMillis();
+        this.modified = at.modified();
         this.channel = channel;
         this.idField = idField;
         this.format = format;
@@ -141,8 +135,8 @@ final class JsonlDay implements AutoCloseable {
     /** True when the file is still the one indexed (the same file, size and modification time). */
     boolean current() {
         try {
-            BasicFileAttributes at = Files.readAttributes(file, BasicFileAttributes.class);
-            return at.size() == size && at.lastModifiedTime().toMillis() == modified && Objects.equals(at.fileKey(), fileKey);
+            FileEntry at = file.entry();
+            return at != null && at.size() == size && at.modified() == modified;
         } catch (IOException e) {
             return false;
         }
@@ -246,7 +240,7 @@ final class JsonlDay implements AutoCloseable {
         long pos = offsets[i];
         try {
             while (b.hasRemaining()) {
-                if (channel.read(b, pos + b.position()) < 0) {
+                if (channel.read(pos + b.position(), b) < 0) {
                     throw new StaleIndexException(file + " is shorter than when it was indexed");
                 }
             }
@@ -336,8 +330,8 @@ final class JsonlDay implements AutoCloseable {
         return doc != null ? new Line(id, doc) : new Line(plainId, line);   // else a plain document per line
     }
 
-    /** {@link #index(Path, LocalDate, List, String, JsonlFormat)} with the default format. */
-    static JsonlDay index(Path file, LocalDate day, List<String> paths, String idField) throws IOException {
+    /** {@link #index(Place, LocalDate, List, String, JsonlFormat)} with the default format. */
+    static JsonlDay index(Place file, LocalDate day, List<String> paths, String idField) throws IOException {
         return index(file, day, paths, idField, JsonlFormat.DEFAULT);
     }
 
@@ -348,25 +342,25 @@ final class JsonlDay implements AutoCloseable {
      * @throws NoSuchFileException when the file is gone (the next rescan forgets it); any other failure to read it is an
      *     empty day whose {@link #report()} says why
      */
-    static JsonlDay index(Path file, LocalDate day, List<String> paths, String idField, JsonlFormat format) throws IOException {
+    static JsonlDay index(Place file, LocalDate day, List<String> paths, String idField, JsonlFormat format) throws IOException {
         for (int attempt = 0; ; attempt++) {
-            BasicFileAttributes before = Files.readAttributes(file, BasicFileAttributes.class);
-            FileChannel ch;
+            FileEntry before = file.status();
+            RangeReader ch;
             try {
-                ch = FileChannel.open(file, StandardOpenOption.READ);
-            } catch (NoSuchFileException e) {
-                throw e;
+                ch = file.open();
+            } catch (java.io.FileNotFoundException e) {
+                throw new NoSuchFileException(file.path());
             } catch (IOException e) {
                 return failed(file, before, day, idField, format, e);
             }
-            BasicFileAttributes after;
+            FileEntry after;
             try {
-                after = Files.readAttributes(file, BasicFileAttributes.class);
+                after = file.status();
             } catch (IOException e) {
                 ch.close();
                 throw e;
             }
-            if (attempt < 3 && !Objects.equals(before.fileKey(), after.fileKey())) {
+            if (attempt < 3 && (before.size() != after.size() || before.modified() != after.modified())) {
                 ch.close();                                       // replaced while it was opened: open the new one
                 continue;
             }
@@ -379,15 +373,15 @@ final class JsonlDay implements AutoCloseable {
         }
     }
 
-    private static JsonlDay failed(Path file, BasicFileAttributes at, LocalDate day, String idField, JsonlFormat format, Exception e) {
+    private static JsonlDay failed(Place file, FileEntry at, LocalDate day, String idField, JsonlFormat format, Exception e) {
         String why = e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage());
         return new JsonlDay(file, at, null, idField, format, new String[0], new long[0], new int[0],
                 new ColumnSet(new String[0], Map.of(), Map.of(), day), new Report(0, List.of(), 0, List.of(), why));
     }
 
-    private static JsonlDay index(Path file, BasicFileAttributes at, FileChannel ch, LocalDate day, List<String> paths, String idField,
+    private static JsonlDay index(Place file, FileEntry at, RangeReader ch, LocalDate day, List<String> paths, String idField,
             JsonlFormat format) throws IOException {
-        long size = ch.size();
+        long size = ch.length();
         Map<String, Integer> column = new HashMap<>();
         for (int c = 0; c < paths.size(); c++) {
             column.put(paths.get(c), c);
@@ -499,7 +493,7 @@ final class JsonlDay implements AutoCloseable {
         }
 
         /** Indexes the lines in {@code [from, to)}, read in blocks of 4 MB; a line longer than the format allows is skipped unread. */
-        Part scan(FileChannel ch, long from, long to) throws IOException {
+        Part scan(RangeReader ch, long from, long to) throws IOException {
             ByteBuffer block = ByteBuffer.allocate(BLOCK);
             ByteArrayOutputStream carry = new ByteArrayOutputStream(16_384);   // a line that runs past the end of a block
             boolean tooLong = false;                                           // the current line is past the limit: not kept
@@ -509,7 +503,7 @@ final class JsonlDay implements AutoCloseable {
             while (pos < to) {
                 block.clear();
                 block.limit((int) Math.min(BLOCK, to - pos));
-                int got = com.ash.lake.common.ChannelIo.read(ch, block, pos);   // 4 MB into a heap buffer: chunked, no 4 MB direct buffer
+                int got = ch.read(pos, block);                                  // 4 MB into a heap buffer (local disk: chunked, no direct buffer)
                 if (got <= 0) {
                     break;
                 }
@@ -588,12 +582,12 @@ final class JsonlDay implements AutoCloseable {
     }
 
     /** The offset just after the first line end at or after {@code at} (the file's size when there is none). */
-    private static long lineStartAfter(FileChannel ch, long at, long size) throws IOException {
+    private static long lineStartAfter(RangeReader ch, long at, long size) throws IOException {
         ByteBuffer b = ByteBuffer.allocate(64 << 10);
         long pos = at;
         while (pos < size) {
             b.clear();
-            int got = ch.read(b, pos);
+            int got = ch.read(pos, b);
             if (got <= 0) {
                 break;
             }
@@ -700,7 +694,7 @@ final class JsonlDay implements AutoCloseable {
      * Sorts the lines by id (the file may be in any order), keeps each id's last line (as a reload of the file would
      * leave it), and turns the promoted values into columns.
      */
-    private static JsonlDay sorted(Path file, BasicFileAttributes at, FileChannel ch, String idField, JsonlFormat format, LocalDate day,
+    private static JsonlDay sorted(Place file, FileEntry at, RangeReader ch, String idField, JsonlFormat format, LocalDate day,
             List<String> paths, int n, String[] ids, long[] offsets, int[] lengths, Object[][] values, int unreadable, List<String> unreadableLines) {
         Integer[] order = new Integer[n];
         for (int i = 0; i < n; i++) {

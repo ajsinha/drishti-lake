@@ -32,8 +32,6 @@ import com.ash.lake.spi.TableWriter;
 import com.ash.lake.spi.WriteSpec;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -43,7 +41,6 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.function.Predicate;
-import java.util.stream.Stream;
 
 /**
  * The files store (LK-8): one JSON-lines file per table and business date, {@code <root>/<domain>/<date>/<table>.jsonl}, a line per
@@ -51,8 +48,8 @@ import java.util.stream.Stream;
  * it ({@link JsonlDay}). A date is written whole into a file beside it and moved into place, so a reader sees the old day or the new one.
  * Its rows are {@code id}, {@code business_date}, {@code doc} and the table's typed columns (each line's {@code columns}); its log
  * ({@link FilesLog}) keeps every version of a date with the load and batch that wrote it, for undo, a batch's retry and reading an earlier
- * version. A table of day files without a log (written by hand) reads as {@code id}, {@code business_date} and {@code doc}. Local folders
- * only.
+ * version. A table of day files without a log (written by hand) reads as {@code id}, {@code business_date} and {@code doc}. On every
+ * storage a lake lives on: local disk, S3 and memory ({@link Place}), as Delta and Iceberg.
  */
 public final class FilesStore implements TableStore {
 
@@ -73,7 +70,7 @@ public final class FilesStore implements TableStore {
 
     @Override
     public com.ash.lake.read.LakeReader open(com.ash.lake.LakeRuntime runtime, com.ash.lake.read.LakeAddress address) {
-        return new FilesLakeReader(address);
+        return new FilesLakeReader(runtime, address);
     }
 
     @Override
@@ -86,33 +83,23 @@ public final class FilesStore implements TableStore {
         return CAPABILITIES;
     }
 
-    /** The domain's folder of a table: {@code <root>/<domain>}, a local folder. */
-    static Path domainDir(TableRef t) {
-        return local(t.root()).resolve(t.domain());
-    }
-
-    static Path local(String root) {
-        String r = root.startsWith("file://") ? root.substring("file://".length()) : root;
-        if (r.contains("://")) {
-            throw new UnsupportedOperationException("the files store reads and writes local folders only, not " + root);
-        }
-        return Path.of(r);
+    /** The domain's folder of a table: {@code <root>/<domain>}, on the storage of its root. */
+    static Place domainDir(LakeRuntime runtime, TableRef t) {
+        return Place.root(runtime, t.root()).resolve(t.domain());
     }
 
     /** The table's day files by date, oldest first. */
-    static SortedMap<LocalDate, Path> days(TableRef t) throws IOException {
-        SortedMap<LocalDate, Path> out = new TreeMap<>();
-        Path base = domainDir(t);
-        if (!Files.isDirectory(base)) {
-            return out;
-        }
-        try (Stream<Path> s = Files.list(base)) {
-            for (Path d : s.filter(Files::isDirectory).toList()) {
-                LocalDate date = date(d.getFileName().toString());
-                Path f = d.resolve(t.table() + ".jsonl");
-                if (date != null && Files.isRegularFile(f)) {
-                    out.put(date, f);
-                }
+    static SortedMap<LocalDate, Place> days(LakeRuntime runtime, TableRef t) throws IOException {
+        return days(domainDir(runtime, t), t.table());
+    }
+
+    static SortedMap<LocalDate, Place> days(Place base, String table) throws IOException {
+        SortedMap<LocalDate, Place> out = new TreeMap<>();
+        for (String d : base.directories()) {
+            LocalDate date = date(d);
+            Place f = base.resolve(d).resolve(table + ".jsonl");
+            if (date != null && f.isFile()) {
+                out.put(date, f);
             }
         }
         return out;
@@ -128,47 +115,36 @@ public final class FilesStore implements TableStore {
 
     @Override
     public boolean exists(LakeRuntime runtime, TableRef table) throws IOException {
-        return !days(table).isEmpty();
+        return !days(runtime, table).isEmpty();
     }
 
     @Override
     public Columns columns(LakeRuntime runtime, TableRef table) throws IOException {
         if (!exists(runtime, table)) {
-            throw new IOException("no files table at " + domainDir(table) + "/<date>/" + table.table() + ".jsonl");
+            throw new IOException("no files table at " + domainDir(runtime, table) + "/<date>/" + table.table() + ".jsonl");
         }
-        return columnsOf(table);
+        return columnsOf(runtime, table);
     }
 
-    static Columns columnsOf(TableRef table) throws IOException {
-        Columns c = new FilesLog(domainDir(table), table.table()).columns();
+    static Columns columnsOf(LakeRuntime runtime, TableRef table) throws IOException {
+        Columns c = new FilesLog(domainDir(runtime, table), table.table()).columns();
         return c == null ? BASE : c;
     }
 
     @Override
     public SortedMap<LocalDate, Long> dates(LakeRuntime runtime, TableRef table) throws IOException {
         SortedMap<LocalDate, Long> out = new TreeMap<>();
-        for (Map.Entry<LocalDate, Path> e : days(table).entrySet()) {
-            out.put(e.getKey(), lines(e.getValue()));
+        for (Map.Entry<LocalDate, Place> e : days(runtime, table).entrySet()) {
+            out.put(e.getKey(), e.getValue().countLines());
         }
         return out;
-    }
-
-    /** The rows of a day file. */
-    static long count(Path f) throws IOException {
-        return lines(f);
-    }
-
-    private static long lines(Path f) throws IOException {
-        try (Stream<String> ls = Files.lines(f, StandardCharsets.UTF_8)) {
-            return ls.filter(l -> !l.isBlank()).count();
-        }
     }
 
     /** The log's commits, oldest first: a commit's number and when it was committed (a table without a log: none). */
     @Override
     public List<TableVersion> versions(LakeRuntime runtime, TableRef table) throws IOException {
         List<TableVersion> out = new ArrayList<>();
-        for (FilesLog.Commit c : new FilesLog(domainDir(table), table.table()).commits()) {
+        for (FilesLog.Commit c : new FilesLog(domainDir(runtime, table), table.table()).commits()) {
             out.add(new TableVersion(c.version(), java.time.Instant.ofEpochMilli(c.at())));
         }
         return out;
@@ -178,19 +154,19 @@ public final class FilesStore implements TableStore {
      * The table's days as of {@code asOf}, oldest first, each read by {@link #readDay}: the day files (the newest version), or each date's
      * content at the commit the log names (a date whose newest commit then removed it is absent).
      */
-    private static SortedMap<LocalDate, Object> daysAsOf(TableRef table, AsOf asOf) throws IOException {
+    private static SortedMap<LocalDate, Object> daysAsOf(LakeRuntime runtime, TableRef table, AsOf asOf) throws IOException {
         SortedMap<LocalDate, Object> out = new TreeMap<>();
         if (asOf.latest()) {
-            out.putAll(days(table));
+            out.putAll(days(runtime, table));
             return out;
         }
-        FilesLog log = new FilesLog(domainDir(table), table.table());
+        FilesLog log = new FilesLog(domainDir(runtime, table), table.table());
         List<FilesLog.Commit> commits = log.commits();
         List<TableVersion> versions = new ArrayList<>();
         commits.forEach(c -> versions.add(new TableVersion(c.version(), java.time.Instant.ofEpochMilli(c.at()))));
         TableVersion at = asOf.resolve(versions);
         if (at == null) {
-            throw new IOException(asOf.missing(domainDir(table) + "/" + table.table()));
+            throw new IOException(asOf.missing(domainDir(runtime, table) + "/" + table.table()));
         }
         java.util.Set<LocalDate> dates = new java.util.TreeSet<>();
         commits.forEach(c -> dates.add(c.date()));
@@ -211,8 +187,8 @@ public final class FilesStore implements TableStore {
     /** Hands each line of a day to {@code sink}: its day file, read as a stream, or the lines a commit held. */
     @SuppressWarnings("unchecked")
     private static void readDay(Object day, LineSink sink) throws IOException {
-        if (day instanceof Path p) {
-            try (java.io.BufferedReader r = Files.newBufferedReader(p, StandardCharsets.UTF_8)) {
+        if (day instanceof Place p) {
+            try (java.io.BufferedReader r = p.reader()) {
                 for (String line = r.readLine(); line != null; line = r.readLine()) {
                     sink.line(line);
                 }
@@ -230,16 +206,16 @@ public final class FilesStore implements TableStore {
      */
     @Override
     public RowScan scan(LakeRuntime runtime, TableRef table, ScanRequest request) throws IOException {
-        Columns all = columnsOf(table);
+        Columns all = columnsOf(runtime, table);
         Columns out = request.columns().isEmpty() ? all : project(all, request.columns());
         int[] picks = new int[out.size()];
         for (int i = 0; i < picks.length; i++) {
             picks[i] = all.indexOf(out.get(i).name());
         }
         List<Row> rows = new ArrayList<>();
-        Map<LocalDate, com.fasterxml.jackson.databind.JsonNode> stats = statsAsOf(table, request.asOf());
+        Map<LocalDate, com.fasterxml.jackson.databind.JsonNode> stats = statsAsOf(runtime, table, request.asOf());
         long[] count = new long[3];                              // files read, files skipped, rows read
-        for (Map.Entry<LocalDate, Object> e : daysAsOf(table, request.asOf()).entrySet()) {
+        for (Map.Entry<LocalDate, Object> e : daysAsOf(runtime, table, request.asOf()).entrySet()) {
             LocalDate date = e.getKey();
             com.fasterxml.jackson.databind.JsonNode st = stats.get(date);
             // a date is one file: pruned by its date and by its commit's statistics (FilesStats), as the Parquet stores prune files
@@ -277,8 +253,8 @@ public final class FilesStore implements TableStore {
     }
 
     /** Each date's commit statistics at the request's version (none for a table without a log, or a commit before statistics). */
-    private static Map<LocalDate, com.fasterxml.jackson.databind.JsonNode> statsAsOf(TableRef table, AsOf asOf) throws IOException {
-        FilesLog log = new FilesLog(domainDir(table), table.table());
+    private static Map<LocalDate, com.fasterxml.jackson.databind.JsonNode> statsAsOf(LakeRuntime runtime, TableRef table, AsOf asOf) throws IOException {
+        FilesLog log = new FilesLog(domainDir(runtime, table), table.table());
         List<FilesLog.Commit> commits = log.commits();
         long version = Long.MAX_VALUE;
         if (!asOf.latest() && !commits.isEmpty()) {
@@ -345,7 +321,7 @@ public final class FilesStore implements TableStore {
 
     @Override
     public TableWriter writer(WriteSpec spec) throws IOException {
-        return new FilesWriter(spec, local(spec.root()));
+        return new FilesWriter(spec, Place.root(spec.runtime(), spec.root(), spec.storage()));
     }
 
     @Override
@@ -353,7 +329,7 @@ public final class FilesStore implements TableStore {
         Set<String> wanted = new java.util.HashSet<>();
         dates.forEach(d -> wanted.add(d.toString()));
         List<DateChange> out = new ArrayList<>();
-        for (Map<String, Object> line : lines(dropDates(table.root(), table.domain(), table.table(), wanted::contains, dryRun))) {
+        for (Map<String, Object> line : lines(dropDates(runtime, table.root(), table.domain(), table.table(), wanted::contains, dryRun))) {
             out.add(new DateChange(LocalDate.parse((String) line.get("date")), ((Number) line.get("dropped")).longValue(), 0, -1));
         }
         return out;
@@ -370,16 +346,16 @@ public final class FilesStore implements TableStore {
      */
     @Override
     public List<DateChange> undo(LakeRuntime runtime, TableRef table, String loadId, boolean dryRun) throws IOException {
-        FilesLog log = new FilesLog(domainDir(table), table.table());
+        FilesLog log = new FilesLog(domainDir(runtime, table), table.table());
         List<DateChange> out = new ArrayList<>();
         if (!log.exists()) {
             return out;
         }
         List<FilesLog.Commit> commits = log.commits();
-        for (Map.Entry<LocalDate, Path> e : days(table).entrySet()) {
+        for (Map.Entry<LocalDate, Place> e : days(runtime, table).entrySet()) {
             List<String> keep = new ArrayList<>();
             long removed = 0;
-            for (String line : java.nio.file.Files.readAllLines(e.getValue(), StandardCharsets.UTF_8)) {
+            for (String line : e.getValue().lines()) {
                 if (line.isBlank()) {
                     continue;
                 }
@@ -413,74 +389,96 @@ public final class FilesStore implements TableStore {
         return out;
     }
 
+    /** The tables of the lake at {@code root} that have a log, {@code <domain>/<table>}, sorted. */
+    public static List<String> tables(LakeRuntime runtime, String root) throws IOException {
+        Place r = Place.root(runtime, root);
+        List<String> out = new ArrayList<>();
+        for (String d : r.directories()) {
+            Place logs = r.resolve(d).resolve("_log");
+            for (String t : logs.directories()) {
+                if (logs.resolve(t).resolve("columns.json").isFile()) {
+                    out.add(d + "/" + t);
+                }
+            }
+        }
+        return out;
+    }
+
+    /** The business dates of the table {@code domain/table} of the lake at {@code root} (its day files), oldest first. */
+    public static List<LocalDate> dayDates(LakeRuntime runtime, String root, String domain, String table) throws IOException {
+        return new ArrayList<>(days(domain.isEmpty() ? Place.root(runtime, root) : Place.root(runtime, root).resolve(domain), table).keySet());
+    }
+
+    /** The non-blank lines of one day of the table {@code domain/table} of the lake at {@code root} (none when the day is not there). */
+    public static List<String> dayLines(LakeRuntime runtime, String root, String domain, String table, LocalDate date) throws IOException {
+        Place base = domain.isEmpty() ? Place.root(runtime, root) : Place.root(runtime, root).resolve(domain);
+        Place f = base.resolve(date.toString()).resolve(table + ".jsonl");
+        return f.isFile() ? f.lines() : List.of();
+    }
+
     /** Commits {@code lines} as the date's next version ({@code op}: {@code undo}, {@code retention}); none: the date removed. */
     static FilesLog.Commit rewrite(FilesLog log, LocalDate date, String op, List<String> loads, List<String> lines) throws IOException {
-        Path content = null;
+        Place content = null;
         if (!lines.isEmpty()) {
             content = log.newContent();
-            java.nio.file.Files.write(content, (String.join("\n", lines) + "\n").getBytes(StandardCharsets.UTF_8));
+            try (java.io.OutputStream out = content.out()) {
+                out.write((String.join("\n", lines) + "\n").getBytes(StandardCharsets.UTF_8));
+            }
         }
         return log.commit(date, op, loads, null, lines.size(), content);
     }
 
     /**
      * The day {@code date} of the table {@code domain/table} of the lake at {@code root} rewritten with {@code lines} in one commit (the
-     * lake's row retention); a table without a log has its day file replaced atomically.
+     * lake's row retention); a table without a log has its day file replaced whole.
      */
-    public static void rewriteDay(String root, String domain, String table, LocalDate date, List<String> lines, String op) throws IOException {
-        FilesLog log = new FilesLog(domain.isEmpty() ? local(root) : local(root).resolve(domain), table);
+    public static void rewriteDay(LakeRuntime runtime, String root, String domain, String table, LocalDate date, List<String> lines, String op)
+            throws IOException {
+        FilesLog log = new FilesLog(domain.isEmpty() ? Place.root(runtime, root) : Place.root(runtime, root).resolve(domain), table);
         if (log.exists()) {
             rewrite(log, date, op, List.of(), lines);
             return;
         }
-        Path f = log.day(date);
+        Place f = log.day(date);
         if (lines.isEmpty()) {
-            java.nio.file.Files.deleteIfExists(f);
+            f.delete();
             return;
         }
-        Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
-        java.nio.file.Files.write(tmp, (String.join("\n", lines) + "\n").getBytes(StandardCharsets.UTF_8));
-        java.nio.file.Files.move(tmp, f, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        f.put((String.join("\n", lines) + "\n").getBytes(StandardCharsets.UTF_8));
     }
 
     /**
      * Whole dates removed from the table {@code domain/table} of the lake at {@code root} (the lake's delete): {@code held} (every date
      * held before) and {@code dates} (a line per date {@code wanted} accepts: {@code date}, {@code rows}, {@code dropped}). Each day file is
-     * deleted whole, so a reader sees the whole day or none of it; nothing on a dry run.
+     * removed whole, so a reader sees the whole day or none of it; nothing on a dry run.
      */
-    public static Map<String, Object> dropDates(String root, String domain, String table, Predicate<String> wanted, boolean dryRun) throws IOException {
-        Path base = domain.isEmpty() ? local(root) : local(root).resolve(domain);
+    public static Map<String, Object> dropDates(LakeRuntime runtime, String root, String domain, String table, Predicate<String> wanted,
+            boolean dryRun) throws IOException {
+        Place base = domain.isEmpty() ? Place.root(runtime, root) : Place.root(runtime, root).resolve(domain);
         List<String> held = new ArrayList<>();
         List<Map<String, Object>> lines = new ArrayList<>();
-        List<Path> gone = new ArrayList<>();
-        if (Files.isDirectory(base)) {
-            try (Stream<Path> days = Files.list(base)) {
-                for (Path d : days.filter(Files::isDirectory).sorted().toList()) {
-                    Path f = d.resolve(table + ".jsonl");
-                    if (!Files.isRegularFile(f)) {
-                        continue;
-                    }
-                    String date = d.getFileName().toString();
-                    held.add(date);
-                    if (wanted.test(date)) {
-                        long n = lines(f);
-                        Map<String, Object> m = new LinkedHashMap<>();
-                        m.put("date", date);
-                        m.put("rows", n);
-                        m.put("dropped", n);
-                        lines.add(m);
-                        gone.add(f);
-                    }
-                }
+        Map<LocalDate, Place> gone = new TreeMap<>();
+        for (Map.Entry<LocalDate, Place> e : days(base, table).entrySet()) {
+            String date = e.getKey().toString();
+            held.add(date);
+            if (wanted.test(date)) {
+                long n = e.getValue().countLines();
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("date", date);
+                m.put("rows", n);
+                m.put("dropped", n);
+                lines.add(m);
+                gone.put(e.getKey(), e.getValue());
             }
         }
         if (!dryRun) {
             FilesLog log = new FilesLog(base, table);
-            for (Path f : gone) {
-                if (log.exists()) {
-                    log.commit(LocalDate.parse(f.getParent().getFileName().toString()), "delete", List.of(), null, 0, null);   // the date's versions kept
+            boolean logged = log.exists();
+            for (Map.Entry<LocalDate, Place> e : gone.entrySet()) {
+                if (logged) {
+                    log.commit(e.getKey(), "delete", List.of(), null, 0, null);   // the date's versions kept
                 } else {
-                    Files.delete(f);
+                    e.getValue().delete();
                 }
             }
         }

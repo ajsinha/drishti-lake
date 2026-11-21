@@ -145,8 +145,8 @@ def jobs(cases, scratch, stores=None, storages=("local",), loaders=("java",)):
                 continue
             if loader == "python" and store != "delta":
                 continue                                             # the Python path writes Delta tables
-            if storage != "local" and (store not in ("delta", "iceberg") or c.get("local-only")):
-                continue                                             # the memory and S3 rows: Delta and Iceberg tables (files: local disk)
+            if storage != "local" and c.get("local-only"):
+                continue                                             # the memory and S3 rows: every store (a local-only case says why)
             if storage in (c.get("not-on") or {}):
                 continue                                             # a storage the case cannot run on, with the reason in the case
             cid = f"{name}@{store}" + ROW.get(storage, "") + (PYTHON if loader == "python" else "")

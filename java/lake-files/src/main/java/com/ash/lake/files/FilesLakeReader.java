@@ -27,8 +27,7 @@ import com.ash.lake.spi.AsOf;
 import com.ash.lake.spi.TableRef;
 import com.ash.lake.spi.TableVersion;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import com.ash.lake.LakeRuntime;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -38,7 +37,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Stream;
 
 /**
  * The read API over a files lake (READ_API.md section 4): a table's log ({@code <root>/<domain>/_log/<table>/}) gives its versions,
@@ -46,19 +44,21 @@ import java.util.stream.Stream;
  */
 final class FilesLakeReader implements LakeReader {
 
+    final LakeRuntime runtime;
     final String root;
     final String domain;
-    final Path domainDir;
+    final Place domainDir;
     final Map<String, String> names;
     final Problems problems;
     private final Map<String, Table> tables = new ConcurrentHashMap<>();
     private final Map<String, com.ash.lake.io.read.ForeignTableReader> foreign = new ConcurrentHashMap<>();
     private final java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
 
-    FilesLakeReader(LakeAddress address) {
+    FilesLakeReader(LakeRuntime runtime, LakeAddress address) {
+        this.runtime = runtime;
         this.root = address.root();
         this.domain = address.domain();
-        this.domainDir = FilesStore.local(address.root()).resolve(address.domain());
+        this.domainDir = Place.root(runtime, address.root(), address.settings()).resolve(address.domain());
         this.names = address.tableNames();
         this.problems = new Problems(domainDir.toString(), Problems::describe);
     }
@@ -76,10 +76,10 @@ final class FilesLakeReader implements LakeReader {
     @Override
     public List<String> tables() throws IOException {
         List<String> out = new ArrayList<>();
-        Path logs = domainDir.resolve("_log");
-        if (Files.isDirectory(logs)) {
-            try (Stream<Path> s = Files.list(logs)) {
-                s.filter(p -> Files.isRegularFile(p.resolve("columns.json"))).forEach(p -> out.add(p.getFileName().toString()));
+        Place logs = domainDir.resolve("_log");
+        for (String t : logs.directories()) {
+            if (logs.resolve(t).resolve("columns.json").isFile()) {
+                out.add(t);
             }
         }
         if (!names.isEmpty()) {
@@ -114,19 +114,25 @@ final class FilesLakeReader implements LakeReader {
 
     /**
      * A folder of JSON Lines other systems wrote: {@code <domain>/<table>/}, or (a {@code namespace.table}) {@code <levels…>/<table>/}
-     * under the lake's root (local disk).
+     * under the lake's root, on the lake's storage.
      */
     @Override
     public TableReader foreign(String name, com.ash.lake.read.TableShape shape) {
-        Path base = shape.namespace().isEmpty() ? domainDir : FilesStore.local(root).resolve(String.join("/", shape.namespace()));
-        Path dir = base.resolve(shape.tableName());
+        Place base = shape.namespace().isEmpty() ? domainDir : domainDir.parent().resolve(String.join("/", shape.namespace()));
+        Place dir = base.resolve(shape.tableName());
         return foreign.computeIfAbsent(name + "\u001f" + shape, k -> new com.ash.lake.io.read.ForeignTableReader(name, shape,
                 new FilesForeign(dir), pool, problems));
     }
 
     @Override
     public LakeHealth health(Instant now) {
-        return new LakeHealth(Files.isDirectory(domainDir), false, domainDir.toString(), "files", List.of());
+        boolean there;
+        try {
+            there = domainDir.isDirectory();
+        } catch (IOException e) {
+            there = false;
+        }
+        return new LakeHealth(there, root.startsWith("mem://"), domainDir.toString(), "files", List.of());
     }
 
     @Override
@@ -183,7 +189,7 @@ final class FilesLakeReader implements LakeReader {
         public TableIdentity identity() throws IOException {
             FilesLog log = log();
             String id = log.id();
-            String where = domainDir.resolve(stored(name)).toAbsolutePath().toString();
+            String where = domainDir.resolve(stored(name)).path();
             if (id != null) {
                 return new TableIdentity("files", id, where);
             }
@@ -206,13 +212,13 @@ final class FilesLakeReader implements LakeReader {
                 long version;
                 Instant committed;
                 if (commits.isEmpty()) {                         // day files without a log: one version, 0
-                    if (!log.exists() && FilesStore.days(ref).isEmpty()) {
+                    if (!log.exists() && FilesStore.days(runtime, ref).isEmpty()) {
                         return Optional.<TableSnapshot>empty();
                     }
                     if (!asOf.latest()) {
                         throw new IOException(asOf.missing(domainDir + "/" + stored(name)));
                     }
-                    FilesStore.days(ref).forEach((d, p) -> days.put(d, new FilesSnapshot.Day(p, -1, null)));
+                    FilesStore.days(runtime, ref).forEach((d, p) -> days.put(d, new FilesSnapshot.Day(p, -1, null)));
                     version = 0;
                     committed = Instant.EPOCH;
                 } else {
@@ -237,7 +243,7 @@ final class FilesLakeReader implements LakeReader {
                 synchronized (this) {
                     FilesSnapshot s = kept.get(version);
                     if (s == null) {
-                        s = new FilesSnapshot(FilesLakeReader.this, name, version, committed, FilesStore.columnsOf(ref), days);
+                        s = new FilesSnapshot(FilesLakeReader.this, name, version, committed, FilesStore.columnsOf(runtime, ref), days);
                         kept.put(version, s);
                         while (kept.size() > 4) {
                             kept.remove(kept.keySet().iterator().next()).close();

@@ -181,24 +181,9 @@ public final class LakeUndo {
         }
     }
 
-    /** The files store's tables under a local lake root: {@code <domain>/_log/<table>/columns.json}. */
+    /** The files store's tables under the lake root ({@code <domain>/_log/<table>/columns.json}), on any storage. */
     static List<String> filesTables(com.ash.lake.LakeRuntime runtime, String root) throws IOException {
-        List<String> out = new ArrayList<>();
-        if (runtime.supports(root) || !Files.isDirectory(Path.of(root))) {
-            return out;
-        }
-        try (Stream<Path> domains = Files.list(Path.of(root))) {
-            for (Path d : domains.filter(Files::isDirectory).sorted().toList()) {
-                Path logs = d.resolve("_log");
-                if (Files.isDirectory(logs)) {
-                    try (Stream<Path> tables = Files.list(logs)) {
-                        tables.filter(t -> Files.isRegularFile(t.resolve("columns.json"))).sorted()
-                                .forEach(t -> out.add(d.getFileName() + "/" + t.getFileName()));
-                    }
-                }
-            }
-        }
-        return out;
+        return com.ash.lake.files.FilesStore.tables(runtime, root);
     }
 
     /**

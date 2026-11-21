@@ -5,6 +5,13 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **The files store on S3 and in memory (G3 F4, decision O3: built, not declared)**: the files store reads and writes through the
+  `Storage` interface (`Place`), so a files lake lives on local disk, S3 or a memory store as Delta and Iceberg do; the parity kit's
+  memory and S3 rows run the files store too (`<case>@files~mem`, `@files~s3`). The log needs no lock on any storage: a commit is the
+  exclusive creation of `<n>.json` (the loser reads the log again and checks what it built on), its content a file of its own
+  (`<uuid>.jsonl`), and the day file is published whole after the commit (`Storage.publish`: a link and a rename on local disk) until it
+  is the newest content. The writer's part files are local temporary files (`TempFiles`). `Storage` gains `files(dir)` and
+  `publish(from, to)`; `FilesStore.tables`, `dayDates`, `dayLines` serve undo and row retention on any storage.
 - **A lost concurrent replace fails on every store (G3 F5, decision O5a)**: a load's base is the table as it found it when it started
   (the writer is made before the input is read). A replace of a date that another writer changed after that commits nothing and fails
   with `TableWriter.LostReplace` (exit 1, "... was replaced or changed by another load while this one ran ... run it again"); the winner's
