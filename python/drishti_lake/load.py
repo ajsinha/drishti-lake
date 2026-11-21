@@ -273,7 +273,7 @@ class Loader:
             counts = row_days.setdefault(i, {}) if self.plan.date is not None else {}
             for ln, line in enumerate(inputs.lines(f), 1):
                 read.documents += 1
-                r = rowrule.row(self.plan, line, file_day, today_day, rows_or_today, self.wrapped)
+                r = rowrule.row(self.plan, line, file_day, today_day, rows_or_today, self.wrapped, cfg.contract)
                 if isinstance(r, str):
                     read.reject(r, f"{f.name}:{ln}")
                     continue

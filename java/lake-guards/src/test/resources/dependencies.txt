@@ -2,7 +2,10 @@
 # The dependency allow-list (design section 6, guard ModuleRulesTest): each module's direct dependencies outside test scope.
 # A dependency not listed fails the build; a listed one no longer declared fails too, so the list stays true and only shrinks.
 # Lines marked "until" are the move's leftovers (java/SPLIT_EXEMPTIONS.md says which step removes them).
+lake-contracts com.fasterxml.jackson.core:jackson-databind
+lake-contracts com.fasterxml.jackson.dataformat:jackson-dataformat-yaml
 lake-config com.ash.lake:lake-api
+lake-config com.ash.lake:lake-contracts
 lake-config com.fasterxml.jackson.core:jackson-databind
 lake-config com.fasterxml.jackson.dataformat:jackson-dataformat-yaml
 lake-delta com.ash.lake:lake-io
@@ -49,6 +52,7 @@ lake-io org.slf4j:slf4j-api
 lake-load com.ash.lake:lake-io
 lake-load com.ash.lake:lake-files
 lake-load com.ash.lake:lake-config
+lake-load com.ash.lake:lake-contracts
 lake-load com.ash.lake:lake-delta
 lake-load com.ash.lake:lake-iceberg
 lake-load io.delta:delta-kernel-api

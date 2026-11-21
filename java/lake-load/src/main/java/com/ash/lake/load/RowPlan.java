@@ -66,6 +66,8 @@ final class RowPlan {
      */
     volatile byte[][] loadIds = new byte[0][];
     volatile byte[][] sourceFiles = new byte[0][];
+    /** {@code target.contract}: every row checked against it after the row rules, before the first write (null: none). */
+    volatile com.ash.lake.contract.Contract contract;
 
     /** The load column names every row carries. */
     static final String LOAD_ID = "_load_id";

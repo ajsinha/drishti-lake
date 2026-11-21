@@ -203,11 +203,7 @@ public record PackEntry(String domain, String table, String key, String date, Li
             return null;
         }
         try {
-            JsonNode k = new YAMLMapper().readTree(Files.readString(f)).path("key");
-            if (k.isArray() && k.size() == 1 && k.get(0).isTextual() && !k.get(0).asText().isBlank()) {
-                return k.get(0).asText().trim();
-            }
-            return k.isTextual() && !k.asText().isBlank() && !k.asText().contains(",") ? k.asText().trim() : null;
+            return com.ash.lake.contract.Contract.read(f).singleKey();
         } catch (IOException | RuntimeException e) {
             return null;
         }

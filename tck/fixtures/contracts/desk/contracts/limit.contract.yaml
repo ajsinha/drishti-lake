@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# A sample planned data contract (synthetic): a kind designed before its data exists.
+kind: limit
+version: "0.1"
+status: planned
+title: Desk limit
+description: The limit of a desk.
+source: the risk committee
+grain: one row per desk
+key: [DESK]
+dated-by: snapshot
+cadence: {frequency: on change, due: any time}
+fields:
+  - {name: DESK, type: text, presence: required}
+  - {name: LIMIT_USD, type: amount, presence: required, unit: USD}
+validation: []
+review: []

@@ -5,6 +5,14 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **Data contracts (L11)**: the contract schema, reader, checks and page generator are the product's. Python `drishti_lake.contracts`
+  (`schema.json` without the host's keys; `Profile` adds a host's keys, handed back untouched; `schema_problems`, `record`, `drift`;
+  `pages` with a host's words through a `PageProfile`; `python -m drishti_lake contracts check|pages`). Java `lake-contracts`
+  (`com.ash.lake.contract`: `Contract`, `ContractChecker.standard()`, the same words as Python's `record`, `records.json`); the loader's
+  `target.contract` (Java and Python) rejects a row that breaks its contract, after the row rules and before the first write (case
+  `load/contract-rejects-rows`); `PackEntry.contractKey` and the inbox's contract check read through `Contract`. Proof
+  (`tools/split/contracts_proof.py`, Drishti at the freeze, read only): its 139 contracts read and validate identically with its profile
+  (the merged schema is its own) and its 20 contract pages are byte-identical.
 - **The old Delta entry points removed**: `NewTables` deleted, `LakeStore` package-private (the Delta reader's own); a host lists, opens
   and finds new tables through the read API (`LakeReader.tables`, `newTables`, `health`). `LakeStoreTest` is `DeltaLakeOpenTest` on
   the read API.

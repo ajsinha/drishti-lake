@@ -80,6 +80,7 @@
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-config</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-delta</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-iceberg</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-contracts</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-files</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-memory</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-load</artifactId><version>${project.version}</version></dependency>

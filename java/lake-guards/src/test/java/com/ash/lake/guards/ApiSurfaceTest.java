@@ -49,6 +49,7 @@ class ApiSurfaceTest {
             "com.ash.lake.spi", "lake-api",
             "com.ash.lake.read", "lake-api",
             "com.ash.lake.config", "lake-config",
+            "com.ash.lake.contract", "lake-contracts",
             "com.ash.lake.load", "lake-load",
             "com.ash.lake.inbox", "lake-load",
             "com.ash.lake.memory", "lake-memory",

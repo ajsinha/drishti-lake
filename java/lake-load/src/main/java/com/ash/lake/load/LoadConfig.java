@@ -83,7 +83,8 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
 
     /** The table and its layout. */
     record Target(String format, String path, String lake, String domain, String kind, String table, Map<String, String> storage,
-            Map<String, String> properties, Map<String, String> iceberg, Layout layout, String loadMode, String batchId, String modeFrom) {
+            Map<String, String> properties, Map<String, String> iceberg, Layout layout, String loadMode, String batchId, String modeFrom,
+            com.ash.lake.contract.Contract contract) {
 
         /** Where the load mode came from, in words (the report's {@code modeFrom}). */
         String modeWords() {
@@ -141,7 +142,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
                     "partition-by", "pack", "connector", "latest-by", "dataset", "archive"),
             "source.archive", Set.of("max-mb", "max-ratio", "max-members", "validate"),
             "target", Set.of("format", "path", "lake", "domain", "kind", "table", "storage-options", "mode", "properties", "iceberg", "layout",
-                    "batch-id", "default-mode"),
+                    "batch-id", "default-mode", "contract"),
             "target.layout", Set.of("sort-by", "file-size-mb", "row-group-mb", "compression", "vector-compression", "byte-stream-split",
                     "shard-aligned", "vector-type"),
             "parallel", Set.of("readers", "parsers", "writers", "queue-mb", "split-mb"),
@@ -573,7 +574,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
             }
         }
         Target tgt = new Target(tf, path, r.text(t, "lake", null), domain, r.text(t, "kind", null), table, targetStorage, props, iceberg, layout,
-                loadMode, batchId, modeFrom);
+                loadMode, batchId, modeFrom, contract(r.text(t, "contract", null)));
         if (tgt.path() == null && (tgt.lake() == null || tgt.domain() == null || tgt.kind() == null && tgt.table() == null)) {
             throw new IllegalArgumentException("target: give path (the table) or lake, domain and kind (the table <lake>/<domain>/<kind>)");
         }
@@ -585,6 +586,25 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         Report rep = new Report(r.text(rp, "summary", null), r.text(rp, "manifest", null), r.text(rp, "progress", null), r.bool(rp, "run-log", true),
                 r.bool(rp, "dry-run", false));
         return new LoadConfig(src, tgt, par, memory, rej, rep, tree.path("lock").asBoolean(true), archive(r, s), Map.of(), null, tree, rt);
+    }
+
+    /**
+     * {@code target.contract}: the data contract every row is checked against before the first write (a row that breaks it is rejected
+     * with the first problem: {@code com.ash.lake.contract.ContractChecker}); an absolute path to the contract file, read now.
+     */
+    static com.ash.lake.contract.Contract contract(String file) {
+        if (file == null || file.isBlank()) {
+            return null;
+        }
+        Path f = Path.of(file.strip());
+        if (!f.isAbsolute()) {
+            throw new IllegalArgumentException("target.contract " + file + ": give the contract file's absolute path");
+        }
+        try {
+            return com.ash.lake.contract.Contract.read(f);
+        } catch (IOException | RuntimeException e) {
+            throw new IllegalArgumentException("target.contract " + file + ": cannot be read (" + e.getMessage() + ")");
+        }
     }
 
     /** Whether {@code target.lake} names a lake of config/lakes/ (a plain name) rather than a folder or a URL (the old form). */

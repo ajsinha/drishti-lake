@@ -7,7 +7,7 @@ constants and flattened fields it gains, its vectors, its document text, its par
 writes none; the business date of the file is the caller's (``file_day``: rule of the file, not of the row).
 
 The order of the checks is part of the rule (a line with two faults is rejected for the first): JSON, an object, the id, the slice, the
-date, the vectors.
+date, the vectors, then (``target.contract``) the document as sent against its data contract (``contracts.checker``).
 
 **The document text** is the document written again as Python's ``json.dumps(ensure_ascii=False, separators=(",", ":"))`` writes it
 (the Java loader's ``PyJson`` writes the same bytes): key order kept, a float as ``repr``, a top-level numeric id as its text, a vector
@@ -151,11 +151,12 @@ def _not_json(e: json.JSONDecodeError, line: str) -> str:
     return f"not JSON ({e.msg})"
 
 
-def row(plan: Plan, line: str, file_day: int | None, today_day: int, rows_or_today: bool, wrapped: str | None = None) -> Row | str:
+def row(plan: Plan, line: str, file_day: int | None, today_day: int, rows_or_today: bool, wrapped: str | None = None,
+        contract=None) -> Row | str:
     """One line's outcome: a ``Row`` or the reason it is rejected. ``file_day``: the file's business date (epoch day) when it has one;
     ``rows_or_today``: no date given or named, the row's own date decides (else today). ``wrapped``: ``<domain>/<kind>`` for loader
     rows (``{domain, kind, id, date, doc, columns}`` a line: the document ``doc``, the id and the row's own date the wrapper's, a
-    promoted value the document lacks the wrapper's ``columns`` value)."""
+    promoted value the document lacks the wrapper's ``columns`` value). ``contract``: a ``contracts.Contract`` the document must keep."""
     try:
         doc = json.loads(line, parse_constant=_no_constant)
     except json.JSONDecodeError as e:
@@ -180,6 +181,10 @@ def row(plan: Plan, line: str, file_day: int | None, today_day: int, rows_or_tod
             doc = d
         if not isinstance(doc, dict):
             return "not a JSON object"
+    sent = None
+    if contract is not None:                           # the document as sent: the rule below rewrites ids, vectors and constants
+        sent = json.loads(d if wrapper is not None and isinstance(d, str) else line, parse_constant=_no_constant)
+        sent = sent.get("doc") if wrapper is not None and not isinstance(d, str) else sent
     top = set(doc)
     if wrapper is not None:
         kv = wrapper.get("id", MISSING)
@@ -226,6 +231,11 @@ def row(plan: Plan, line: str, file_day: int | None, today_day: int, rows_or_tod
             doc[p] = {"$vector": column_name(p)}
     if bad is not None:
         return f"the vector field '{bad}' is not a list of numbers"
+    if contract is not None:
+        from .contracts import checker
+        problems = checker.record(contract, sent)
+        if problems:
+            return checker.reason(contract, problems)
     for name, path in plan.flatten.items():
         if name not in top:
             v = get_indexed(doc, path)

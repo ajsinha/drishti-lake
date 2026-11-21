@@ -32,6 +32,7 @@
     <module>lake-bom</module>
     <module>lake-api</module>
     <module>lake-io</module>
+    <module>lake-contracts</module>
     <module>lake-config</module>
     <module>lake-delta</module>
     <module>lake-iceberg</module>

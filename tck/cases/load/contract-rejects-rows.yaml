@@ -1,0 +1,56 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# target.contract: every row is checked against the kind's data contract after the row rules and before the first write; a row that
+# breaks it is rejected with the contract's first problem (no value in the words, so reasons count together); the document is checked
+# as sent (a numeric id, a vector), the field that dates the kind may be missing (the file's name dates it), a derived field is never loaded
+inputs:
+  position.contract.yaml: |
+    kind: scenario-pv
+    version: "1.0"
+    status: active
+    title: Scenario values
+    description: A position's value under each scenario.
+    source: the desk
+    grain: one row per position and date
+    key: [POSITION_ID]
+    dated-by: BUSINESS_DATE
+    cadence: {frequency: daily, due: "18:00"}
+    fields:
+      - {name: POSITION_ID, type: id, presence: required, pattern: "^P-"}
+      - {name: BUSINESS_DATE, type: date, presence: required}
+      - {name: DESK, type: text, presence: required, enum: [D1, D2]}
+      - {name: QUANTITY, type: integer, presence: optional}
+      - {name: SCENARIO_PV, type: vector, presence: optional}
+      - {name: NET_PV, type: amount, presence: derived}
+      - {name: LEGS, type: record list, presence: optional}
+    nested:
+      "LEGS[]":
+        - {name: CCY, type: text, presence: required, pattern: "^[A-Z]{3}$"}
+    validation: []
+    review: []
+  scenario-pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"D1","QUANTITY":3,"SCENARIO_PV":[1,2.5]}
+    {"POSITION_ID":"P-2","BUSINESS_DATE":"2026-10-27","DESK":"D2","LEGS":[{"CCY":"USD"}]}
+    {"POSITION_ID":"P-3","DESK":"D9"}
+    {"POSITION_ID":"P-4","DESK":"D1","QUANTITY":1.5,"COLOUR":"red"}
+    {"POSITION_ID":"P-5","DESK":"D1","SCENARIO_PV":[]}
+    {"POSITION_ID":"P-6","DESK":"D2","NET_PV":4}
+    {"POSITION_ID":"P-7","DESK":"D2","LEGS":[{"CCY":"usd"},{"CCY":"EUR","X":1}]}
+    {"POSITION_ID":"X-8","DESK":"D1"}
+    {"POSITION_ID":"P-9"}
+    {"DESK":"D1"}
+    {"POSITION_ID":"P-10","DESK":"D1","SCENARIO_PV":[1,"two"]}
+    {"POSITION_ID":"P-11","DESK":"D2","SCENARIO_PV":[null,4]}
+config: |
+  source:
+    files: '${in}/*.jsonl'
+    id: POSITION_ID
+    promote: [DESK, QUANTITY]
+    vectors: [SCENARIO_PV]
+  target:
+    format: ${store}
+    lake: '${lake}'
+    domain: risk
+    kind: scenario-pv
+    contract: '${in}/position.contract.yaml'
+steps:
+  - load: []

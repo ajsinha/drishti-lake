@@ -21,7 +21,7 @@ KEYS = {
                "partition-by", "pack", "connector", "latest-by", "dataset", "archive"},
     "source.archive": {"max-mb", "max-ratio", "max-members", "validate"},
     "target": {"format", "path", "lake", "domain", "kind", "table", "storage-options", "mode", "properties", "iceberg", "layout", "batch-id",
-               "default-mode"},
+               "default-mode", "contract"},
     "target.layout": {"sort-by", "file-size-mb", "row-group-mb", "compression", "vector-compression", "byte-stream-split", "shard-aligned",
                       "vector-type"},
     "parallel": {"readers", "parsers", "writers", "queue-mb", "split-mb"},
@@ -70,6 +70,7 @@ class LoadConfig:
     sort_by: list = field(default_factory=lambda: list(DEFAULT_SORT))
     loader_rows_of: str | None = None
     float32: bool = False
+    contract: object = None    # contracts.Contract (target.contract): every row checked against it before the first write
 
 
 def _check(section: str, n):
@@ -205,7 +206,20 @@ def of(tree: dict) -> LoadConfig:
         mode=mode, mode_from=mode_from, batch_id=_text(t, "batch-id"), max_pct=float(rj.get("max-pct", 100.0)), keep=int(rj.get("keep", 50)),
         summary=_text(rp, "summary"), progress=_text(rp, "progress"), run_log=_bool(rp, "run-log", True), dry_run=_bool(rp, "dry-run", False),
         lock=_bool(tree, "lock", True), sort_by=_list(lay, "sort-by") or list(DEFAULT_SORT),
-        loader_rows_of=loader_rows_of, float32=_vector_type(_text(lay, "vector-type", "double")))
+        loader_rows_of=loader_rows_of, float32=_vector_type(_text(lay, "vector-type", "double")), contract=_contract(_text(t, "contract")))
+
+
+def _contract(file: str | None):
+    """target.contract: the data contract file (an absolute path), read now (Java: LoadConfig.contract)."""
+    if file is None or not file.strip():
+        return None
+    if not os.path.isabs(file.strip()):
+        raise ConfigError(f"target.contract {file}: give the contract file's absolute path")
+    from .contracts import Contract
+    try:
+        return Contract.read(file.strip())
+    except (OSError, ValueError, yaml.YAMLError) as e:
+        raise ConfigError(f"target.contract {file}: cannot be read ({e})") from None
 
 
 def _vector_type(v: str) -> bool:

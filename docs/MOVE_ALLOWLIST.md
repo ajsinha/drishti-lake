@@ -347,7 +347,7 @@ the archives and file names both loaders (Java and Python) are proven on; the mo
 | `plugins/drishti-connectors/src/main/java/com/ash/drishti/plugin/file/JsonlDay.java` | L8 (moved into `lake-files`, `com.ash.lake.files`) | files store: read and write of `<root>/<domain>/<date>/<kind>.jsonl` moves into `lake-files`; the plug-in half stays | L8 |
 | `plugins/drishti-connectors/src/main/java/com/ash/drishti/plugin/file/JsonlFormat.java` | L8 (moved into `lake-files`, `com.ash.lake.files`) | files store: read and write of `<root>/<domain>/<date>/<kind>.jsonl` moves into `lake-files`; the plug-in half stays | L8 |
 | `plugins/drishti-connectors/src/main/java/com/ash/drishti/plugin/file/JsonlLoader.java` | L8 (moved into `lake-files`, `com.ash.lake.files`) | files store: read and write of `<root>/<domain>/<date>/<kind>.jsonl` moves into `lake-files`; the plug-in half stays | L8 |
-| `tools/contracts.py` (not moved yet) | | reader, checker and page generator move (`lake-contracts`, `drishti_lake.contracts`); the 143 contract files and the measure documents stay | L11 |
+| `tools/contracts.py` (L11: rewritten, not moved) | | schema, reader, checker and page generator are the product's (`lake-contracts`, `drishti_lake.contracts`); the host keeps its contract files, the measure documents, `bootstrap` (drafting from its packs) and its profile (keys, words, pack folders; rehearsed in `tools/split/contracts_proof.py`) | L11 |
 
 ## 3. Moves later
 

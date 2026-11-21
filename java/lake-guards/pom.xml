@@ -32,6 +32,7 @@
     <!-- test scope: the API surface guard loads the public packages' compiled classes -->
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-api</artifactId><scope>test</scope></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-config</artifactId><scope>test</scope></dependency>
+    <dependency><groupId>com.ash.lake</groupId><artifactId>lake-contracts</artifactId><scope>test</scope></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-load</artifactId><scope>test</scope></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-memory</artifactId><scope>test</scope></dependency>
   </dependencies>

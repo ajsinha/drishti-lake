@@ -61,7 +61,7 @@ def interop_ran():
 def python_tests():
     """pytest over python/tests with the pins (delta-rs, pyarrow), Polars and PyYAML, through uv (offline first: the cache)."""
     uv = shutil.which("uv") or str(Path.home() / ".local" / "bin" / "uv")
-    withs = [x for p in pins() + ["polars==2.1.0", "pyyaml", "pytest==8.4.2"] for x in ("--with", p)]
+    withs = [x for p in pins() + ["polars==2.1.0", "pyyaml", "jsonschema==4.26.0", "pytest==8.4.2"] for x in ("--with", p)]
     return [uv, "run", "--offline", "--quiet", "--no-project"] + withs + ["python", "-I", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"]
 
 

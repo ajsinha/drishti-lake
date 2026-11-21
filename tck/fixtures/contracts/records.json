@@ -1,0 +1,181 @@
+[
+ {
+  "record": {
+   "POSITION_ID": "P-1",
+   "BUSINESS_DATE": "2026-10-27",
+   "DESK": "D1",
+   "QUANTITY": 3,
+   "BASE_PV": 1.5,
+   "SCENARIO_PV": [
+    1,
+    2.5
+   ],
+   "TRADE_IDS": [
+    "T1"
+   ],
+   "ACTIVE": true,
+   "UPDATED_AT": "2026-10-27T10:00:00Z",
+   "TIER": 1.0,
+   "KYC": {
+    "STATUS": "OK",
+    "CHECKED_ON": "2026-10-01"
+   },
+   "LEGS": [
+    {
+     "INDEX": 0,
+     "CCY": "USD"
+    }
+   ]
+  },
+  "problems": [
+   "TIER: not an integer"
+  ]
+ },
+ {
+  "record": {
+   "POSITION_ID": "P-2",
+   "DESK": "D2"
+  },
+  "problems": []
+ },
+ {
+  "record": {
+   "POSITION_ID": "",
+   "DESK": null,
+   "BUSINESS_DATE": "2026-10-27"
+  },
+  "problems": [
+   "POSITION_ID: required, missing",
+   "DESK: required, missing"
+  ]
+ },
+ {
+  "record": {
+   "POSITION_ID": "X-3",
+   "BUSINESS_DATE": "2026-10-27",
+   "DESK": "D9",
+   "COLOUR": "red",
+   "BOOK": "B1"
+  },
+  "problems": [
+   "COLOUR: not a field of the contract",
+   "BOOK: not a field of the contract",
+   "POSITION_ID: does not match ^P-[0-9]+$",
+   "DESK: not one of the contract's values"
+  ]
+ },
+ {
+  "record": {
+   "POSITION_ID": "P-4",
+   "DESK": "D1",
+   "QUANTITY": 1.0,
+   "BASE_PV": "12",
+   "ACTIVE": 1,
+   "UPDATED_AT": "2026-10-27 10:00",
+   "TIER": true
+  },
+  "problems": [
+   "QUANTITY: not an integer",
+   "BASE_PV: not a finite number",
+   "ACTIVE: not true or false",
+   "UPDATED_AT: not an ISO-8601 timestamp",
+   "TIER: not an integer"
+  ]
+ },
+ {
+  "record": {
+   "POSITION_ID": "P-5",
+   "DESK": "D1",
+   "SCENARIO_PV": [
+    1,
+    null,
+    "x"
+   ],
+   "TRADE_IDS": [
+    "T1",
+    ""
+   ],
+   "NET_PV": 4.0
+  },
+  "problems": [
+   "SCENARIO_PV: 2 value(s) not finite numbers (first at index 1); never filled with zero",
+   "TRADE_IDS: not a list of ids (text)",
+   "NET_PV: derived, never loaded"
+  ]
+ },
+ {
+  "record": {
+   "POSITION_ID": "P-6",
+   "DESK": "D1",
+   "SCENARIO_PV": [],
+   "KYC": {
+    "STATUS": "NO",
+    "EXTRA": 1
+   },
+   "LEGS": [
+    {
+     "CCY": "usd",
+     "PV": 1
+    },
+    7
+   ]
+  },
+  "problems": [
+   "SCENARIO_PV: not a list of numbers",
+   "KYC.EXTRA: not a field of the contract",
+   "KYC.STATUS: not one of the contract's values",
+   "LEGS[0].INDEX: required, missing",
+   "LEGS[0].CCY: does not match ^[A-Z]{3}$",
+   "LEGS[0].PV: derived, never loaded",
+   "LEGS[1]: not a record"
+  ]
+ },
+ {
+  "record": {
+   "POSITION_ID": "P-7",
+   "DESK": "D2",
+   "KYC": "OK",
+   "LEGS": {
+    "INDEX": 1
+   },
+   "TIER": 4,
+   "BUSINESS_DATE": "27/10/2026"
+  },
+  "problems": [
+   "KYC: not a record",
+   "LEGS: not a list of records",
+   "TIER: not one of the contract's values",
+   "BUSINESS_DATE: not a date (YYYY-MM-DD)"
+  ]
+ },
+ {
+  "record": {
+   "POSITION_ID": 8,
+   "DESK": "D2",
+   "QUANTITY": 12345678901234567890,
+   "TIER": 2,
+   "KYC": {
+    "STATUS": "",
+    "CHECKED_ON": "2026-1-1"
+   }
+  },
+  "problems": [
+   "POSITION_ID: not text",
+   "KYC.STATUS: required, missing",
+   "KYC.CHECKED_ON: not a date (YYYY-MM-DD)"
+  ]
+ },
+ {
+  "record": {
+   "POSITION_ID": "P-9",
+   "DESK": "D1",
+   "TIER": 2.0,
+   "BASE_PV": -0.0,
+   "UPDATED_AT": "2026-10-27T10:00:00.123+05:30",
+   "TRADE_IDS": []
+  },
+  "problems": [
+   "TIER: not an integer"
+  ]
+ }
+]

@@ -82,6 +82,7 @@ final class Loader {
         this.cfg = cfg;
         this.given = files;
         this.plan = new RowPlan(cfg.source(), cfg.target().layout().sortBy(), FileDates.today(cfg.runtime().options().businessZone()));
+        this.plan.contract = cfg.target().contract();
         this.report = new LoadReport(cfg, plan);
     }
 

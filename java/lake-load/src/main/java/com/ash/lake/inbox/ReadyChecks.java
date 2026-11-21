@@ -24,7 +24,6 @@ import com.ash.lake.load.FileRows;
 import com.ash.lake.load.TableDateRows;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -389,18 +388,16 @@ public final class ReadyChecks {
             out.add(ReadyCheck.warning(at + "The kind " + r.kind() + " has no data contract to check the sample against.", null));
             return;
         }
-        JsonNode c;
+        com.ash.lake.contract.Contract c;
         try {
-            c = new YAMLMapper().readTree(Files.readString(f));
+            c = com.ash.lake.contract.Contract.read(f);
         } catch (IOException e) {
             out.add(ReadyCheck.warning(at + "The contract of " + r.kind() + " cannot be read: " + e.getMessage(), null));
             return;
         }
-        String datedBy = c.path("dated-by").asText("");
         Map<String, Integer> absent = new LinkedHashMap<>();
-        for (JsonNode fd : c.path("fields")) {
-            String name = fd.path("name").asText();
-            if (!"required".equals(fd.path("presence").asText()) || name.equals(datedBy)) {
+        for (String name : c.requiredFields()) {
+            if (name.equals(c.datedBy())) {
                 continue;                                               // the date comes from outside the data, never from a row
             }
             int miss = 0;
@@ -414,7 +411,7 @@ public final class ReadyChecks {
             }
         }
         String of = "Sample of " + num(sample.size()) + " rows" + (sample.size() >= size ? " (the file's first rows)" : "") + " against the " + r.kind() + " contract, version "
-                + c.path("version").asText("?");
+                + (c.version().isEmpty() ? "?" : c.version());
         if (absent.isEmpty()) {
             out.add(ReadyCheck.pass(at + of + ": every required field is there."));
         } else {

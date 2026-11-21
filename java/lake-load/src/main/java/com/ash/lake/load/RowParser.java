@@ -37,7 +37,8 @@ import java.util.regex.Pattern;
  * written out again as {@code lake build} keeps it ({@link PyJson}: compact, Python's number text), the fields the plan wants are caught
  * on the way, and a vector field's numbers go straight into a {@code double[]}, never boxed. The rules are {@code tools/lake/stage.py}'s,
  * with its reject reasons: no id, an id that is not a single value, no business date or one that is not a date, a vector that is not a
- * list of numbers, a line that is not JSON or not an object. Used by one thread; a parser thread keeps one.
+ * list of numbers, a line that is not JSON or not an object, then (with {@code target.contract}) the document breaking its data contract
+ * (the document as sent, read again as a tree only then). Used by one thread; a parser thread keeps one.
  */
 final class RowParser {
 
@@ -98,6 +99,13 @@ final class RowParser {
     private final DoubleList[] vectors;
     private final boolean[] vectorPresent;
     private String badVector;
+    /** {@code target.contract} (null: none), and the current document's bytes as read (the contract checks the document as sent). */
+    private final com.ash.lake.contract.Contract contract;
+    private byte[] source;
+    private int sourceOff;
+    private int sourceLen;
+    private static final com.fasterxml.jackson.databind.ObjectMapper CONTRACT_TREE = new com.fasterxml.jackson.databind.ObjectMapper(
+            JsonFactory.builder().enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS).build());
 
     final Bytes doc = new Bytes(1 << 16);
     final Bytes record = new Bytes(1 << 16);
@@ -138,6 +146,7 @@ final class RowParser {
 
     RowParser(RowPlan plan) {
         this.plan = plan;
+        this.contract = plan.contract;
         Map<String, Integer> slots = new HashMap<>();
         boolean wrapped = plan.loaderRowsOf != null;              // loader rows: the id and the row's date are the wrapper's, never a document field
         keySlot = slot(slots, wrapped ? WRAP_ID : plan.key, false);
@@ -239,6 +248,9 @@ final class RowParser {
         if (wrapColumns != null) {
             return loaderRow(a, off, len);
         }
+        source = a;
+        sourceOff = off;
+        sourceLen = len;
         String bad = document(a, off, len);
         return bad != null ? bad : row();
     }
@@ -274,6 +286,9 @@ final class RowParser {
         if (doc == null) {
             return "a loader row without its document (doc)";
         }
+        source = doc;
+        sourceOff = 0;
+        sourceLen = doc.length;
         String bad = document(doc, 0, doc.length);
         if (bad != null) {
             return bad;
@@ -585,6 +600,18 @@ final class RowParser {
         }
     }
 
+    /** The first problem of the document under {@code target.contract} as a reject reason, null when it keeps the contract. */
+    private String contractProblem() {
+        com.fasterxml.jackson.databind.JsonNode d;
+        try {
+            d = CONTRACT_TREE.readTree(source, sourceOff, sourceLen);
+        } catch (IOException e) {
+            return "not JSON (" + e.getMessage() + ")";
+        }
+        List<String> problems = com.ash.lake.contract.ContractChecker.standard().problems(contract, d);
+        return problems.isEmpty() ? null : com.ash.lake.contract.ContractChecker.reason(contract, problems);
+    }
+
     // ------------------------------------------------------------------------------------------------ the row
 
     private String row() {
@@ -633,6 +660,13 @@ final class RowParser {
         if (badVector != null) {
             otherDate = false;
             return "the vector field '" + badVector + "' is not a list of numbers";
+        }
+        if (contract != null) {
+            String broken = contractProblem();
+            if (broken != null) {
+                otherDate = false;
+                return broken;
+            }
         }
         byte[] idBytes = id.getBytes(StandardCharsets.UTF_8);
         idHash = hash(idBytes);

@@ -1,0 +1,46 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# A sample data contract (synthetic): the Java and the Python checker's shared cases (records.json), the pages' (pages/).
+kind: position
+version: "1.2"
+status: active
+title: Desk position
+description: One position of a desk on a business date, with its scenario values.
+source: the desk's position extract
+grain: one row per position and business date
+key: [POSITION_ID]
+id-pattern: ["^P-[0-9]+$"]
+dated-by: BUSINESS_DATE
+cadence: {frequency: daily, due: "18:00 New York"}
+owner-team: market-risk
+fields:
+  - {name: POSITION_ID, type: id, presence: required, description: The position's id, example: P-1, pattern: "^P-[0-9]+$"}
+  - {name: BUSINESS_DATE, type: date, presence: required, description: The business date}
+  - {name: DESK, type: text, presence: required, description: The desk, enum: [D1, D2]}
+  - {name: QUANTITY, type: integer, presence: optional, unit: units}
+  - {name: BASE_PV, type: amount, presence: optional, unit: USD, description: Present value today}
+  - {name: SCENARIO_PV, type: vector, presence: optional, description: Value under each scenario}
+  - {name: TRADE_IDS, type: id list, presence: optional}
+  - {name: ACTIVE, type: boolean, presence: optional}
+  - {name: UPDATED_AT, type: timestamp, presence: optional}
+  - {name: TIER, type: integer, presence: optional, enum: [1, 2, 3], note: "1 is the most liquid"}
+  - {name: KYC, type: record, presence: optional}
+  - {name: LEGS, type: record list, presence: optional}
+  - {name: NET_PV, type: amount, presence: derived, description: Computed from the legs}
+nested:
+  KYC:
+    - {name: STATUS, type: text, presence: required, enum: [OK, PENDING]}
+    - {name: CHECKED_ON, type: date, presence: optional}
+  "LEGS[]":
+    - {name: INDEX, type: integer, presence: required}
+    - {name: CCY, type: text, presence: optional, pattern: "^[A-Z]{3}$"}
+    - {name: PV, type: amount, presence: derived}
+links:
+  - {field: DESK, kind: desk}
+validation:
+  - {rule: required, fields: [POSITION_ID, BUSINESS_DATE, DESK]}
+  - {rule: enum, field: DESK, values: [D1, D2]}
+  - {rule: unique, key: [POSITION_ID], per: BUSINESS_DATE}
+notes:
+  - A position closed during the day is sent with QUANTITY 0.
+review:
+  - Confirm the TIER values with the desk.
