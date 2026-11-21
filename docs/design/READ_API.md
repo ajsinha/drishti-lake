@@ -443,3 +443,7 @@ Drishti is not touched; its adapter rewrite (rehearsal L1, 5 bd, Opus) starts at
   sized on the assumption that both do; if the Kernel does not for raw Parquet reads, D1 grows by about a day).
 - "Zero-copy" is used as the task used it: no copy **added** by the API. Today's reads already copy each vector once from the
   decoded column into the reused buffer; this design keeps that and adds none.
+
+## Decisions taken (lead, under the owner's delegation, 2026-11-21)
+
+RA-1 to RA-12 are **accepted as recommended** (including RA-3 the product applies deletes, RA-6 one stamp rule with Iceberg id-map files rebuilt once, RA-7 `VectorBatches` back to the adapter, RA-9 foreign-table shapes last, RA-10 the files store measured but not held to Parquet speed, no sidecar). Feature parity stays absolute (owner rule); speed parity is not required for the files store. The unverified points of section 10 are checked first in RA-S0.
