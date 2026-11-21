@@ -71,6 +71,7 @@ public final class ParquetFooters {
 
     /** The bytes of parsed footers kept now (their weights), for Health and tests. */
     public long weightBytes() {
+        footers.cleanUp();                                         // Caffeine weighs writes on its maintenance thread: settle them first
         return footers.policy().eviction().map(e -> e.weightedSize().orElse(0L)).orElse(0L);
     }
 
