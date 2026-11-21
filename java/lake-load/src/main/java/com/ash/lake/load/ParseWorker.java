@@ -104,8 +104,7 @@ final class ParseWorker implements Callable<Void> {
     private Map<Integer, Long> lastRowDays;
     private boolean lastRowsOrToday;
     private final RowPlan plan;
-    private final java.time.LocalDate today = FileDates.today();
-    private Inputs.InputFile lastFile;
+        private Inputs.InputFile lastFile;
     private long[] lastFileDate;
     final Map<String, Long> rejectsByReason = new LinkedHashMap<>();
     final List<Reject> firstRejects = new ArrayList<>();
@@ -188,7 +187,7 @@ final class ParseWorker implements Callable<Void> {
             return new FileDates.Decided(f.member().date(), "folder", null);
         }
         String dated = f.member() != null ? f.member().archiveName() : f.name();          // the name the date is read from
-        java.time.LocalDate named = FileDates.of(dated);
+        java.time.LocalDate named = FileDates.of(dated, today);
         java.time.LocalDate given = plan.asOf != null ? plan.asOf : FileDates.readyDate(f.member() != null ? f.member().archive() : f.path());
         FileDates.Decided d = FileDates.decide(given, named, plan.dateFrom, today, dated);
         return d.error() == null && plan.asOf == null && given != null ? new FileDates.Decided(d.date(), "ready", null) : d;
@@ -199,7 +198,7 @@ final class ParseWorker implements Callable<Void> {
         Inputs.InputFile f = c.split().file();
         if (f != lastFile) {                               // a file's chunks mostly come one after another
             lastFile = f;
-            FileDates.Decided d = decide(plan, f, today);
+            FileDates.Decided d = decide(plan, f, plan.today);
             lastFileDate = d.date() == null ? null : fileDates.computeIfAbsent(f.name(), k -> new long[] {d.date().toEpochDay(), 0,
                     java.util.Arrays.asList(SOURCES).indexOf(d.source()), 0});
             lastRowDays = rowDays.computeIfAbsent(f.name(), k -> new HashMap<>());

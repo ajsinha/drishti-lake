@@ -343,7 +343,7 @@ public final class Routes {
 
     private Route route(String fileName, ReadyNote note, boolean anyPack) throws Unrouted {
         ReadyNote n = note == null ? ReadyNote.EMPTY : note;
-        FileDates.Name name = FileDates.parse(fileName);
+        FileDates.Name name = FileDates.parse(fileName, FileDates.today(runtime.options().businessZone()));
         if (name.tar() && (n.businessDate() != null || n.table() != null)) {
             throw new Unrouted(fileName + ": a .tar archive names its own tables and dates (its <table>/<YYYY-MM-DD>/ folders): its .ready file's "
                     + "business-date: and table: are refused");
@@ -455,7 +455,7 @@ public final class Routes {
         LocalDate nameDate = name.error() == null && !name.tar() ? name.date() : null;
         LocalDate asOf = n.businessDate();
         String dateBy = asOf != null ? asOf + " from the .ready file" : nameDate != null ? nameDate + " from the name"
-                : FileDates.businessToday() + " (today: no date in the name)";
+                : FileDates.businessToday(FileDates.today(runtime.options().businessZone())) + " (today: no date in the name)";
         return new Route(pack, table, null, table, null, asOf, n.key() != null ? n.key() : "id", lake(n, rule),
                 rule == null ? "delta" : rule.format(), "a new table " + table + " (new-table: true)", info.dir(), "auto", nameDate, dateBy,
                 n.mode() != null ? n.mode() : defaultMode, null, domain, n.mode() != null);

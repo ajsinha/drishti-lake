@@ -151,7 +151,7 @@ class DataInboxLoaderTest {
         Cycle.FileOutcome e = r.files().stream().filter(o -> o.file().startsWith("trades-e")).findFirst().orElseThrow();
         assertThat(e.versions()).containsOnlyKeys("2026-10-30");
         assertThat(e.dateNote()).isNotNull();
-        String today = FileDates.businessToday().toString();
+        String today = FileDates.businessToday(FileDates.today(com.ash.lake.LakeRuntime.fromProcess().options().businessZone())).toString();
         // trade.jsonl: no date given or named, its row carries 2026-11-01: loaded under its rows' date, never today by guess
         assertThat(f.signals).extracting(Signal.Landed::date).contains(LocalDate.parse("2026-11-02"), LocalDate.parse("2026-10-30"), LocalDate.parse("2026-11-01"))
                 .doesNotContain(LocalDate.parse(today));

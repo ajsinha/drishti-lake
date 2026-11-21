@@ -76,14 +76,12 @@ public final class FileDates {
         return d == DayOfWeek.SATURDAY ? today.minusDays(1) : d == DayOfWeek.SUNDAY ? today.minusDays(2) : today;
     }
 
-    /** Today in the system's time zone (the zone the loaders and the server run in). */
-    public static LocalDate today() {
-        return LocalDate.now(java.time.ZoneId.systemDefault());
-    }
-
-    /** The business today of the system's clock. */
-    public static LocalDate businessToday() {
-        return businessToday(today());
+    /**
+     * Today: the calendar date in the business zone ({@code LakeOptions.businessZone()}: {@code lake.business.zone},
+     * {@code LAKE_BUSINESS_ZONE}), never the JVM's default zone. A load takes it once and uses it for every file.
+     */
+    public static LocalDate today(java.time.ZoneId businessZone) {
+        return LocalDate.now(businessZone);
     }
 
     /** The last part of a path (after '/', '\' or an archive's '!/'). */
@@ -126,11 +124,6 @@ public final class FileDates {
             return new Object[] {null, text + " is in the future"};
         }
         return new Object[] {day, null};
-    }
-
-    /** The table and date {@code name} carries, or why it is refused (class doc), against the system's today. */
-    public static Name parse(String name) {
-        return parse(name, today());
     }
 
     /** The table and date {@code name} carries, or why it is refused (class doc). */
@@ -188,8 +181,8 @@ public final class FileDates {
     }
 
     /** The date {@code name} carries; null when it carries none, is refused or is a tar (where the table comes from elsewhere). */
-    public static LocalDate of(String name) {
-        Name n = parse(name);
+    public static LocalDate of(String name, LocalDate today) {
+        Name n = parse(name, today);
         return n.error() != null || n.tar() ? null : n.date();
     }
 
@@ -204,7 +197,7 @@ public final class FileDates {
         }
         String[] tokens = base.split("\\.", -1);
         if (tokens.length > 1 && DATEISH.matcher(tokens[1]).matches()) {
-            Object[] d = date(tokens[1], today == null ? today() : today);
+            Object[] d = date(tokens[1], java.util.Objects.requireNonNull(today, "today"));
             if (d[1] != null) {
                 return base + ": " + d[1];
             }

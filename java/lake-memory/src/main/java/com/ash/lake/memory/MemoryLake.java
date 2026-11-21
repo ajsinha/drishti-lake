@@ -334,8 +334,9 @@ public final class MemoryLake implements AutoCloseable {
         Engine engine = LakeWriter.engineFor(runtime, path, settings);
         // id → row; the run's rows grouped by business date, sorted by sort-by (runs of equal values: dictionaries and RLE shrink)
         Map<String, Row> byId = new LinkedHashMap<>();
+        LocalDate today = today();
         for (ObjectNode d : docs) {
-            Row r = row(spec, d);
+            Row r = row(spec, d, today);
             byId.put(r.date + "\u001f" + r.id, r);
         }
         String mode = switch (spec.mode()) {
@@ -375,7 +376,7 @@ public final class MemoryLake implements AutoCloseable {
         }
         if (parts.isEmpty() && mode.equals("replace")) {
             // an empty run of a replace: an empty table (one commit removing every file), so screens say "no rows", not stale ones
-            parts.add(LakeManifest.Part.inMemory(() -> new StringReader(""), 0, Map.of("business_date", LocalDate.now(ZoneId.systemDefault()).toString())));
+            parts.add(LakeManifest.Part.inMemory(() -> new StringReader(""), 0, Map.of("business_date", today().toString())));
         }
         List<LakeManifest.Column> columns = new ArrayList<>(List.of(new LakeManifest.Column("id", "string"), new LakeManifest.Column("doc", "string"),
                 new LakeManifest.Column("business_date", "date")));
@@ -407,7 +408,7 @@ public final class MemoryLake implements AutoCloseable {
         }
     }
 
-    private static Row row(MemoryLakeSettings.TableSpec spec, ObjectNode d) {
+    private static Row row(MemoryLakeSettings.TableSpec spec, ObjectNode d, LocalDate today) {
         String id;
         if (spec.key().isEmpty()) {
             id = Integer.toHexString(d.toString().hashCode());
@@ -418,7 +419,7 @@ public final class MemoryLake implements AutoCloseable {
             }
             id = b.toString();
         }
-        String date = date(spec.businessDate(), d);
+        String date = date(spec.businessDate(), d, today);
         StringBuilder sort = new StringBuilder();
         for (String k : spec.sortBy()) {
             sort.append(text(d.get(k))).append('\u001f');
@@ -443,9 +444,14 @@ public final class MemoryLake implements AutoCloseable {
         return n == null || n.isNull() ? "" : n.isTextual() ? n.asText() : n.toString();
     }
 
-    static String date(String rule, JsonNode d) {
+    /** Today: the calendar date in the runtime's business zone ({@code lake.business.zone}), never the JVM's default zone. */
+    LocalDate today() {
+        return LocalDate.now(runtime.options().businessZone());
+    }
+
+    static String date(String rule, JsonNode d, LocalDate today) {
         if (rule.equalsIgnoreCase("today")) {
-            return LocalDate.now(ZoneId.systemDefault()).toString();
+            return today.toString();
         }
         if (rule.startsWith("field:")) {
             String v = text(d.get(rule.substring(6).trim()));
@@ -456,7 +462,7 @@ public final class MemoryLake implements AutoCloseable {
                     // not a date: today's
                 }
             }
-            return LocalDate.now(ZoneId.systemDefault()).toString();
+            return today.toString();
         }
         return LocalDate.parse(rule).toString();
     }

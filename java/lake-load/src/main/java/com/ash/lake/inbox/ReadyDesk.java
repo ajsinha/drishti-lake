@@ -183,6 +183,11 @@ public final class ReadyDesk {
         return packs;
     }
 
+    /** Today: the calendar date of the desk's clock in the runtime's business zone. */
+    java.time.LocalDate today() {
+        return java.time.LocalDate.now(clock.withZone(settings.runtime().options().businessZone()));
+    }
+
     /** The runtime the desk reads lakes and packs with. */
     com.ash.lake.LakeRuntime runtime() {
         return settings.runtime();
@@ -496,7 +501,7 @@ public final class ReadyDesk {
         m.put("rowsSoFar", it.rowsSoFar);
         m.put("error", it.error);
         m.put("tar", it.tar());
-        FileDates.Name nm = FileDates.parse(it.name);
+        FileDates.Name nm = FileDates.parse(it.name, today());
         Map<String, Object> s = new LinkedHashMap<>();
         if (!it.tar() && nm.error() == null) {
             s.put("table", nm.table());

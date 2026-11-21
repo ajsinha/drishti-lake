@@ -203,7 +203,7 @@ final class MemoryCompactor {
             }
             if (parts.isEmpty() && dropped > 0) {
                 // every row expired: an empty table (one commit removing every file)
-                parts.add(LakeManifest.Part.inMemory(() -> new StringReader(""), 0, Map.of("business_date", java.time.LocalDate.now(java.time.ZoneId.systemDefault()).toString())));
+                parts.add(LakeManifest.Part.inMemory(() -> new StringReader(""), 0, Map.of("business_date", lake.today().toString())));
             }
             if (parts.isEmpty()) {
                 return false;

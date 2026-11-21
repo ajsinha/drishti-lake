@@ -179,4 +179,9 @@ Entries are written per release; unreleased work is listed first.
   and flatten, dry run / date-from / mode / progress, a `.ready` file's date: 59 of 103 items covered. Found: Iceberg refuses
   `partition-by` beside the business date (a parity gap; its case comes with the fix). The host's read API needs written in
   SPLIT_STATUS (G4 rehearsal).
+- **Today is the business zone's.** The loaders' today (a business date after it is refused; a file with no date gets its business
+  today) is the calendar date in the runtime's business zone, `lake.business.zone` / `LAKE_BUSINESS_ZONE` (default
+  `America/New_York`, `LakeOptions.businessZone()`), taken once per load; it was the JVM's default zone. The same zone for the inbox's
+  routes and checks, the memory lake's `today` dates and lake maintain's guard (`--zone` still wins there). `BusinessZoneTest`: a date
+  that is tomorrow in `Etc/GMT+12` and today in `Pacific/Kiritimati` is refused in the one and loaded in the other.
 - Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).

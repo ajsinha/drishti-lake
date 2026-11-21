@@ -208,7 +208,7 @@ class MemoryLakeTest {
         assertThat(why).doesNotContain("SECRET");
         assertThat(MemoryLake.duration("15m").toMinutes()).isEqualTo(15);
         assertThat(MemoryLake.duration("30s").toSeconds()).isEqualTo(30);
-        assertThat(MemoryLake.date("field:AS_OF", new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("AS_OF", "2026-10-16 16:00")))
+        assertThat(MemoryLake.date("field:AS_OF", new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("AS_OF", "2026-10-16 16:00"), java.time.LocalDate.of(2026, 11, 21)))
                 .isEqualTo("2026-10-16");
     }
 }

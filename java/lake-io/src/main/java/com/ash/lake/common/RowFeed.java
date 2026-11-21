@@ -54,6 +54,8 @@ public final class RowFeed implements AutoCloseable {
 
     private final List<Path> files = new ArrayList<>();
     private final LocalDate asOf;
+    /** Today in the business zone ({@code LakeOptions.businessZone()}), taken once when the feed opens. */
+    private final LocalDate today;
     private final boolean stdin;
     private int fileIndex = -1;
     private BufferedReader reader;
@@ -74,8 +76,9 @@ public final class RowFeed implements AutoCloseable {
 
     private java.io.Reader stream;              // a stream given by the caller (stream()): one table, one date
 
-    private RowFeed(String input, LocalDate asOf) throws IOException {
+    private RowFeed(String input, LocalDate asOf, java.time.ZoneId businessZone) throws IOException {
         this.asOf = asOf;
+        this.today = FileDates.today(businessZone);
         this.stdin = "-".equals(input);
         if (!stdin && input != null) {
             Path p = Path.of(input);
@@ -93,14 +96,14 @@ public final class RowFeed implements AutoCloseable {
                             + "--as-of is refused for it");
                 }
                 if (FileDates.isTar(name) && !name.toLowerCase(Locale.ROOT).endsWith(".tar.zip")) {
-                    checkLayout(f, name);
+                    checkLayout(f, name, today);
                 }
             }
         }
     }
 
     /** A tar's whole layout checked before any of its rows is read (as lake build does): one refused member refuses the archive. */
-    private static void checkLayout(Path f, String name) throws IOException {
+    private static void checkLayout(Path f, String name, LocalDate today) throws IOException {
         List<String[]> entries = new ArrayList<>();
         try (InputStream raw = Files.newInputStream(f);
              TarStream t = new TarStream(name.toLowerCase(Locale.ROOT).endsWith(".tar") ? raw : new GZIPInputStream(raw, 1 << 16), name)) {
@@ -108,23 +111,26 @@ public final class RowFeed implements AutoCloseable {
                 entries.add(e);
             }
         }
-        FileDates.Layout lay = FileDates.tarLayout(entries, FileDates.today(), null);
+        FileDates.Layout lay = FileDates.tarLayout(entries, today, null);
         if (!lay.errors().isEmpty()) {
             throw new IOException(name + ": refused (" + String.join("; ", lay.errors()) + ")");
         }
     }
 
-    /** The feed of {@code input}: a file, a folder of them, or {@code -} for standard input; {@code asOf}: the date given (or null). */
-    public static RowFeed open(String input, LocalDate asOf) throws IOException {
-        return new RowFeed(input, asOf);
+    /**
+     * The feed of {@code input}: a file, a folder of them, or {@code -} for standard input; {@code asOf}: the date given (or null);
+     * {@code businessZone}: the zone whose calendar date is today ({@code LakeOptions.businessZone()}).
+     */
+    public static RowFeed open(String input, LocalDate asOf, java.time.ZoneId businessZone) throws IOException {
+        return new RowFeed(input, asOf, businessZone);
     }
 
     /**
      * A stream of rows of one table and one date (a pipe, a socket): {@code date} the business date it is filed under (null: the business
      * today), as {@code --as-of} gives standard input's.
      */
-    public static RowFeed stream(java.io.Reader in, LocalDate date) throws IOException {
-        RowFeed f = new RowFeed(null, date);
+    public static RowFeed stream(java.io.Reader in, LocalDate date, java.time.ZoneId businessZone) throws IOException {
+        RowFeed f = new RowFeed(null, date, businessZone);
         f.stream = in;
         return f;
     }
@@ -214,7 +220,7 @@ public final class RowFeed implements AutoCloseable {
     private void openPlain(String name, Path path, InputStream raw) throws IOException {
         LocalDate ready = asOf == null && path != null ? FileDates.readyDate(path.toString()) : null;
         LocalDate given = asOf != null ? asOf : ready;
-        FileDates.Decided d = FileDates.decide(given, path == null ? null : FileDates.of(name), "auto", FileDates.today(), name);
+        FileDates.Decided d = FileDates.decide(given, path == null ? null : FileDates.of(name, today), "auto", today, name);
         if (d.error() != null) {
             throw new IOException(d.error());
         }
@@ -234,7 +240,7 @@ public final class RowFeed implements AutoCloseable {
     }
 
     private void openMember(TarStream.Member m) throws IOException {
-        FileDates.Layout lay = FileDates.tarLayout(List.<String[]>of(new String[] {m.name(), m.type()}), FileDates.today(), null);
+        FileDates.Layout lay = FileDates.tarLayout(List.<String[]>of(new String[] {m.name(), m.type()}), today, null);
         if (!lay.errors().isEmpty()) {
             throw new IOException(tar.name + ": refused (" + String.join("; ", lay.errors()) + ")");
         }

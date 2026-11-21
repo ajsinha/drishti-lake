@@ -154,7 +154,7 @@ final class ChildLoads {
             throws IOException, InterruptedException {
         Map<String, Long> rows = new LinkedHashMap<>();
         Map<String, BufferedWriter> writers = new HashMap<>();
-        RowPlan plan = new RowPlan(cfg.source(), cfg.target().layout().sortBy());
+        RowPlan plan = new RowPlan(cfg.source(), cfg.target().layout().sortBy(), FileDates.today(cfg.runtime().options().businessZone()));
         Meter meter = new Meter("children", 1);
         try (FileAccess io = new FileAccess(cfg.runtime(), S3Settings.from(cfg.runtime(), cfg.source().storage()), Relocation.none(), null)) {
             List<InputFile> files = given != null ? given : Inputs.resolve(cfg.source().files(), cfg.source().recursive(), io);
@@ -168,7 +168,7 @@ final class ChildLoads {
             }
             for (InputFile f : files) {
                 if (f.member() == null && !f.isArchive()) {
-                    LocalDate day = ParseWorker.decide(plan, f, FileDates.today()).date();
+                    LocalDate day = ParseWorker.decide(plan, f, plan.today).date();
                     String path = io.resolve(Inputs.uri(f.path()));
                     try (RangeReader r = io.storage(path).open(path, f.size());
                             InputStream in = decompress(f, new SourceReader.RangeStream(r, 0, r.length(), meter))) {
@@ -178,7 +178,7 @@ final class ChildLoads {
             }
             for (Map.Entry<Archives.Plan, List<Archives.Member>> e : byArchive.entrySet()) {
                 Archives.read(io, e.getKey(), e.getValue(), cfg.archive().limits(), meter, 1 << 20, (m, in) -> {
-                    LocalDate day = ParseWorker.decide(plan, members.get(m), FileDates.today()).date();
+                    LocalDate day = ParseWorker.decide(plan, members.get(m), plan.today).date();
                     lines(in, kids, day, scratch, writers, rows);
                 });
             }

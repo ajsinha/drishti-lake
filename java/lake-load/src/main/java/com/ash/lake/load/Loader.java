@@ -81,7 +81,7 @@ final class Loader {
     Loader(LoadConfig cfg, List<InputFile> files) {
         this.cfg = cfg;
         this.given = files;
-        this.plan = new RowPlan(cfg.source(), cfg.target().layout().sortBy());
+        this.plan = new RowPlan(cfg.source(), cfg.target().layout().sortBy(), FileDates.today(cfg.runtime().options().businessZone()));
         this.report = new LoadReport(cfg, plan);
     }
 
@@ -102,7 +102,7 @@ final class Loader {
                 if (f.isArchive()) {
                     throw new IllegalStateException(f.path() + ": an archive is read through its plan (DatasetLoads)");
                 }
-                FileDates.Decided d = ParseWorker.decide(plan, f, FileDates.today());
+                FileDates.Decided d = ParseWorker.decide(plan, f, plan.today);
                 if (d.error() != null) {
                     throw new IllegalArgumentException(d.error() + " (nothing was loaded)");
                 }
@@ -122,7 +122,7 @@ final class Loader {
             read(io, splits, readers, spillDir, workers, read, decompress, parse, spill, lines);
             report.readSeconds = (System.nanoTime() - t0) / 1e9;
             checkRowDates(workers);
-            checkFutureDates(workers, FileDates.today());
+            checkFutureDates(workers, plan.today);
             report.collect(workers, splits, lines);
             progress.phase("read");
             if (report.documents > 0 && report.rejected * 100.0 / report.documents > cfg.rejects().maxPct()) {

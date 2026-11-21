@@ -20,7 +20,6 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicLong;
@@ -32,7 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <ul>
  *   <li><b>No business date in the future.</b> A row dated after today plus {@code --future-days} (1: tomorrow) in the
- *       business zone ({@code --zone}, else {@code LAKE_BUSINESS_ZONE}, else {@code America/New_York}) is quarantined:
+ *       business zone ({@code --zone}, else the runtime's {@code lake.business.zone} / {@code LAKE_BUSINESS_ZONE}, else {@code America/New_York}) is quarantined:
  *       it is not written, the first few are named on standard error, and the load ends with an error once the rows
  *       that are good are in ({@link #finish()}).</li>
  *   <li><b>Retention counts back from the newest business date of the load.</b> A retention cut-off ({@code --keep-days},
@@ -47,8 +46,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class LoadGuard {
 
-    /** The business zone when neither {@code --zone} nor {@code LAKE_BUSINESS_ZONE} names one. */
-    public static final String DEFAULT_ZONE = "America/New_York";
     /** Rows named on standard error before the rest are only counted. */
     private static final int EXAMPLES = 10;
 
@@ -92,14 +89,14 @@ public final class LoadGuard {
      * The guard a loader's command line asks for: {@code --zone Z}, {@code --as-of yyyy-MM-dd}, {@code --future-days N},
      * {@code --max-drop-share F}, {@code --force-drop}; anything else is the loader's own.
      */
-    public static LoadGuard fromArgs(String[] args) {
-        return fromArgs(args, System.getenv(), Clock.systemUTC());
+    public static LoadGuard fromArgs(String[] args, ZoneId businessZone) {
+        return fromArgs(args, businessZone, Clock.systemUTC());
     }
 
-    static LoadGuard fromArgs(String[] args, Map<String, String> env, Clock clock) {
-        String zone = value(args, "--zone", env.getOrDefault("LAKE_BUSINESS_ZONE", ""));
+    static LoadGuard fromArgs(String[] args, ZoneId businessZone, Clock clock) {
+        String zone = value(args, "--zone", "");
         String asOf = value(args, "--as-of", "");
-        return new LoadGuard(ZoneId.of(zone.isBlank() ? DEFAULT_ZONE : zone), clock, asOf.isBlank() ? null : LocalDate.parse(asOf),
+        return new LoadGuard(zone.isBlank() ? businessZone : ZoneId.of(zone), clock, asOf.isBlank() ? null : LocalDate.parse(asOf),
                 Integer.parseInt(value(args, "--future-days", "1")), Double.parseDouble(value(args, "--max-drop-share", "0.5")),
                 List.of(args).contains("--force-drop"));
     }

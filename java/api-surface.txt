@@ -135,6 +135,7 @@ com.ash.lake.LakeOptions :: public boolean com.ash.lake.LakeOptions.readsProcess
 com.ash.lake.LakeOptions :: public java.lang.String com.ash.lake.LakeOptions.homeSetting()
 com.ash.lake.LakeOptions :: public java.lang.String com.ash.lake.LakeOptions.tmpDirSetting()
 com.ash.lake.LakeOptions :: public java.lang.String com.ash.lake.LakeOptions.value(java.lang.String)
+com.ash.lake.LakeOptions :: public java.time.ZoneId com.ash.lake.LakeOptions.businessZone()
 com.ash.lake.LakeOptions :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.LakeOptions.given()
 com.ash.lake.LakeOptions :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.LakeOptions.s3()
 com.ash.lake.LakeOptions :: public java.util.function.Function<java.lang.String, java.lang.String> com.ash.lake.LakeOptions.lookup()
@@ -149,9 +150,11 @@ com.ash.lake.LakeOptions :: public static com.ash.lake.LakeOptions$Builder com.a
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.ARCHIVE_MAX_MB
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.ARCHIVE_MAX_MEMBERS
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.ARCHIVE_MAX_RATIO
+com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.BUSINESS_ZONE
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.CONFIG_DIR
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.CONNECTORS_DIR
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.DATA_DIR
+com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.DEFAULT_BUSINESS_ZONE
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.DELETE_CACHE_ROWS
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.FOOTER_CACHE_MB
 com.ash.lake.LakeOptions :: public static final java.lang.String com.ash.lake.LakeOptions.HOME

@@ -102,7 +102,7 @@ public final class ReadyChecks {
         boolean make = Boolean.TRUE.equals(f.newTable());
         String table = present(f.table()) ? f.table().trim().toLowerCase(Locale.ROOT) : null;
         if (table == null) {
-            FileDates.Name nm = FileDates.parse(file);
+            FileDates.Name nm = FileDates.parse(file, desk.today());
             if (nm.error() == null && nm.table() != null) {
                 table = nm.table();
                 derived.put("tableFrom", "the file name");
@@ -214,7 +214,7 @@ public final class ReadyChecks {
             return out;
         }
         Routes.Route r = b.route();
-        LocalDate date = r.asOf() != null ? r.asOf() : r.nameDate() != null ? r.nameDate() : FileDates.businessToday();
+        LocalDate date = r.asOf() != null ? r.asOf() : r.nameDate() != null ? r.nameDate() : FileDates.businessToday(desk.today());
         List<JsonNode> sample = sample(it, FileRows.SINGLE, size, out);
         table(r, r.kind(), List.of(date), sample, f, size, false, out);
         return out;

@@ -228,7 +228,7 @@ final class Archives {
                     + " (a zip bomb?); nothing was read");
         }
         if (kind != Kind.ZIP) {
-            return tarFeed(path, name, kind, size, entries);
+            return tarFeed(path, name, kind, size, entries, FileDates.today(io.runtime().options().businessZone()));
         }
         List<String> notes = new ArrayList<>();
         List<Member> loose = new ArrayList<>();
@@ -309,7 +309,7 @@ final class Archives {
      * A tar feed (DATA_GUIDE.md section 2.8): every member {@code <table>/<YYYY-MM-DD>/<file>.jsonl}, checked by {@link FileDates#tarLayout}
      * (every problem listed, the archive refused whole); one dataset per table, each member dated by its folder.
      */
-    private static Plan tarFeed(String path, String name, Kind kind, long size, List<Entry> entries) throws IOException {
+    private static Plan tarFeed(String path, String name, Kind kind, long size, List<Entry> entries, java.time.LocalDate today) throws IOException {
         Map<String, Entry> byName = new java.util.HashMap<>();
         List<String[]> listed = new ArrayList<>();
         for (Entry e : entries) {
@@ -319,7 +319,7 @@ final class Archives {
                 byName.put(String.join("/", parts), e);
             }
         }
-        FileDates.Layout lay = FileDates.tarLayout(listed, FileDates.today(), null);
+        FileDates.Layout lay = FileDates.tarLayout(listed, today, null);
         if (!lay.errors().isEmpty()) {
             throw new ArchiveException(name + ": refused, nothing was loaded (" + lay.errors().size() + " problem" + (lay.errors().size() > 1 ? "s" : "")
                     + "): " + String.join("; ", lay.errors()));
