@@ -239,7 +239,10 @@ public final class LakeLoad {
         } catch (Loader.LoadException | IllegalArgumentException | IllegalStateException e) {
             error = e.getMessage();
         } catch (Exception | OutOfMemoryError e) {
-            error = oneLine(e);
+            Map<String, String> where = new java.util.HashMap<>(cfg.target().storage());
+            where.putAll(cfg.target().iceberg());
+            where.putIfAbsent("root", cfg.lakeRoot());
+            error = oneLine(e, where);
             if (cfg.runtime().options().loaderTrace()) {
                 e.printStackTrace(out);
             }
@@ -356,21 +359,62 @@ public final class LakeLoad {
 
     /** A failure in one line: the innermost message (never a stack trace; -Dlake.loader.trace=true prints one). */
     static String oneLine(Throwable e) {
+        return oneLine(e, Map.of());
+    }
+
+    /**
+     * A failure in one line, with the target's settings ({@code root}, {@code catalog}, {@code uri}, {@code warehouse}, {@code s3.endpoint}) for
+     * its words: a missing bucket names the bucket, the endpoint and what to check; an unreachable REST catalog or object store says which
+     * and what to check; else the messages of the chain. Never a stack trace, never ": null".
+     */
+    static String oneLine(Throwable e, Map<String, String> settings) {
         for (Throwable c = e; c != null; c = c.getCause() == c ? null : c.getCause()) {
             if (c instanceof Archives.ArchiveException) {
                 return c.getMessage();                                   // the archive rule's refusal says it all
             }
         }
         StringBuilder chain = new StringBuilder();
+        Throwable root = e;
+        Throwable refused = null;
         for (Throwable c = e; c != null; c = c.getCause() == c ? null : c.getCause()) {
+            root = c;
+            refused = refused == null && c instanceof java.net.ConnectException ? c : refused;
             String m = c.getMessage();
-            if (m != null && !m.isBlank() && chain.indexOf(m) < 0) {
+            if (m != null && !m.isBlank() && !m.strip().equals("null") && chain.indexOf(m) < 0) {
                 chain.append(chain.length() == 0 ? "" : " / ").append(m);
             }
         }
         if (e instanceof OutOfMemoryError) {
             return "out of memory: lower memory.budget-mb or raise -Xmx (" + chain + ")";
         }
-        return "the load failed: " + (chain.length() == 0 ? e.getClass().getSimpleName() : chain) + " (" + e.getClass().getSimpleName() + ")";
+        String all = chain.toString();
+        String s3 = settings.getOrDefault("s3.endpoint", "");
+        String endpoint = s3.isBlank() ? "AWS S3 (no s3.endpoint set)" : s3;
+        String catalog = "rest".equalsIgnoreCase(settings.getOrDefault("catalog", "")) ? settings.getOrDefault("uri", "") : "";
+        if (all.contains("NoSuchBucket") || all.contains("bucket does not exist")) {
+            String bucket = bucket(settings.getOrDefault("warehouse", "")).or(() -> bucket(settings.getOrDefault("root", "")))
+                    .map(b -> "'" + b + "'").orElse("of the catalog's warehouse");
+            return "the bucket " + bucket + " does not exist at " + endpoint + (catalog.isBlank() ? "" : " (said by the REST catalog at " + catalog + ")")
+                    + ": create it, or check the warehouse, s3.endpoint and the catalog's own warehouse setting [" + first(all, 300) + "]";
+        }
+        if (!catalog.isBlank() && refused != null) {
+            return "cannot reach the REST catalog at " + catalog + " (" + com.ash.lake.iceberg.io.Reasons.of(refused) + "): check its uri and that "
+                    + "the catalog runs";
+        }
+        if (root instanceof java.net.ConnectException && !s3.isBlank()) {
+            return "cannot reach the object store at " + endpoint + " (" + com.ash.lake.iceberg.io.Reasons.of(root) + "): check s3.endpoint and "
+                    + "that the store runs";
+        }
+        return "the load failed: " + first(all.isEmpty() ? com.ash.lake.iceberg.io.Reasons.of(e) : all, 600) + " (" + e.getClass().getSimpleName() + ")";
+    }
+
+    private static java.util.Optional<String> bucket(String uri) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^s3[an]?://([^/]+)").matcher(uri.trim());
+        return m.find() ? java.util.Optional.of(m.group(1)) : java.util.Optional.empty();
+    }
+
+    private static String first(String s, int n) {
+        String one = s.replace('\n', ' ');
+        return one.length() <= n ? one : one.substring(0, n - 1) + "\u2026";
     }
 }

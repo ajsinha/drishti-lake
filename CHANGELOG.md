@@ -118,6 +118,14 @@ Entries are written per release; unreleased work is listed first.
   store's second writer) is deleted; parity case `load/loader-rows` equal on Delta, Iceberg, files and the memory row. For the host's
   adapter (G4): `data load --store files` becomes the loader with `format: loader-rows`, one table a load (a tar's
   `<kind>/<date>/` members as the loader's archives).
+- **One loader: `IcebergLoader` folded in.** The Iceberg tables' second writer of loader rows is deleted: the one loader writes the
+  same layout (`IcebergTarget`: id, doc, business_date, promoted and vector columns, identity partition, sorted by id) with
+  `format: loader-rows`, one table a load, and its own external sort and memory budget; keeping the newest N days is
+  `IcebergMaintenance --keep-days` (lake maintain, guarded by `LoadGuard`: counted from `--as-of`, the drop share capped), not part of a
+  load. The words of a failure move with it: `LakeLoad.oneLine` names a missing bucket, its endpoint and what to check, and an
+  unreachable REST catalog or object store in words (`LoadFailureWordsTest`, ported from `IcebergLoaderFailureTest`). For the host's
+  adapter (G4): `data load --store iceberg` becomes the loader with `format: loader-rows`, as `--store files` did. Host-word files
+  68 -> 66.
 - **L12, first part: the host's bill of materials gone.** `spring-boot-dependencies` is no longer imported; `java/pom.xml` pins the
   product's own versions (39 libraries, and 25 for the S3 mock alone, test support, leaving with it at L9), each the version the build
   resolved with the bill, so every module's resolved dependencies are unchanged (checked: `dependency:list` before and after equal).

@@ -247,7 +247,7 @@ final class NativeLayout {
             return null;
         }
         if (type instanceof Type.ListType l && Type.Primitive.STRING.equals(l.element())) {
-            List<String> texts = v instanceof IcebergLoader.Texts x ? x.values() : com.ash.lake.rows.ListValues.of(v);
+            List<String> texts = v instanceof SortedRuns.Texts x ? x.values() : com.ash.lake.rows.ListValues.of(v);
             return texts != null ? texts : List.of(String.valueOf(v));      // a list attribute; a single value is a list of one
         }
         if (type.id() == Type.Id.LIST) {

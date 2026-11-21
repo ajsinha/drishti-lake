@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * The tables of a data domain as {@link IcebergLoader} and {@link IcebergMaintenance} write them ({@link IcebergLayout}).
+ * The tables of a data domain as the loader (lake-load) and {@link IcebergMaintenance} write them ({@link IcebergLayout}).
  */
 interface LayoutLake extends Closeable {
 

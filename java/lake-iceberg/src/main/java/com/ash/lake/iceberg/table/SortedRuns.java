@@ -49,6 +49,9 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 final class SortedRuns implements Closeable {
 
+    /** A promoted list attribute's values (a list holding text: {@code TRADE_IDS}, {@code TAGS}): a {@code list<string>} column. */
+    record Texts(List<String> values) {}
+
     private static final Comparator<Row> BY_ID = Comparator.comparing(Row::id);
 
     private record Run(Path file, int seq) {}
@@ -348,7 +351,7 @@ final class SortedRuns implements Closeable {
             Object v = e.getValue();
             if (v == null) {
                 out.writeByte(0);
-            } else if (v instanceof IcebergLoader.Texts texts) {
+            } else if (v instanceof SortedRuns.Texts texts) {
                 out.writeByte(4);                               // a list attribute: its length, then each text
                 out.writeInt(texts.values().size());
                 for (String x : texts.values()) {
@@ -375,13 +378,13 @@ final class SortedRuns implements Closeable {
         }
     }
 
-    private static IcebergLoader.Texts readTexts(DataInputStream in) throws IOException {
+    private static SortedRuns.Texts readTexts(DataInputStream in) throws IOException {
         int n = in.readInt();
         List<String> out = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {
             out.add(readString(in));
         }
-        return new IcebergLoader.Texts(out);
+        return new SortedRuns.Texts(out);
     }
 
     private static List<Double> readVector(DataInputStream in) throws IOException {

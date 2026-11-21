@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The table layout the connector reads fastest, shared by the connector, {@link IcebergLoader} and
+ * The table layout the connector reads fastest, shared by the connector, the loader (lake-load) and
  * {@link IcebergMaintenance}: one table per kind with columns {@code id}, {@code doc} (the whole JSON document),
  * {@code business_date} (an identity partition) and the pack's promoted fields beside them ({@code counterparty.id} is
  * column {@code counterparty__id}; numbers are {@code double}, everything else {@code string}; a vector field,

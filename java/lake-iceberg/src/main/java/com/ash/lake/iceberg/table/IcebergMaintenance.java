@@ -61,7 +61,7 @@ import java.util.concurrent.ExecutorService;
  * deletes nothing: it says which dates keep-days would drop and which orphans would go. {@code --json} prints one line of JSON a
  * table (its files, MB, dates and snapshots before and after, and what each step did), which {@code lake maintain} reads.
  *
- * <p>Catalog options as {@link IcebergLoader}: {@code --engine native|library|auto} (as the connector's; {@code native}, drishti-iceberg,
+ * <p>Catalog options: {@code --engine native|library|auto} (as the connector's; {@code native}, drishti-iceberg,
  * needs no Hadoop), {@code --catalog rest --uri …}, {@code --set key=value}.
  * {@code --kinds k1,k2} limits the tables; {@code --spill-dir} and {@code --buffer-mb} bound a rewrite's sort.
  */
