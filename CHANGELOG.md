@@ -5,6 +5,10 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **Foreign tables: the account of a missing table and the documents' fields (G4 closure)**: `TableReader.absence()` says why a
+  table has no snapshot (a foreign table: what its catalog looked for and what is there instead, a Delta table's missing log, a missing
+  folder); `TableSnapshot.documentFields()` lists the documents' fields of a shaped table with their nested fields and the id and date
+  roles (the date also when it is the table's day partition), as `DocumentField`. Additive: `api-surface.txt` extended.
 - **Shaped reads of foreign tables (RA-S8)**: `TableShape` (from a connector's `tables.<kind>.*` settings) and `LakeReader.foreign`
   read a table other engines wrote (Spark, delta-rs, pyiceberg, a folder of JSON Lines) as a kind's documents, through the same
   `TableSnapshot` on Delta, Iceberg and files; the shape rule (dates from partitions, a zone's day, bounds or the column; ids; documents;

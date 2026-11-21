@@ -34,6 +34,11 @@ public interface ForeignSource {
     /** The table at {@code asOf}; empty: there is no table (yet, or then). */
     Optional<Version> version(AsOf asOf) throws IOException;
 
+    /** Why {@link #version} found no table: what was looked for and what is there instead (at least {@code no table}). */
+    default String missing() {
+        return "no table";
+    }
+
     /** What the table is, the same after a reopen. */
     TableIdentity identity() throws IOException;
 

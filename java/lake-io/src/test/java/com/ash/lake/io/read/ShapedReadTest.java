@@ -187,4 +187,48 @@ class ShapedReadTest {
         json.put("name", "N");                                         // a JSON object's fields in another order
         assertEquals("N", ShapedTable.at(new Object[] {1L, json}, 1, ShapedTable.resolve(shape(Map.of("id", "id")), fake).searchable.get("cp.name")));
     }
+
+    @Test
+    void theDocumentsFieldsKeepTheirNestedFieldsAndTheIdAndDateRoles() throws IOException {
+        ShapeField cp = new ShapeField("cp", ShapeField.Kind.STRUCT, 0, List.of(ShapeField.of("name", ShapeField.Kind.STRING)));
+        Fake fake = new Fake(List.of(ID, DAY, cp, BOOK), List.of("day"), List.of(), Map.of());     // the date is the day partition's
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            TableSnapshot s = new ForeignTableReader("t", shape(Map.of("id", "id", "columns.rename.book", "desk")), fake, pool,
+                    new Problems("fake", Problems::describe)).snapshot(AsOf.LATEST).orElseThrow();
+            List<com.ash.lake.read.DocumentField> f = s.documentFields();
+            assertEquals(List.of("id", "day", "cp", "desk"), f.stream().map(com.ash.lake.read.DocumentField::name).toList());
+            assertEquals(List.of(true, false, false, false), f.stream().map(com.ash.lake.read.DocumentField::id).toList());
+            assertEquals(List.of(false, true, false, false), f.stream().map(com.ash.lake.read.DocumentField::date).toList());
+            assertEquals("struct", f.get(2).kind());
+            assertEquals("name", f.get(2).children().get(0).name());
+            assertEquals("string", f.get(2).children().get(0).kind());
+        }
+    }
+
+    @Test
+    void aMissingTablesAbsenceIsItsSourcesAccountAndThePlainWordsOtherwise() {
+        Fake fake = new Fake(List.of(ID), List.of(), List.of(), Map.of());
+        ForeignSource none = new ForeignSource() {
+            @Override
+            public Optional<Version> version(AsOf asOf) {
+                return Optional.empty();
+            }
+
+            @Override
+            public String missing() {
+                return "no table t: looked for metadata/v1.metadata.json";
+            }
+
+            @Override
+            public TableIdentity identity() {
+                return fake.identity();
+            }
+        };
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            ForeignTableReader r = new ForeignTableReader("t", shape(Map.of("id", "id")), none, pool, new Problems("fake", Problems::describe));
+            assertEquals(Optional.empty(), r.snapshot(AsOf.LATEST));
+            assertEquals("no table t: looked for metadata/v1.metadata.json", r.absence());
+            assertEquals("no table", fake.missing());
+        }
+    }
 }

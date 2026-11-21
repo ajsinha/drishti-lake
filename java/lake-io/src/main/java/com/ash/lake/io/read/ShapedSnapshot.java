@@ -18,6 +18,7 @@ package com.ash.lake.io.read;
 import com.ash.lake.read.ColumnAsk;
 import com.ash.lake.read.ColumnBlock;
 import com.ash.lake.read.DataFile;
+import com.ash.lake.read.DocumentField;
 import com.ash.lake.read.DayFiles;
 import com.ash.lake.read.DocumentSink;
 import com.ash.lake.read.IdMap;
@@ -265,6 +266,29 @@ public final class ShapedSnapshot implements TableSnapshot {
     @Override
     public Columns columns() {
         return columns;
+    }
+
+    /** The documents' fields (nested ones included) with the id and date roles. */
+    @Override
+    public List<DocumentField> documentFields() {
+        List<DocumentField> out = new ArrayList<>();
+        for (int c : shape.documentColumns) {
+            ShapeField f = shape.columns.get(c);
+            boolean id = false;
+            for (int i : shape.idColumns) {
+                id |= i == c;
+            }
+            out.add(describe(shape.shape.nameOf(f.name()), f, id, c == shape.dateColumn));
+        }
+        return out;
+    }
+
+    private static DocumentField describe(String name, ShapeField f, boolean id, boolean date) {
+        List<DocumentField> kids = new ArrayList<>();
+        for (ShapeField k : f.children()) {
+            kids.add(describe(k.name(), k, false, false));
+        }
+        return new DocumentField(name, f.kind().name().toLowerCase(java.util.Locale.ROOT), kids, id, date);
     }
 
     /** The id's columns by their names in the document, joined by commas. */

@@ -75,6 +75,11 @@ final class IcebergForeign implements ForeignSource {
     }
 
     @Override
+    public String missing() {
+        return catalog.missing(table);
+    }
+
+    @Override
     public TableIdentity identity() throws IOException {
         Optional<Table> t = table();
         if (t.isPresent() && t.get().metadata().uuid() != null) {

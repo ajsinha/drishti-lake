@@ -64,6 +64,11 @@ final class FilesForeign implements ForeignSource {
     }
 
     @Override
+    public String missing() {
+        return "no folder " + dir.toAbsolutePath() + " of JSON Lines files";
+    }
+
+    @Override
     public TableIdentity identity() {
         String where = dir.toAbsolutePath().toString();
         return new TableIdentity("location", where, where);

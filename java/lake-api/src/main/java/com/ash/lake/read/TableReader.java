@@ -29,6 +29,14 @@ public interface TableReader {
     TableIdentity identity() throws IOException;
 
     /**
+     * Why {@link #snapshot} of the latest version is empty, for a health line: for a table not in the layout ({@link LakeReader#foreign})
+     * what its catalog or folder looked for and what is there instead; else {@code no table <name>}.
+     */
+    default String absence() {
+        return "no table " + name();
+    }
+
+    /**
      * The table at {@code asOf} ({@link AsOf#LATEST}, a version, a time); empty: no table then (none yet, or a time before its first
      * commit, on every store). A version the table does not hold is an {@link IOException}. Snapshots are kept per version.
      */

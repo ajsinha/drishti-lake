@@ -93,6 +93,7 @@ class public final record com.ash.lake.read.ColumnAsk
 class public final record com.ash.lake.read.ColumnBlock
 class public final record com.ash.lake.read.DataFile
 class public final record com.ash.lake.read.DayFiles
+class public final record com.ash.lake.read.DocumentField
 class public final record com.ash.lake.read.LakeAddress
 class public final record com.ash.lake.read.LakeHealth
 class public final record com.ash.lake.read.ReadProblem
@@ -1089,6 +1090,15 @@ com.ash.lake.read.DayFiles :: public long com.ash.lake.read.DayFiles.bytesUncoun
 com.ash.lake.read.DayFiles :: public long com.ash.lake.read.DayFiles.rows()
 com.ash.lake.read.DayFiles :: public static com.ash.lake.read.DayFiles com.ash.lake.read.DayFiles.of(java.time.LocalDate,java.util.List<com.ash.lake.read.DataFile>)
 com.ash.lake.read.DayFiles :: public static java.lang.String com.ash.lake.read.DayFiles.stamp(java.util.List<com.ash.lake.read.DataFile>)
+com.ash.lake.read.DocumentField :: public boolean com.ash.lake.read.DocumentField.date()
+com.ash.lake.read.DocumentField :: public boolean com.ash.lake.read.DocumentField.id()
+com.ash.lake.read.DocumentField :: public com.ash.lake.read.DocumentField(java.lang.String,java.lang.String,java.util.List<com.ash.lake.read.DocumentField>,boolean,boolean)
+com.ash.lake.read.DocumentField :: public final boolean com.ash.lake.read.DocumentField.equals(java.lang.Object)
+com.ash.lake.read.DocumentField :: public final int com.ash.lake.read.DocumentField.hashCode()
+com.ash.lake.read.DocumentField :: public final java.lang.String com.ash.lake.read.DocumentField.toString()
+com.ash.lake.read.DocumentField :: public java.lang.String com.ash.lake.read.DocumentField.kind()
+com.ash.lake.read.DocumentField :: public java.lang.String com.ash.lake.read.DocumentField.name()
+com.ash.lake.read.DocumentField :: public java.util.List<com.ash.lake.read.DocumentField> com.ash.lake.read.DocumentField.children()
 com.ash.lake.read.DocumentSink :: public abstract void com.ash.lake.read.DocumentSink.document(java.lang.String,java.lang.String)
 com.ash.lake.read.Documents :: public static java.lang.String com.ash.lake.read.Documents.withVectors(java.lang.String,java.util.Map<java.lang.String, double[]>)
 com.ash.lake.read.FileFormat :: public static com.ash.lake.read.FileFormat com.ash.lake.read.FileFormat.valueOf(java.lang.String)
@@ -1161,6 +1171,7 @@ com.ash.lake.read.TableIdentity :: public java.lang.String com.ash.lake.read.Tab
 com.ash.lake.read.TableReader :: public abstract com.ash.lake.read.TableIdentity com.ash.lake.read.TableReader.identity() throws java.io.IOException
 com.ash.lake.read.TableReader :: public abstract java.lang.String com.ash.lake.read.TableReader.name()
 com.ash.lake.read.TableReader :: public abstract java.util.Optional<com.ash.lake.read.TableSnapshot> com.ash.lake.read.TableReader.snapshot(com.ash.lake.spi.AsOf) throws java.io.IOException
+com.ash.lake.read.TableReader :: public default java.lang.String com.ash.lake.read.TableReader.absence()
 com.ash.lake.read.TableShape :: public boolean com.ash.lake.read.TableShape.dateFromDay()
 com.ash.lake.read.TableShape :: public boolean com.ash.lake.read.TableShape.decimalsAsText()
 com.ash.lake.read.TableShape :: public boolean com.ash.lake.read.TableShape.omitBinary()
@@ -1203,6 +1214,7 @@ com.ash.lake.read.TableSnapshot :: public abstract long com.ash.lake.read.TableS
 com.ash.lake.read.TableSnapshot :: public abstract void com.ash.lake.read.TableSnapshot.documents(java.time.LocalDate,com.ash.lake.read.DocumentSink) throws java.io.IOException
 com.ash.lake.read.TableSnapshot :: public abstract void com.ash.lake.read.TableSnapshot.scanFile(java.time.LocalDate,int,java.util.List<java.lang.String>,com.ash.lake.spi.Expr,com.ash.lake.read.RowSink) throws java.io.IOException
 com.ash.lake.read.TableSnapshot :: public abstract void com.ash.lake.read.TableSnapshot.vectors(com.ash.lake.read.VectorRequest,com.ash.lake.read.VectorSink) throws java.io.IOException
+com.ash.lake.read.TableSnapshot :: public default java.util.List<com.ash.lake.read.DocumentField> com.ash.lake.read.TableSnapshot.documentFields()
 com.ash.lake.read.VectorRequest :: public com.ash.lake.read.VectorRequest com.ash.lake.read.VectorRequest.keep(java.util.function.Predicate<com.ash.lake.read.DataFile>)
 com.ash.lake.read.VectorRequest :: public com.ash.lake.read.VectorRequest com.ash.lake.read.VectorRequest.parallel(int,long)
 com.ash.lake.read.VectorRequest :: public com.ash.lake.read.VectorRequest(java.time.LocalDate,java.lang.String,java.util.List<java.lang.String>,java.util.function.Predicate<com.ash.lake.read.DataFile>,int,long)

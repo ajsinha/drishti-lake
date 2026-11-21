@@ -53,6 +53,14 @@ public interface TableSnapshot {
     /** The vector columns. */
     Set<String> vectorColumns();
 
+    /**
+     * The fields of the documents of a table read through a {@link TableShape}, nested fields included, with the id and date roles; empty
+     * for a table in the product's layout (its documents are stored whole).
+     */
+    default List<DocumentField> documentFields() {
+        return List.of();
+    }
+
     /** Whether any date carries deleted rows (deletion vectors, delete files). */
     boolean deletes();
 

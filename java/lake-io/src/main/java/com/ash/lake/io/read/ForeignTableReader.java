@@ -56,6 +56,11 @@ public final class ForeignTableReader implements TableReader {
     }
 
     @Override
+    public String absence() {
+        return source.missing();
+    }
+
+    @Override
     public TableIdentity identity() throws IOException {
         return source.identity();
     }

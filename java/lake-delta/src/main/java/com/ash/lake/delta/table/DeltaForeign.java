@@ -95,6 +95,11 @@ final class DeltaForeign implements ForeignSource {
     }
 
     @Override
+    public String missing() {
+        return "no Delta table at " + path + " (no _delta_log with a commit there)";
+    }
+
+    @Override
     public TableIdentity identity() {
         Optional<Snapshot> s = latest();
         return s.isPresent() ? new TableIdentity("delta", DeltaTable.metadataId(s.get()), path) : new TableIdentity("location", path, path);
