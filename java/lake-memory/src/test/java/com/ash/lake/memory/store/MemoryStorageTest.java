@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,14 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake.store;
+package com.ash.lake.memory.store;
+
+import com.ash.lake.memory.MemoryRuntime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.drishti.lakeio.RangeReader;
+import com.ash.lake.spi.RangeReader;
 import java.io.FileNotFoundException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,12 +34,12 @@ class MemoryStorageTest {
 
     @AfterEach
     void drop() {
-        MemoryStores.remove("cap");
+        MemoryRuntime.STORES.remove("cap");
     }
 
     @Test
     void theCapIsHardAndARefusedWriteKeepsNothing() throws Exception {
-        MemoryStorage s = MemoryStores.define("cap", 4L * CHUNK, CHUNK, "VX-2026-07");
+        MemoryStorage s = MemoryRuntime.STORES.define("cap", 4L * CHUNK, CHUNK, "VX-2026-07");
         s.put("mem://cap/a.bin", new byte[3 * CHUNK]);
         assertThat(s.pool().inUseBytes()).isEqualTo(3L * CHUNK);
         assertThatThrownBy(() -> s.put("mem://cap/b.bin", new byte[2 * CHUNK])).isInstanceOf(MemoryStoreFullException.class)
@@ -50,7 +52,7 @@ class MemoryStorageTest {
 
     @Test
     void theRoomMakerRunsBeforeARefusal() throws Exception {
-        MemoryStorage s = MemoryStores.define("cap", 4L * CHUNK, CHUNK, "");
+        MemoryStorage s = MemoryRuntime.STORES.define("cap", 4L * CHUNK, CHUNK, "");
         s.put("mem://cap/old/x.bin", new byte[3 * CHUNK]);
         AtomicInteger asked = new AtomicInteger();
         s.roomMaker((store, bytes, writing) -> {
@@ -70,7 +72,7 @@ class MemoryStorageTest {
 
     @Test
     void aReaderFinishesOnAFileDeletedUnderIt() throws Exception {
-        MemoryStorage s = MemoryStores.define("cap", 16L * CHUNK, CHUNK, "");
+        MemoryStorage s = MemoryRuntime.STORES.define("cap", 16L * CHUNK, CHUNK, "");
         byte[] content = new byte[2 * CHUNK + 10];
         content[2 * CHUNK + 5] = 42;
         s.put("mem://cap/t/part.parquet", content);
@@ -87,7 +89,7 @@ class MemoryStorageTest {
 
     @Test
     void chunksAreReusedAndReleasedWhenTheCapIsLowered() throws Exception {
-        MemoryStorage s = MemoryStores.define("cap", 32L * CHUNK, CHUNK, "");
+        MemoryStorage s = MemoryRuntime.STORES.define("cap", 32L * CHUNK, CHUNK, "");
         for (int i = 0; i < 50; i++) {                   // a soak of replaces: allocation never grows past one file's chunks plus one
             s.put("mem://cap/t/data.bin", new byte[8 * CHUNK]);
         }
@@ -103,7 +105,7 @@ class MemoryStorageTest {
 
     @Test
     void anUndefinedStoreHoldsNothingAndRefuses() {
-        MemoryStorage s = MemoryStores.store("cap");
+        MemoryStorage s = MemoryRuntime.STORES.store("cap");
         assertThatThrownBy(() -> s.put("mem://cap/x", new byte[] {1})).isInstanceOf(MemoryStoreFullException.class);
         assertThatThrownBy(() -> s.put("mem://other/x", new byte[] {1})).hasMessageContaining("is not in memory store cap");
         assertThatThrownBy(() -> s.put("mem://cap/../x", new byte[] {1})).hasMessageContaining("climb");

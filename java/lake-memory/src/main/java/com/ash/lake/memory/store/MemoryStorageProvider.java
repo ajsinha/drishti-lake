@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,17 +13,33 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake.store;
+package com.ash.lake.memory.store;
 
-import com.ash.drishti.lakeio.Storage;
-import com.ash.drishti.lakeio.StorageProvider;
+import com.ash.lake.spi.Storage;
+import com.ash.lake.spi.StorageProvider;
 
 /**
- * {@code mem://} for every lake engine: listed in {@code META-INF/services/com.ash.drishti.lakeio.StorageProvider}, so the native Delta
- * engine, the lake writer and the Iceberg engine find the memory stores through {@link com.ash.drishti.lakeio.StorageProviders} without
- * depending on this module. Memory-only: nothing read from it may reach a disk.
+ * {@code mem://} for every lake engine of one runtime: registered when the runtime is built
+ * ({@code LakeRuntime.builder().storage(new MemoryStorageProvider())}), so the native Delta engine, the lake writer and the Iceberg
+ * engine find the memory stores through the runtime without depending on this module. Memory-only: nothing read from it may reach a disk.
  */
 public final class MemoryStorageProvider implements StorageProvider {
+
+    private final MemoryStores stores;
+
+    /** A provider holding stores of its own (one per runtime). */
+    public MemoryStorageProvider() {
+        this(new MemoryStores());
+    }
+
+    public MemoryStorageProvider(MemoryStores stores) {
+        this.stores = java.util.Objects.requireNonNull(stores, "stores");
+    }
+
+    /** The stores this provider answers {@code mem://} with. */
+    public MemoryStores stores() {
+        return stores;
+    }
 
     @Override
     public String scheme() {
@@ -32,7 +48,7 @@ public final class MemoryStorageProvider implements StorageProvider {
 
     @Override
     public Storage storage(String path) {
-        return MemoryStores.forPath(path);
+        return stores.forPath(path);
     }
 
     @Override

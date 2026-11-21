@@ -49,7 +49,9 @@ class ApiSurfaceTest {
             "com.ash.lake.spi", "lake-api",
             "com.ash.lake.config", "lake-config",
             "com.ash.lake.load", "lake-load",
-            "com.ash.lake.inbox", "lake-load");
+            "com.ash.lake.inbox", "lake-load",
+            "com.ash.lake.memory", "lake-memory",
+            "com.ash.lake.memory.store", "lake-memory");
 
     /** The libraries that stay inside (LK-13). */
     static final List<String> LIBRARIES = List.of("io.delta.", "org.apache.iceberg.", "org.apache.parquet.", "org.apache.hadoop.");

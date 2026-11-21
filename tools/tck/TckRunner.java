@@ -82,7 +82,9 @@ import java.util.concurrent.Executors;
 public final class TckRunner {
 
     /** The runtime the dumps read with: the process's, as a command line (the reference bridge drops it). */
-    static final com.ash.lake.LakeRuntime RT = com.ash.lake.LakeRuntime.fromProcess();   // lake-only
+    static final com.ash.lake.memory.store.MemoryStorageProvider MEMORY = new com.ash.lake.memory.store.MemoryStorageProvider();   // lake-only
+    /** The runtime every step and dump uses: the process's options, and memory storage ({@code mem://}) for the cases' memory row. */   // lake-only
+    static final com.ash.lake.LakeRuntime RT = com.ash.lake.LakeRuntime.builder().options(com.ash.lake.LakeOptions.fromProcess()).storage(MEMORY).build();   // lake-only
 
     private static final ObjectMapper JSON = new ObjectMapper().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
 
@@ -100,6 +102,8 @@ public final class TckRunner {
     static ObjectNode run(JsonNode job) {
         ObjectNode r = JSON.createObjectNode().put("case", job.path("case").asText());
         ArrayNode steps = r.putArray("steps");
+        String mem = job.path("memory").asText("");   // lake-only: the case's memory store (the matrix's mem:// row)
+        if (!mem.isEmpty()) MEMORY.stores().define(mem, 512L << 20, 1 << 20, "");   // lake-only
         try {
             for (JsonNode step : job.path("steps")) {
                 List<String> a = new ArrayList<>();
@@ -114,9 +118,9 @@ public final class TckRunner {
                 }
                 String[] argv = a.toArray(new String[0]);
                 int code = switch (op) {
-                    case "load" -> LakeLoad.run(argv, ps);
-                    case "undo" -> LakeUndo.run(argv, ps);
-                    case "retention" -> LakeRetention.run(argv, ps);
+                    case "load" -> LakeLoad.run(RT, argv, ps);
+                    case "undo" -> LakeUndo.run(RT, argv, ps);
+                    case "retention" -> LakeRetention.run(RT, argv, ps);
                     case "store" -> store(argv, ps);   // lake-only
                     default -> throw new IllegalArgumentException("unknown op " + op);
                 };
@@ -145,6 +149,8 @@ public final class TckRunner {
             r.put("status", "ok");
         } catch (Throwable e) {
             r.put("status", "error").put("error", e.getClass().getSimpleName());
+        } finally {
+            if (!mem.isEmpty()) MEMORY.stores().remove(mem);   // lake-only
         }
         return r;
     }
@@ -168,7 +174,7 @@ public final class TckRunner {
 
     static Map<String, Map<String, Object>> delta(String table) throws Exception {
         Map<String, Map<String, Object>> out = new TreeMap<>();
-        if (!Files.isDirectory(Path.of(table, "_delta_log"))) {
+        if (!deltaTable(table)) {
             return out;
         }
         Engine engine = NativeEngine.create(RT);
@@ -207,6 +213,12 @@ public final class TckRunner {
             }
         }
         return out;
+    }
+
+    /** Whether a Delta table is there (a folder with its log, or a memory table's log). */
+    static boolean deltaTable(String table) throws Exception {
+        if (table.startsWith("mem://")) return RT.storage(table).isDirectory(table + "/_delta_log");   // lake-only
+        return Files.isDirectory(Path.of(table, "_delta_log"));
     }
 
     private static Object value(ColumnVector v, int r) {

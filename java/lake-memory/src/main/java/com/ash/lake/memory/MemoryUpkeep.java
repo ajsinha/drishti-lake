@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,11 +13,10 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
-import com.ash.drishti.lakeio.FileEntry;
-import com.ash.drishti.memlake.store.MemoryStorage;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ash.lake.spi.FileEntry;
+import com.ash.lake.memory.store.MemoryStorage;
 import io.delta.kernel.Snapshot;
 import io.delta.kernel.Table;
 import io.delta.kernel.data.FilteredColumnarBatch;
@@ -26,21 +25,17 @@ import io.delta.kernel.engine.Engine;
 import io.delta.kernel.internal.InternalScanFileUtils;
 import io.delta.kernel.utils.CloseableIterator;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import io.delta.kernel.internal.SnapshotImpl;
+import io.delta.kernel.internal.util.FileNames;
 
 /**
- * Old versions of a Delta table in a memory store expired the moment they are past {@code keep-versions} (docs/architecture/DATA_ARCHITECTURE.md
- * sections 5 and 6): a version still readable holds its files; one past it costs memory for nothing. The caller holds the table's write
+ * Old versions of a Delta table in a memory store expired the moment they are past {@code keep-versions}: a version still readable holds its files; one past it costs memory for nothing. The caller holds the table's write
  * lock: a file written but not committed yet would otherwise look unreferenced.
  */
-public final class MemoryUpkeep {
+final class MemoryUpkeep {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
-    private static final Pattern LOG_FILE = Pattern.compile("^(\\d{20})\\..*");
 
     private MemoryUpkeep() {}
 
@@ -82,12 +77,12 @@ public final class MemoryUpkeep {
             freed += chunked(store, f.size());
             store.delete(f.path());
         }
-        long checkpoint = lastCheckpoint(store, log);
-        if (checkpoint > 0 && checkpoint <= oldest) {
+        // the log before the checkpoint the oldest kept version reads from (the Kernel's own log segment and file names)
+        long checkpoint = ((SnapshotImpl) t.getSnapshotAsOfVersion(engine, oldest)).getLogSegment().getCheckpointVersionOpt().orElse(-1L);
+        if (checkpoint > 0) {
             for (FileEntry f : store.filesIn(root + "/_delta_log")) {
                 String name = f.path().substring(log.length());
-                Matcher m = LOG_FILE.matcher(name);
-                if (m.matches() && Long.parseLong(m.group(1)) < checkpoint) {
+                if ((FileNames.isCommitFile(name) || FileNames.isCheckpointFile(name)) && FileNames.getFileVersion(new io.delta.kernel.internal.fs.Path(f.path())) < checkpoint) {
                     freed += chunked(store, f.size());
                     store.delete(f.path());
                 }
@@ -99,14 +94,5 @@ public final class MemoryUpkeep {
     private static long chunked(MemoryStorage store, long length) {
         int c = store.pool().chunkBytes();
         return (length + c - 1) / c * c;
-    }
-
-    private static long lastCheckpoint(MemoryStorage store, String log) {
-        try {
-            String text = new String(store.readAll(log + "_last_checkpoint"), StandardCharsets.UTF_8);
-            return JSON.readTree(text).path("version").asLong(-1);
-        } catch (IOException e) {
-            return -1;
-        }
     }
 }

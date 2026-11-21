@@ -44,6 +44,11 @@
 
   <build>
     <plugins>
+      <!-- the test jar: the memory store's tests reuse the storage contract (StorageContract) -->
+      <plugin>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions><execution><goals><goal>test-jar</goal></goals></execution></executions>
+      </plugin>
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
         <executions>

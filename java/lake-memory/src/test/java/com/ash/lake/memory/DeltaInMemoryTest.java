@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,21 +13,21 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.ash.drishti.deltalake.NativeEngine;
-import com.ash.drishti.deltalake.TableReader;
-import com.ash.drishti.deltalake.write.LakeManifest;
-import com.ash.drishti.deltalake.write.LakeWriter;
-import com.ash.drishti.deltalake.write.TableUpkeep;
-import com.ash.drishti.memlake.store.MemoryStorage;
-import com.ash.drishti.memlake.store.MemoryStoreFullException;
-import com.ash.drishti.memlake.store.MemoryStores;
+import com.ash.lake.delta.NativeEngine;
+import com.ash.lake.delta.TableReader;
+import com.ash.lake.delta.write.LakeManifest;
+import com.ash.lake.delta.write.LakeWriter;
+import com.ash.lake.delta.write.TableUpkeep;
+import com.ash.lake.memory.store.MemoryStorage;
+import com.ash.lake.memory.store.MemoryStoreFullException;
+import com.ash.lake.memory.store.MemoryStores;
 import io.delta.kernel.utils.FileStatus;
 import java.io.StringReader;
 import java.nio.file.Path;
@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Delta tables in memory (docs/architecture/DATA_ARCHITECTURE.md): written by the lake writer from rows held in memory (no staged file),
+ * Delta tables in memory: written by the lake writer from rows held in memory (no staged file),
  * read by the native engine unchanged, equal to the same table on disk, never a byte on the disk.
  */
 class DeltaInMemoryTest {
@@ -49,7 +49,7 @@ class DeltaInMemoryTest {
 
     @AfterEach
     void drop() {
-        MemoryStores.remove("unit");
+        MemoryRuntime.STORES.remove("unit");
     }
 
     private static String rows(int from, int count, String word) {
@@ -69,16 +69,16 @@ class DeltaInMemoryTest {
     }
 
     private static Map<String, String> read(String table) throws Exception {
-        try (NativeEngine engine = NativeEngine.create(Map.of())) {
+        try (NativeEngine engine = NativeEngine.create(MemoryRuntime.RT, Map.of())) {
             return TableReader.rows(engine, table, null);
         }
     }
 
     @Test
     void aTableInMemoryIsWrittenAndReadLikeOneOnDisk() throws Exception {
-        MemoryStorage store = MemoryStores.define("unit", 64L << 20, 64 * 1024, "TEST");
+        MemoryStorage store = MemoryRuntime.STORES.define("unit", 64L << 20, 64 * 1024, "TEST");
         String table = "mem://unit/news/news";
-        LakeWriter.Result r = LakeWriter.forTable(table, Map.of()).write(manifest(table, "overwrite-dates", "2026-11-02", rows(0, 300, "alpha"), 300),
+        LakeWriter.Result r = LakeWriter.forTable(MemoryRuntime.RT, table, Map.of()).write(manifest(table, "overwrite-dates", "2026-11-02", rows(0, 300, "alpha"), 300),
                 n -> { });
         assertEquals(0, r.version());
         assertEquals(300, r.rows());
@@ -87,11 +87,11 @@ class DeltaInMemoryTest {
         assertTrue(got.get("2026-11-02|N7").contains("alpha 7"), got.get("2026-11-02|N7"));
 
         // replace: one commit, the new rows only; append adds
-        LakeWriter.forTable(table, Map.of()).write(manifest(table, "overwrite-dates", "2026-11-02", rows(1000, 50, "beta"), 50), n -> { });
+        LakeWriter.forTable(MemoryRuntime.RT, table, Map.of()).write(manifest(table, "overwrite-dates", "2026-11-02", rows(1000, 50, "beta"), 50), n -> { });
         got = read(table);
         assertEquals(50, got.size());
         assertTrue(got.get("2026-11-02|N1000").contains("beta 1000"));
-        LakeWriter.forTable(table, Map.of()).write(manifest(table, "append", "2026-11-03", rows(2000, 5, "gamma"), 5), n -> { });
+        LakeWriter.forTable(MemoryRuntime.RT, table, Map.of()).write(manifest(table, "append", "2026-11-03", rows(2000, 5, "gamma"), 5), n -> { });
         assertEquals(55, read(table).size());
         assertTrue(store.isDirectory("mem://unit/news/news/_delta_log"));
         assertTrue(store.pool().inUseBytes() > 0 && store.pool().inUseBytes() <= 64L << 20);
@@ -99,20 +99,20 @@ class DeltaInMemoryTest {
 
     @Test
     void theSameRowsGiveByteEqualParquetOnDiskAndInMemory() throws Exception {
-        MemoryStores.define("unit", 64L << 20, 4096, "");
+        MemoryRuntime.STORES.define("unit", 64L << 20, 4096, "");
         String rows = rows(0, 200, "same");
         Path disk = tmp.resolve("lake/news/news");
-        LakeWriter.forTable(disk.toString(), Map.of()).write(manifest(disk.toString(), "overwrite-dates", "2026-11-02", rows, 200), n -> { });
+        LakeWriter.forTable(MemoryRuntime.RT, disk.toString(), Map.of()).write(manifest(disk.toString(), "overwrite-dates", "2026-11-02", rows, 200), n -> { });
         String mem = "mem://unit/news/news";
-        LakeWriter.forTable(mem, Map.of("codec", "snappy")).write(manifest(mem, "overwrite-dates", "2026-11-02", rows, 200), n -> { });
+        LakeWriter.forTable(MemoryRuntime.RT, mem, Map.of("codec", "snappy")).write(manifest(mem, "overwrite-dates", "2026-11-02", rows, 200), n -> { });
         assertEquals(read(disk.toString()).values().stream().sorted().toList(), read(mem).values().stream().sorted().toList());
-        try (NativeEngine engine = NativeEngine.create(Map.of())) {
+        try (NativeEngine engine = NativeEngine.create(MemoryRuntime.RT, Map.of())) {
             List<FileStatus> d = TableReader.files(engine, disk.toString());
             List<FileStatus> m = TableReader.files(engine, mem);
             assertEquals(d.size(), m.size());
             for (int i = 0; i < d.size(); i++) {
-                byte[] a = new com.ash.drishti.lakeio.LocalStorage().readAll(d.get(i).getPath());
-                byte[] b = MemoryStores.store("unit").readAll(m.get(i).getPath());
+                byte[] a = new com.ash.lake.io.LocalStorage().readAll(d.get(i).getPath());
+                byte[] b = MemoryRuntime.STORES.store("unit").readAll(m.get(i).getPath());
                 assertArrayEquals(a, b, "the Parquet bytes of file " + i);
             }
         }
@@ -120,15 +120,15 @@ class DeltaInMemoryTest {
 
     @Test
     void aFullStoreRefusesTheCommitAndTheTableStaysWholeAtItsVersion() throws Exception {
-        MemoryStorage store = MemoryStores.define("unit", 64L << 20, 4096, "VX-1");
+        MemoryStorage store = MemoryRuntime.STORES.define("unit", 64L << 20, 4096, "VX-1");
         String table = "mem://unit/t";
-        LakeWriter.forTable(table, Map.of()).write(manifest(table, "overwrite-dates", "2026-11-02", rows(0, 100, "kept"), 100), n -> { });
+        LakeWriter.forTable(MemoryRuntime.RT, table, Map.of()).write(manifest(table, "overwrite-dates", "2026-11-02", rows(0, 100, "kept"), 100), n -> { });
         store.pool().cap(store.pool().inUseBytes() + 4096);       // room for one more chunk only
         StringBuilder big = new StringBuilder();
         for (int i = 0; i < 40; i++) {
             big.append(rows(i * 1000, 100, "x".repeat(200) + i));
         }
-        assertThrows(Exception.class, () -> LakeWriter.forTable(table, Map.of()).write(manifest(table, "overwrite-dates", "2026-11-02",
+        assertThrows(Exception.class, () -> LakeWriter.forTable(MemoryRuntime.RT, table, Map.of()).write(manifest(table, "overwrite-dates", "2026-11-02",
                 big.toString(), 4000), n -> { }));
         assertTrue(store.refusals() > 0);
         Map<String, String> got = read(table);
@@ -139,12 +139,12 @@ class DeltaInMemoryTest {
 
     @Test
     void oldVersionsAreExpiredAndRowsReadBackForARewrite() throws Exception {
-        MemoryStorage store = MemoryStores.define("unit", 64L << 20, 4096, "");
+        MemoryStorage store = MemoryRuntime.STORES.define("unit", 64L << 20, 4096, "");
         String table = "mem://unit/up";
         for (int i = 0; i < 12; i++) {                           // replaces: each version's files only live until it is past keep-versions
-            LakeWriter.forTable(table, Map.of()).write(manifest(table, "replace", "2026-11-0" + (1 + i % 3), rows(i * 100, 100, "v" + i), 100), n -> { });
+            LakeWriter.forTable(MemoryRuntime.RT, table, Map.of()).write(manifest(table, "replace", "2026-11-0" + (1 + i % 3), rows(i * 100, 100, "v" + i), 100), n -> { });
         }
-        try (NativeEngine engine = NativeEngine.create(Map.of())) {
+        try (NativeEngine engine = NativeEngine.create(MemoryRuntime.RT, Map.of())) {
             TableUpkeep.Shape before = TableUpkeep.shape(engine, table, 1 << 20);
             assertEquals(11, before.version());
             assertTrue(before.rows() == 100 || before.rows() == -1, "rows " + before.rows());
@@ -163,14 +163,14 @@ class DeltaInMemoryTest {
 
     @Test
     void zstdIsTheDefaultCodecInMemory() throws Exception {
-        MemoryStores.define("unit", 64L << 20, 4096, "");
+        MemoryRuntime.STORES.define("unit", 64L << 20, 4096, "");
         String table = "mem://unit/z";
-        LakeWriter.forTable(table, Map.of()).write(manifest(table, "overwrite-dates", "2026-11-02", rows(0, 50, "z"), 50), n -> { });
-        try (NativeEngine engine = NativeEngine.create(Map.of())) {
+        LakeWriter.forTable(MemoryRuntime.RT, table, Map.of()).write(manifest(table, "overwrite-dates", "2026-11-02", rows(0, 50, "z"), 50), n -> { });
+        try (NativeEngine engine = NativeEngine.create(MemoryRuntime.RT, Map.of())) {
             List<String> codecs = new ArrayList<>();
             for (FileStatus f : TableReader.files(engine, table)) {
                 try (org.apache.parquet.hadoop.ParquetFileReader r = org.apache.parquet.hadoop.ParquetFileReader.open(
-                        com.ash.drishti.lakeio.ParquetInput.of(MemoryStores.store("unit"), f.getPath(), f.getSize()))) {
+                        com.ash.lake.io.ParquetInput.of(MemoryRuntime.STORES.store("unit"), f.getPath(), f.getSize()))) {
                     r.getFooter().getBlocks().forEach(b -> b.getColumns().forEach(c -> codecs.add(c.getCodec().name())));
                 }
             }

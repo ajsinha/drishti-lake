@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,15 +13,15 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
-import com.ash.drishti.common.RowRetention;
+import com.ash.lake.common.RowRetention;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.drishti.deltalake.write.LakeWriter;
-import com.ash.drishti.deltalake.write.TableUpkeep;
-import com.ash.drishti.memlake.store.MemoryStores;
+import com.ash.lake.delta.write.LakeWriter;
+import com.ash.lake.delta.write.TableUpkeep;
+import com.ash.lake.memory.store.MemoryStores;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -43,7 +43,7 @@ class RowRetentionTest {
         if (lake != null) {
             lake.close();
         }
-        MemoryStores.remove("rx");
+        MemoryRuntime.STORES.remove("rx");
     }
 
     private void feed(String jsonl) throws java.io.IOException {
@@ -56,11 +56,11 @@ class RowRetentionTest {
                 List.of("TRADE_ID"), null, "2026-11-14", List.of("BOOK"), null, null, false, null, false, 2, null, null, r);
         MemoryLakeSettings p = new MemoryLakeSettings(Map.of("rx", new MemoryLakeSettings.Store(64, 64, "RX", true, null, null)), List.of(t),
                 new MemoryLakeSettings.Compaction(false, false, null, 0, 1, null, 3, null), null, 1);
-        return new MemoryLake(p, new ReplenishSource(null), null, () -> true, null);
+        return new MemoryLake(MemoryRuntime.RT, p, new ReplenishSource(null), null, () -> true, null);
     }
 
     private static int rows() throws Exception {
-        List<TableUpkeep.Staged> s = TableUpkeep.rows(LakeWriter.engineFor("mem://rx/trades", Map.of()), "mem://rx/trades", pv -> true);
+        List<TableUpkeep.Staged> s = TableUpkeep.rows(LakeWriter.engineFor(MemoryRuntime.RT, "mem://rx/trades", Map.of()), "mem://rx/trades", pv -> true);
         return s == null ? -1 : s.size();
     }
 
@@ -76,12 +76,12 @@ class RowRetentionTest {
         lake = lake(new RowRetention("8h", "UPDATED_AT", 5));
         assertThat(lake.runNow("trades", "test").outcome()).isEqualTo("ok");
         assertThat(rows()).isEqualTo(10);
-        assertThat(MemoryCompactor.expired(lake.table("trades"))).isEqualTo(5);         // two past 8 h, then the cap keeps the newest 5
+        assertThat(lake.compactor().expired(lake.table("trades"))).isEqualTo(5);         // two past 8 h, then the cap keeps the newest 5
         assertThat(lake.compactor().candidates("rx")).first().satisfies(c -> assertThat(c.why()).contains("rows past the retention"));
         assertThat(lake.compactor().rewrite(lake.table("trades"), "retention")).isTrue();
         assertThat(rows()).isEqualTo(5);
         assertThat(lake.table("trades").expiredRows.get()).isEqualTo(5);
-        List<TableUpkeep.Staged> kept = TableUpkeep.rows(LakeWriter.engineFor("mem://rx/trades", Map.of()), "mem://rx/trades", pv -> true);
+        List<TableUpkeep.Staged> kept = TableUpkeep.rows(LakeWriter.engineFor(MemoryRuntime.RT, "mem://rx/trades", Map.of()), "mem://rx/trades", pv -> true);
         assertThat(kept).extracting(TableUpkeep.Staged::id).containsExactlyInAnyOrder("T0", "T1", "T2", "T3", "T4");
         @SuppressWarnings("unchecked")
         Map<String, Object> t = ((List<Map<String, Object>>) lake.describe().get("tables")).get(0);
@@ -93,9 +93,9 @@ class RowRetentionTest {
         feed("{\"TRADE_ID\":\"T1\",\"BOOK\":\"B\"}\n");
         lake = lake(new RowRetention("1d", null, null));
         lake.runNow("trades", "test");
-        String line = TableUpkeep.rows(LakeWriter.engineFor("mem://rx/trades", Map.of()), "mem://rx/trades", pv -> true).get(0).line();
+        String line = TableUpkeep.rows(LakeWriter.engineFor(MemoryRuntime.RT, "mem://rx/trades", Map.of()), "mem://rx/trades", pv -> true).get(0).line();
         assertThat(line).contains(RowRetention.ARRIVED);
-        assertThat(MemoryCompactor.expired(lake.table("trades"))).isZero();
+        assertThat(lake.compactor().expired(lake.table("trades"))).isZero();
         assertThat(new MemoryLakeSettings.TableSpec("x", "rx", null, null, null, null, null, null, List.of("A"), null, null, null, null, null, null, null, null,
                 null).written()).containsExactly("A");
         assertThatThrownBy(() -> new RowRetention("soon", null, null)).hasMessageContaining("retention.ttl");

@@ -9,7 +9,8 @@ freeze commit, make_reference.py).
 Every case must give the same line, byte for byte, except those listed in known-differences.txt beside this script (each with the step
 that made it and why). Exit 0 when that holds and every case here ran (status ok); 1 otherwise. A listed case that no longer differs is
 reported, so the list stays true. A case of a store the host never had (BEYOND: its jars cannot run it, make_reference.py --stores) has no
-reference line: it must run here (status ok); check.py holds it stable over two runs."""
+reference line: it must run here (status ok); check.py holds it stable over two runs. A case of the memory row (`<case>@<store>~mem`, its
+lake on mem://) must give the same line as the reference's local case, its name aside."""
 import gzip, json, sys
 from pathlib import Path
 
@@ -22,6 +23,7 @@ def lines(p):
 
 
 BEYOND = {"files"}   # stores the host's jars at the freeze commit do not have
+MEM = "~mem"         # the memory row: compared with the local case of the reference
 
 
 def main(argv):
@@ -34,6 +36,10 @@ def main(argv):
             case, _, why = l.partition(" ")
             known[case] = why.strip()
     bad = 0
+    mem = {c: c[:-len(MEM)] for c in new if c.endswith(MEM)}
+    for c, local in mem.items():                                 # the memory row: the reference's local line under this name
+        if local in ref:
+            ref[c] = ref[local].replace(json.dumps(local)[1:-1], json.dumps(c)[1:-1], 1)
     beyond = sorted(c for c in set(new) - set(ref) if c.rpartition("@")[2] in BEYOND)
     only_here = sorted(set(new) - set(ref) - set(beyond))
     if set(ref) - set(new) or only_here:
@@ -57,7 +63,8 @@ def main(argv):
     if failed:
         print(f"not ok here: {failed}")
         bad += 1
-    print(f"{same} identical, {differ} different, {len(known)} known differences listed; {len(beyond)} beyond the reference ({', '.join(sorted(BEYOND))})")
+    print(f"{same} identical ({len(mem)} of them the memory row), {differ} different, {len(known)} known differences listed; "
+          f"{len(beyond)} beyond the reference ({', '.join(sorted(BEYOND))})")
     return 1 if bad else 0
 
 

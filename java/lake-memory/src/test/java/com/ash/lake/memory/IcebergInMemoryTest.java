@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,27 +13,27 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ash.drishti.iceberg.expr.Expr;
-import com.ash.drishti.iceberg.io.FileAccess;
-import com.ash.drishti.iceberg.manifest.DataFile;
-import com.ash.drishti.iceberg.read.ParquetRowReader;
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Schema;
-import com.ash.drishti.iceberg.types.Type;
-import com.ash.drishti.iceberg.write.ParquetDataWriter;
-import com.ash.drishti.lakeio.ParquetInput;
-import com.ash.drishti.memlake.store.MemoryStorage;
-import com.ash.drishti.memlake.store.MemoryStores;
+import com.ash.lake.iceberg.expr.Expr;
+import com.ash.lake.iceberg.io.FileAccess;
+import com.ash.lake.iceberg.manifest.DataFile;
+import com.ash.lake.iceberg.read.ParquetRowReader;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Schema;
+import com.ash.lake.iceberg.types.Type;
+import com.ash.lake.iceberg.write.ParquetDataWriter;
+import com.ash.lake.io.ParquetInput;
+import com.ash.lake.memory.store.MemoryStorage;
+import com.ash.lake.memory.store.MemoryStores;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-/** An Iceberg data file in a memory warehouse (docs/architecture/DATA_ARCHITECTURE.md section 7): written and read through the same Storage. */
+/** An Iceberg data file in a memory warehouse: written and read through the same Storage. */
 class IcebergInMemoryTest {
 
     private static final Schema SCHEMA = new Schema(0, List.of(NestedField.required(1, "id", Type.Primitive.STRING),
@@ -42,14 +42,14 @@ class IcebergInMemoryTest {
 
     @AfterEach
     void drop() {
-        MemoryStores.remove("ice");
+        MemoryRuntime.STORES.remove("ice");
     }
 
     @Test
     void aDataFileIsWrittenAndReadInMemory() throws Exception {
-        MemoryStorage store = MemoryStores.define("ice", 32L << 20, 64 * 1024, "");
-        FileAccess io = FileAccess.local();
-        assertThat(FileAccess.supports("mem://ice/wh/t")).isTrue();
+        MemoryStorage store = MemoryRuntime.STORES.define("ice", 32L << 20, 64 * 1024, "");
+        FileAccess io = FileAccess.local(MemoryRuntime.RT);
+        assertThat(io.reads("mem://ice/wh/t")).isTrue();
         String path = "mem://ice/wh/news/data/f-1.parquet";
         DataFile f;
         try (ParquetDataWriter w = new ParquetDataWriter(io, path, SCHEMA, Map.of("write.parquet.compression-codec", "zstd"), 0,
@@ -63,7 +63,7 @@ class IcebergInMemoryTest {
         assertThat(store.status(path).size()).isEqualTo(f.fileSizeInBytes());
         int found = 0;
         try (ParquetRowReader r = new ParquetRowReader(ParquetInput.of(io.storage(path), path, f.fileSizeInBytes()), path, f.fileSizeInBytes(),
-                SCHEMA.columns(), null, Map.of(), Expr.eq(1, "N-0123"), io.codecs(), false)) {
+                SCHEMA.columns(), null, Map.of(), Expr.eq(1, "N-0123"), io.codecs(), com.ash.lake.io.ParquetFooters.of(io.runtime()), false)) {
             while (r.hasNext()) {
                 Object[] row = r.next().values();
                 if ("N-0123".equals(row[0])) {

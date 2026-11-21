@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,11 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
-import com.ash.drishti.api.AsOf;
-import com.ash.drishti.api.SourcePlugin;
-import com.ash.drishti.engine.source.SourceRegistry;
+import com.ash.lake.spi.RowSource;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -38,7 +36,7 @@ import java.util.List;
 import java.util.zip.GZIPInputStream;
 
 /**
- * What a replenish job reads (docs/architecture/DATA_ARCHITECTURE.md section 4): a connector's documents of a kind (any connector that can list a kind: the
+ * What a replenish job reads: a connector's documents of a kind (any connector that can list a kind: the
  * lakes, Kafka's topic state, JDBC, files, the vendor feeds), a JSON Lines file, or a URL answering JSON Lines or a JSON array. Everything
  * is read into memory and nothing is written anywhere: the source's own bytes stay where they were.
  */
@@ -47,11 +45,12 @@ public final class ReplenishSource {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).followRedirects(HttpClient.Redirect.NORMAL).build();
 
-    private final SourceRegistry registry;
+    private final RowSource rows;
     private volatile java.util.function.Function<String, List<String>> idsOf = ref -> List.of();
 
-    public ReplenishSource(SourceRegistry registry) {
-        this.registry = registry;
+    /** @param rows the host's connectors ({@link RowSource#NONE}: files and URLs only) */
+    public ReplenishSource(RowSource rows) {
+        this.rows = rows == null ? RowSource.NONE : rows;
     }
 
     /** How {@code ids-from} ({@code <table>.<FIELD>}) is read: the lake answers it from its own memory tables. */
@@ -102,13 +101,7 @@ public final class ReplenishSource {
                 return Files.exists(p) ? Files.getLastModifiedTime(p).toMillis() + ":" + Files.size(p) : null;
             }
             if (source.connector() != null && !source.connector().isBlank()) {
-                SourcePlugin plugin = registry.connector(source.connector()).orElse(null);
-                if (plugin == null) {
-                    return null;
-                }
-                java.time.Instant at = plugin.lastUpdate();
-                String v = source.kind() == null ? "" : plugin.dataVersion(source.kind()).orElse("");
-                return (at == null ? "" : at.toString()) + "|" + v;
+                return rows.mark(source.connector(), source.kind());
             }
         } catch (IOException | RuntimeException e) {
             return null;
@@ -117,45 +110,20 @@ public final class ReplenishSource {
     }
 
     private List<ObjectNode> fromConnector(String name, String kind) throws Exception {
-        SourcePlugin plugin = registry.connector(name, Duration.ofSeconds(30))
-                .orElseThrow(() -> new IllegalStateException("connector " + name + " is not running"));
-        if (plugin.memoryOnly()) {
-            throw new IllegalStateException("connector " + name + " is itself held in memory; a memory table is filled from its source, not from another memory table");
-        }
-        List<ObjectNode> out = new ArrayList<>();
-        boolean listed = plugin.documents(kind, AsOf.LATEST, d -> {
-            if (!d.deleted() && d.data() != null) {
-                JsonNode n = JSON.valueToTree(d.data().unwrap());
-                if (n instanceof ObjectNode o) {
-                    out.add(o);
-                }
-            }
-        });
-        if (!listed) {
-            throw new IllegalStateException("connector " + name + " cannot list its documents of " + kind
-                    + "; fill the table from a file or a URL of the feed instead");
-        }
-        return out;
+        return objects(rows.documents(name, kind));
     }
 
-    /** Each id fetched from the connector (one that computes a document when asked, such as the news connector); a miss is skipped. */
+    /** Each id fetched from the connector (one that computes a document when asked, such as a news feed); a miss is skipped. */
     private List<ObjectNode> byIds(String name, String kind, List<String> ids) throws Exception {
-        SourcePlugin plugin = registry.connector(name, Duration.ofSeconds(30))
-                .orElseThrow(() -> new IllegalStateException("connector " + name + " is not running"));
+        return objects(rows.fetch(name, kind, ids));
+    }
+
+    private static List<ObjectNode> objects(List<java.util.Map<String, Object>> docs) {
         List<ObjectNode> out = new ArrayList<>();
-        int failed = 0;
-        for (String id : ids) {
-            try {
-                var doc = plugin.fetch(new com.ash.drishti.api.EntityRef(kind, id));
-                if (doc.isPresent() && !doc.get().deleted() && doc.get().data() != null && JSON.valueToTree(doc.get().data().unwrap()) instanceof ObjectNode o) {
-                    out.add(o);
-                }
-            } catch (Exception e) {
-                failed++;                                        // one entity's feed failing does not stop the others
+        for (java.util.Map<String, Object> d : docs) {
+            if (d != null && JSON.valueToTree(d) instanceof ObjectNode o) {
+                out.add(o);
             }
-        }
-        if (!ids.isEmpty() && out.isEmpty() && failed > 0) {
-            throw new IllegalStateException("connector " + name + " answered none of " + ids.size() + " ids (" + failed + " failed)");
         }
         return out;
     }

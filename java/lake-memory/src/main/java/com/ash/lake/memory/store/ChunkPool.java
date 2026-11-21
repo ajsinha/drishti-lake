@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake.store;
+package com.ash.lake.memory.store;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -24,7 +24,7 @@ import java.util.ArrayDeque;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * A memory store's chunks, off the Java heap, on Java 21 (docs/architecture/DATA_ARCHITECTURE.md, section 3a): direct {@link ByteBuffer}s
+ * A memory store's chunks, off the Java heap, on Java 21: direct {@link ByteBuffer}s
  * of one size, allocated on demand up to a hard cap and <b>reused</b>. A file's chunks come back to the free list the moment the file is
  * deleted or evicted, so the cap is exact and never waits for a garbage collection; chunks beyond what is needed (the cap lowered, or
  * {@link #trim(long)} after an idle spell) are released at once with {@code sun.misc.Unsafe.invokeCleaner} ({@code jdk.unsupported}),

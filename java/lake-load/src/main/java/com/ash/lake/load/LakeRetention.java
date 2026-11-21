@@ -188,10 +188,18 @@ public final class LakeRetention {
         return m;
     }
 
+    /** {@code <root>/<table>}: a local folder, or a URI's path joined with one slash ({@code mem://}, {@code s3://}). */
+    static String tablePath(String root, String table) {
+        if (root.contains("://")) {
+            return (root.endsWith("/") ? root.substring(0, root.length() - 1) : root) + "/" + table;
+        }
+        return Path.of(root).resolve(table).toString();
+    }
+
     /** A Delta table: the dates' files removed in one commit (the writer's remove actions, as an undo that leaves a date empty). */
     static Map<String, Object> deltaDates(com.ash.lake.LakeRuntime runtime, String root, String table, java.util.function.Predicate<String> wanted, boolean dryRun) throws IOException {
         Map<String, Object> out = new LinkedHashMap<>();
-        String path = Path.of(root).resolve(table).toString();
+        String path = tablePath(root, table);
         Engine engine = LakeWriter.engineFor(runtime, path, Map.of());
         Snapshot s;
         try {
@@ -275,7 +283,7 @@ public final class LakeRetention {
     /** A Delta table: every date holding a dropped row is rewritten (one commit), by the writer that commits a load. */
     static List<Map<String, Object>> delta(com.ash.lake.LakeRuntime runtime, String root, String table, RowRetention r, Instant now, boolean dryRun) throws IOException {
         List<Map<String, Object>> out = new ArrayList<>();
-        String path = Path.of(root).resolve(table).toString();
+        String path = tablePath(root, table);
         Engine engine = LakeWriter.engineFor(runtime, path, Map.of());
         Snapshot s;
         try {

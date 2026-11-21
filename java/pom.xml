@@ -29,6 +29,7 @@
     <module>lake-delta</module>
     <module>lake-iceberg</module>
     <module>lake-files</module>
+    <module>lake-memory</module>
     <module>lake-load</module>
     <module>lake-tck</module>
     <module>lake-guards</module>
@@ -77,6 +78,7 @@
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-delta</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-iceberg</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-files</artifactId><version>${project.version}</version></dependency>
+      <dependency><groupId>com.ash.lake</groupId><artifactId>lake-memory</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-load</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-tck</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>org.apache.parquet</groupId><artifactId>parquet-hadoop</artifactId><version>${parquet.version}</version></dependency>

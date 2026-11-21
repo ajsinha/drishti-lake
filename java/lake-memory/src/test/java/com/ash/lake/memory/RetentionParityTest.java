@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,19 +13,19 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
-import com.ash.drishti.testroots.TestRoots;
+import com.ash.lake.tck.TestRoots;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import com.ash.drishti.common.RowRetention;
-import com.ash.drishti.deltalake.write.LakeWriter;
-import com.ash.drishti.deltalake.write.TableUpkeep;
-import com.ash.drishti.lakeload.LakeLoad;
-import com.ash.drishti.lakeload.LakeRetention;
-import com.ash.drishti.lakeload.TableDump;
-import com.ash.drishti.memlake.store.MemoryStores;
+import com.ash.lake.common.RowRetention;
+import com.ash.lake.delta.write.LakeWriter;
+import com.ash.lake.delta.write.TableUpkeep;
+import com.ash.lake.load.LakeLoad;
+import com.ash.lake.load.LakeRetention;
+import com.ash.lake.load.TableDump;
+import com.ash.lake.memory.store.MemoryStores;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -61,7 +61,7 @@ class RetentionParityTest {
         if (memory != null) {
             memory.close();
         }
-        MemoryStores.remove("rp");
+        MemoryRuntime.STORES.remove("rp");
     }
 
     /** Ten trades, T0 the newest and T9 nine hours old, alternating between two business dates. */
@@ -91,11 +91,11 @@ class RetentionParityTest {
                 List.of("TRADE_ID"), null, "2026-11-14", List.of("BOOK"), null, null, false, null, false, 2, null, null, r);
         MemoryLakeSettings p = new MemoryLakeSettings(Map.of("rp", new MemoryLakeSettings.Store(64, 64, "RP", true, null, null)), List.of(t),
                 new MemoryLakeSettings.Compaction(false, false, null, 0, 1, null, 3, null), null, 1);
-        memory = new MemoryLake(p, new ReplenishSource(null), null, () -> true, null);
+        memory = new MemoryLake(MemoryRuntime.RT, p, new ReplenishSource(null), null, () -> true, null);
         assertThat(memory.runNow("trades", "test").outcome()).isEqualTo("ok");
         assertThat(memory.compactor().rewrite(memory.table("trades"), "retention")).isTrue();
         TreeSet<String> out = new TreeSet<>();
-        TableUpkeep.rows(LakeWriter.engineFor("mem://rp/trades", Map.of()), "mem://rp/trades", pv -> true).forEach(s -> out.add(s.id()));
+        TableUpkeep.rows(LakeWriter.engineFor(MemoryRuntime.RT, "mem://rp/trades", Map.of()), "mem://rp/trades", pv -> true).forEach(s -> out.add(s.id()));
         return out;
     }
 
@@ -113,9 +113,9 @@ class RetentionParityTest {
         Path cfg = dir.resolve("load-" + format + ".yaml");
         Files.writeString(cfg, yaml);
         ByteArrayOutputStream said = new ByteArrayOutputStream();
-        assertThat(LakeLoad.run(new String[] {"--config", cfg.toString(), "-q"}, new PrintStream(said, true, StandardCharsets.UTF_8)))
+        assertThat(LakeLoad.run(MemoryRuntime.RT, new String[] {"--config", cfg.toString(), "-q"}, new PrintStream(said, true, StandardCharsets.UTF_8)))
                 .as(said.toString(StandardCharsets.UTF_8)).isZero();
-        Map<String, Object> done = LakeRetention.apply(lake.toString(), format, "risk/trades", r, Instant.now(), false);
+        Map<String, Object> done = LakeRetention.apply(MemoryRuntime.RT, lake.toString(), format, "risk/trades", r, Instant.now(), false);
         assertThat(done.get("dropped")).isNotEqualTo(0L);
         return ids(format.equals("delta") ? TableDump.delta(lake.resolve("risk/trades").toString(), Map.of())
                 : TableDump.iceberg(lake.toString(), "risk", "trades", Map.of()));
@@ -134,7 +134,7 @@ class RetentionParityTest {
             }
             Files.write(day.resolve("trades.jsonl"), lines, StandardCharsets.UTF_8);
         }
-        LakeRetention.apply(root.toString(), "files", "risk/trades", r, Instant.now(), false);
+        LakeRetention.apply(MemoryRuntime.RT, root.toString(), "files", "risk/trades", r, Instant.now(), false);
         TreeSet<String> out = new TreeSet<>();
         for (LocalDate d : List.of(D1, D2)) {
             Path f = root.resolve("risk").resolve(d.toString()).resolve("trades.jsonl");

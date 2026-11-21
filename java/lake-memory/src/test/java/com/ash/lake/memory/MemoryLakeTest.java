@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,14 +13,14 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ash.drishti.deltalake.write.LakeWriter;
-import com.ash.drishti.deltalake.write.TableUpkeep;
-import com.ash.drishti.memlake.store.MemoryStorage;
-import com.ash.drishti.memlake.store.MemoryStores;
+import com.ash.lake.delta.write.LakeWriter;
+import com.ash.lake.delta.write.TableUpkeep;
+import com.ash.lake.memory.store.MemoryStorage;
+import com.ash.lake.memory.store.MemoryStores;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -33,7 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * The in-memory lake's jobs (docs/architecture/DATA_ARCHITECTURE.md sections 4, 6 and 13a), without Spring: a vendor feed served over HTTP fills tables in memory
+ * The in-memory lake's jobs, without Spring: a vendor feed served over HTTP fills tables in memory
  * (replace, append, merge), the eviction ladder gives up whole unpinned tables least recently read first and queues their refill, a full
  * store refuses and the table stays whole, compaction merges small files and saves memory.
  */
@@ -61,7 +61,7 @@ class MemoryLakeTest {
             lake.close();
         }
         http.stop(0);
-        MemoryStores.remove("vx");
+        MemoryRuntime.STORES.remove("vx");
     }
 
     private String url() {
@@ -85,11 +85,11 @@ class MemoryLakeTest {
     private MemoryLake lake(int maxMb, List<MemoryLakeSettings.TableSpec> tables) {
         MemoryLakeSettings p = new MemoryLakeSettings(Map.of("vx", new MemoryLakeSettings.Store(maxMb, 64, "VX-2026-07", true, null, null)),
                 tables, new MemoryLakeSettings.Compaction(false, false, null, 0, 1, null, 3, null), null, 1);
-        return new MemoryLake(p, new ReplenishSource(null), null, () -> true, null);
+        return new MemoryLake(MemoryRuntime.RT, p, new ReplenishSource(null), null, () -> true, null);
     }
 
     private static int rows(String path) throws Exception {
-        List<TableUpkeep.Staged> s = TableUpkeep.rows(LakeWriter.engineFor(path, Map.of()), path, pv -> true);
+        List<TableUpkeep.Staged> s = TableUpkeep.rows(LakeWriter.engineFor(MemoryRuntime.RT, path, Map.of()), path, pv -> true);
         return s == null ? -1 : s.size();
     }
 
@@ -111,7 +111,7 @@ class MemoryLakeTest {
         lake.runNow("book", "test");
         feed.set(docs(5, 10, "new"));
         lake.runNow("book", "test");
-        List<TableUpkeep.Staged> book = TableUpkeep.rows(LakeWriter.engineFor("mem://vx/book", Map.of()), "mem://vx/book", pv -> true);
+        List<TableUpkeep.Staged> book = TableUpkeep.rows(LakeWriter.engineFor(MemoryRuntime.RT, "mem://vx/book", Map.of()), "mem://vx/book", pv -> true);
         assertThat(book).hasSize(15);
         assertThat(book.stream().filter(s -> s.id().equals("I00007")).findFirst().orElseThrow().line()).contains("new");
         assertThat(book.stream().filter(s -> s.id().equals("I00002")).findFirst().orElseThrow().line()).contains("old");
@@ -131,7 +131,7 @@ class MemoryLakeTest {
     @Test
     void theLadderEvictsWholeUnpinnedTablesLeastRecentlyReadFirstThenRefuses() throws Exception {
         lake = lake(3, List.of(table("a", "replace", false), table("b", "replace", false), table("pinned", "replace", true)));
-        MemoryStorage store = MemoryStores.store("vx");
+        MemoryStorage store = MemoryRuntime.STORES.store("vx");
         StringBuilder big = new StringBuilder();
         for (int i = 0; i < 6; i++) {
             big.append(docs(i * 4000, 4000, "x".repeat(40) + i));
@@ -191,7 +191,7 @@ class MemoryLakeTest {
             feed.set(docs(i * 50, 50, "batch" + i));
             lake.runNow("ticks", "test");
         }
-        MemoryStorage store = MemoryStores.store("vx");
+        MemoryStorage store = MemoryRuntime.STORES.store("vx");
         long before = store.bytesUnder("mem://vx/ticks");
         assertThat(lake.compactor().candidates("vx")).isNotEmpty();
         assertThat(lake.compactor().rewrite(lake.table("ticks"), "test")).isTrue();

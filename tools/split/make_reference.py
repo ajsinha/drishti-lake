@@ -68,7 +68,7 @@ def main(argv=None):
         runner.write_text(to_host((ROOT / "tools" / "tck" / "TckRunner.java").read_text(encoding="utf-8")), encoding="utf-8")
         return subprocess.run([sys.executable, str(ROOT / "tools" / "tck" / "tck.py"), "--classpath-file", str(cpf),
                                "--runner", str(runner), "--out", a.out,
-                               "--stores", "delta,iceberg"]).returncode     # the stores the host's jars have
+                               "--stores", "delta,iceberg", "--storages", "local"]).returncode     # the stores the host's jars have; no memory row
     finally:
         if not a.keep:
             shutil.rmtree(scratch, ignore_errors=True)

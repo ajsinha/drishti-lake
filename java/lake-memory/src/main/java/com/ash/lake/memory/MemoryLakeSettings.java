@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,22 +13,22 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
-import com.ash.drishti.common.RowRetention;
+import com.ash.lake.common.RowRetention;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 /**
- * The in-memory lake, {@code drishti.lake.memory.*} (docs/architecture/DATA_ARCHITECTURE.md section 11; docs/guides/DATA_LAKE_GUIDE.md):
+ * The in-memory lake's settings, {@code lake.memory.*}:
  * the memory stores (each a hard cap of off-heap memory), the tables their replenish jobs fill, and the automated compaction. Plain values:
- * the server binds {@code drishti.lake.memory.*} onto this record ({@code MemoryLakeConfiguration}); this module reads no configuration.
+ * the host binds its settings onto this record; this module reads no configuration.
  *
  * @param stores the memory stores by name ({@code mem://<name>/…})
  * @param tables the tables and their replenish jobs
  * @param compaction the automated compaction (on by default)
- * @param historyKeep the runs kept per table for Admin, Lakes and {@code drishti.py lake memory jobs} (50)
+ * @param historyKeep the runs kept per table for the host's screens and {@code lake memory jobs} (50)
  * @param jobThreads the replenish jobs that may run at once (2; one per table at most)
  */
 public record MemoryLakeSettings(Map<String, Store> stores, List<TableSpec> tables, Compaction compaction, Integer historyKeep, Integer jobThreads) {
@@ -47,28 +47,28 @@ public record MemoryLakeSettings(Map<String, Store> stores, List<TableSpec> tabl
     }
 
     /**
-     * These settings with the memory stores the lake files describe (decision L3, docs/guides/DATA_LAKE_GUIDE.md): every lake whose
+     * These settings with the memory stores the lake files describe: every lake whose
      * root is {@code mem://<store>} is a store, its {@code memory:} block giving the cap, chunk size, contract, owner and idle trim, its
-     * {@code format} the store's. A store still under {@code drishti.lake.memory.stores} (the engine file, the old place) is read with one
-     * warning naming {@code drishti.py lake migrate-config}; a store named in both places is refused, naming both.
+     * {@code format} the store's. A store still under {@code lake.memory.stores} (the old place) is read with one
+     * warning; a store named in both places is refused, naming both.
      *
-     * @param lakes the lakes of this server
+     * @param lakes the lakes of this host
      * @param warn  where the one warning goes
      */
-    public MemoryLakeSettings withLakeStores(com.ash.drishti.lakeconfig.Lakes lakes, java.util.function.Consumer<String> warn) {
+    public MemoryLakeSettings withLakeStores(com.ash.lake.config.Lakes lakes, java.util.function.Consumer<String> warn) {
         Map<String, Store> merged = new java.util.LinkedHashMap<>(stores);
         if (!stores.isEmpty()) {
-            warn.accept("the in-memory lake's stores " + stores.keySet() + " are in drishti.lake.memory.stores (config/engines/memory-lake.yaml): "
+            warn.accept("the in-memory lake's stores " + stores.keySet() + " are in lake.memory.stores: "
                     + "describe each as a lake (config/lakes/<store>.yaml, root: mem://<store>, memory: {max-mb: ...}); read there for one more release");
         }
-        for (com.ash.drishti.lakeconfig.Lake l : lakes.all().values()) {
+        for (com.ash.lake.config.Lake l : lakes.all().values()) {
             if (!l.inMemory()) {
                 continue;
             }
             String name = l.store();
             if (merged.containsKey(name) && stores.containsKey(name)) {
-                throw new IllegalArgumentException("memory store " + name + " is described twice: in " + l.file() + " and in drishti.lake.memory.stores "
-                        + "(config/engines/memory-lake.yaml); keep the lake file and remove it from the engine file");
+                throw new IllegalArgumentException("memory store " + name + " is described twice: in " + l.file() + " and in lake.memory.stores; "
+                        + "keep the lake file and remove it from lake.memory.stores");
             }
             Map<String, String> m = l.memory();
             merged.put(name, new Store(integer(m.get("max-mb")), integer(m.get("chunk-kb")), m.get("contract"),
@@ -88,7 +88,7 @@ public record MemoryLakeSettings(Map<String, Store> stores, List<TableSpec> tabl
      * @param chunkKb the chunk size (1024)
      * @param contract the contract the data is held under, shown on every refusal and on Admin, Lakes
      * @param owner whether this node owns the store and binds its pack (true; false: the store is not loaded here and the pack's
-     *     requests go to its owner over Drishti*net)
+     *     requests go to its owner node)
      * @param format {@code delta} or {@code iceberg} (a table may say otherwise)
      * @param idleTrimMinutes free chunks are given back to the operating system after the pool has been idle this long (10)
      */

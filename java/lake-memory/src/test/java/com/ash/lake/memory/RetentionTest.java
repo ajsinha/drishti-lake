@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,18 +13,18 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.drishti.api.error.DrishtiException;
+import com.ash.lake.common.LakeException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
-/** The guard's rules (docs/architecture/DATA_ARCHITECTURE.md section 8): only downloads and peer answers may carry memory-only data; refusals in words. */
+/** The guard's rules: only downloads and peer answers may carry memory-only data; refusals in words. */
 class RetentionTest {
 
     /** A guard whose memory-only kinds are given (no connectors needed). */
@@ -49,7 +49,7 @@ class RetentionTest {
     @Test
     void aRefusalSaysWhyWithTheContract() {
         Retention r = with(Map.of("news", "VX-2026-07"));
-        assertThatThrownBy(() -> r.require(Retention.Sink.REPORT, List.of("news"), "This report")).isInstanceOf(DrishtiException.class)
+        assertThatThrownBy(() -> r.require(Retention.Sink.REPORT, List.of("news"), "This report")).isInstanceOf(LakeException.class)
                 .hasMessageContaining("This report uses news data held in memory only (contract VX-2026-07)")
                 .hasMessageContaining("cannot be delivered by a scheduled report").hasMessageContaining("Only a download by you may leave");
         assertThat(r.refusals()).isEqualTo(1);

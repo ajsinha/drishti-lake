@@ -84,18 +84,25 @@ def subst(x, env):
     return x
 
 
-def jobs(cases, scratch, stores=None):
+MEM = "~mem"   # the matrix's memory row: a case's lake on mem:// (its result must equal the local one's, paths aside)
+
+
+def jobs(cases, scratch, stores=None, storages=("local",)):
     out = []
-    for f in cases:
+    for f, storage in [(f, s) for f in cases for s in storages]:
         c = yaml.safe_load(f.read_text(encoding="utf-8"))
         name = str(f.relative_to(CASES).with_suffix(""))
         for store in c.get("stores", ["delta", "iceberg"]):
             if stores is not None and store not in stores:
                 continue
-            cid = f"{name}@{store}"
-            work = scratch / cid.replace("/", "_")
+            if storage == "mem" and (store not in ("delta", "iceberg") or c.get("local-only")):
+                continue                                             # the memory row: Delta and Iceberg tables in a memory store
+            cid = f"{name}@{store}" + (MEM if storage == "mem" else "")
+            work = scratch / cid.replace("/", "_").replace("~", "_")
             work.mkdir(parents=True)
-            env = {"work": str(work), "lake": str(work / "lake"), "in": str(work / "in"), "store": store}
+            memory = f"tck{len(out)}" if storage == "mem" else ""
+            lake = f"mem://{memory}/lake" if memory else str(work / "lake")
+            env = {"work": str(work), "lake": lake, "in": str(work / "in"), "store": store}
             for n, spec in (c.get("inputs") or {}).items():
                 write_input(work / "in", n, spec)
             configs = c.get("configs") or {"main": c["config"]}
@@ -117,23 +124,27 @@ def jobs(cases, scratch, stores=None):
             for t in c.get("tables", ["risk/scenario-pv"]):
                 dom, tab = t.split("/")
                 d = {"name": t, "format": store}
-                d.update({"path": str(work / "lake" / dom / tab)} if store == "delta" else
-                         {"root": str(work / "lake"), "domain": dom, "table": tab})
+                d.update({"path": f"{lake}/{dom}/{tab}"} if store == "delta" else
+                         {"root": lake, "domain": dom, "table": tab})
                 dumps.append(d)
-            out.append(({"case": cid, "steps": steps, "dumps": dumps}, str(work)))
+            job = {"case": cid, "steps": steps, "dumps": dumps}
+            if memory:
+                job["memory"] = memory
+            out.append((job, str(work), f"mem://{memory}" if memory else None))
     return out
 
 
 def product_classpath():
     """This repository's loader and its run-time class path, packaged here (never installed)."""
     java = ROOT / "java"
-    cpf = java / "lake-load" / "target" / "tck-classpath.txt"
     env = dict(os.environ, JAVA_HOME=JAVA_HOME)
-    subprocess.run(["./mvnw", "-q", "-o", "package", "dependency:build-classpath", "-DskipTests", "-pl", "lake-load", "-am",
-                    f"-Dmdep.outputFile={cpf}", "-Dmdep.includeScope=runtime"], cwd=java, env=env, check=True)
-    own = next(j for j in sorted((java / "lake-load" / "target").glob("lake-load-*.jar")) if not j.name.endswith("-tests.jar"))
-    deps = [p for p in cpf.read_text().strip().split(os.pathsep) if not p.endswith("-tests.jar")]
-    return os.pathsep.join([str(own)] + deps)
+    subprocess.run(["./mvnw", "-q", "-o", "package", "dependency:build-classpath", "-DskipTests", "-pl", "lake-load,lake-memory", "-am",
+                    "-Dmdep.outputFile=target/tck-classpath.txt", "-Dmdep.includeScope=runtime"], cwd=java, env=env, check=True)
+    cp = []
+    for m in ("lake-load", "lake-memory"):
+        cp.append(str(next(j for j in sorted((java / m / "target").glob(m + "-*.jar")) if not j.name.endswith("-tests.jar"))))
+        cp += [p for p in (java / m / "target" / "tck-classpath.txt").read_text().strip().split(os.pathsep) if not p.endswith("-tests.jar")]
+    return os.pathsep.join(dict.fromkeys(cp))
 
 
 def main(argv=None):
@@ -142,6 +153,7 @@ def main(argv=None):
     ap.add_argument("--classpath-file", help="the class path to run over (default: this repository's built modules)")
     ap.add_argument("--runner", default=str(ROOT / "tools" / "tck" / "TckRunner.java"))
     ap.add_argument("--only", help="run the cases whose name starts with this")
+    ap.add_argument("--storages", default="local,mem", help="local, mem or both (the reference: local; the host's kit has no memory row)")
     ap.add_argument("--stores", help="run these stores only (comma separated; the reference: delta,iceberg); default every store a case names")
     a = ap.parse_args(argv)
     cases = sorted(CASES.rglob("*.yaml"))
@@ -150,9 +162,9 @@ def main(argv=None):
     cp = Path(a.classpath_file).read_text().strip() if a.classpath_file else product_classpath()
     scratch = Path(tempfile.mkdtemp(prefix="lake-tck-", dir=os.environ.get("LAKE_TCK_TMP")))   # the caller's scratch folder
     try:
-        js = jobs(cases, scratch, set(a.stores.split(",")) if a.stores else None)
+        js = jobs(cases, scratch, set(a.stores.split(",")) if a.stores else None, a.storages.split(","))
         jf, rf = scratch / "jobs.jsonl", scratch / "results.jsonl"
-        jf.write_text("".join(json.dumps(j) + "\n" for j, _ in js), encoding="utf-8")
+        jf.write_text("".join(json.dumps(j) + "\n" for j, _, _ in js), encoding="utf-8")
         java = str(Path(JAVA_HOME) / "bin" / "java")
         log = scratch / "runner.log"
         with open(log, "w") as lf:
@@ -161,12 +173,15 @@ def main(argv=None):
         if p.returncode != 0:
             print("the runner failed:\n" + log.read_text()[-4000:], file=sys.stderr)
             return 1
-        works = {j["case"]: w for j, w in js}
+        works = {j["case"]: (w, m) for j, w, m in js}
         lines = {}
         for l in rf.read_text(encoding="utf-8").splitlines():
             r = json.loads(l)
             text = json.dumps(r, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-            text = text.replace(works[r["case"]], "${work}").replace(str(scratch), "${tmp}")
+            work, mem = works[r["case"]]
+            text = text.replace(work, "${work}").replace(str(scratch), "${tmp}")
+            if mem:
+                text = text.replace(mem, "${work}")                  # a memory lake's root reads as the local one's
             lines[r["case"]] = text
         Path(a.out).write_text("".join(lines[k] + "\n" for k in sorted(lines)), encoding="utf-8")
         bad = [k for k in sorted(lines) if json.loads(lines[k])["status"] != "ok"]

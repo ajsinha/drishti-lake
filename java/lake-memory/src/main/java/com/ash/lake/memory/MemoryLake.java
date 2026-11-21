@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,15 +13,15 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
-import com.ash.drishti.common.RowRetention;
-import com.ash.drishti.deltalake.write.LakeManifest;
-import com.ash.drishti.deltalake.write.LakeWriter;
-import com.ash.drishti.deltalake.write.TableUpkeep;
-import com.ash.drishti.memlake.store.MemoryStorage;
-import com.ash.drishti.memlake.store.MemoryStoreFullException;
-import com.ash.drishti.memlake.store.MemoryStores;
+import com.ash.lake.common.RowRetention;
+import com.ash.lake.delta.write.LakeManifest;
+import com.ash.lake.delta.write.LakeWriter;
+import com.ash.lake.delta.write.TableUpkeep;
+import com.ash.lake.memory.store.MemoryStorage;
+import com.ash.lake.memory.store.MemoryStoreFullException;
+import com.ash.lake.memory.store.MemoryStores;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -51,9 +51,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The in-memory lake of this node (docs/architecture/DATA_ARCHITECTURE.md): its memory stores, the tables their replenish jobs fill (on a
+ * The in-memory lake of this node: its memory stores, the tables their replenish jobs fill (on a
  * schedule, on the source's signal, at start in warm-up order, and at once after an eviction), the eviction ladder each store runs when a
- * write needs room (section 6), and what Admin, Lakes, Health and {@code drishti.py lake memory} show. Logs carry ids and counts only, never
+ * write needs room (section 6), and what Admin, Lakes, Health and {@code lake memory} show. Logs carry ids and counts only, never
  * a value of the data.
  */
 public final class MemoryLake implements AutoCloseable {
@@ -67,6 +67,8 @@ public final class MemoryLake implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(MemoryLake.class);
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    private final com.ash.lake.LakeRuntime runtime;
+    private final MemoryStores memory;
     private final MemoryLakeSettings props;
     private final ReplenishSource source;
     private final Map<String, MemoryTable> tables = new LinkedHashMap<>();
@@ -81,6 +83,7 @@ public final class MemoryLake implements AutoCloseable {
     private volatile Instant lastActivity = Instant.now();
 
     /**
+     * @param runtime the runtime whose memory storage holds the stores (built with {@code .storage(new MemoryStorageProvider())})
      * @param props the stores and tables
      * @param source what the jobs read
      * @param ownedHere the stores this node owns (node.yaml {@code memory-stores}); null: every store whose {@code owner} is true
@@ -88,8 +91,10 @@ public final class MemoryLake implements AutoCloseable {
      * @param cron the next time a table's {@code cron} line fires (the server's cron parser: this module has none of its own); null when
      *     no table has a cron line
      */
-    public MemoryLake(MemoryLakeSettings props, ReplenishSource source, Set<String> ownedHere, java.util.function.BooleanSupplier quiet,
+    public MemoryLake(com.ash.lake.LakeRuntime runtime, MemoryLakeSettings props, ReplenishSource source, Set<String> ownedHere, java.util.function.BooleanSupplier quiet,
             Cron cron) {
+        this.runtime = runtime;
+        this.memory = MemoryStores.of(runtime);
         this.props = props;
         this.source = source;
         this.cron = cron;
@@ -98,20 +103,20 @@ public final class MemoryLake implements AutoCloseable {
             boolean mine = ownedHere == null ? s.owner() : ownedHere.contains(name);
             if (mine) {
                 owned.add(name);
-                MemoryStorage st = MemoryStores.define(name, (long) s.maxMb() << 20, s.chunkKb() * 1024, s.contract());
+                MemoryStorage st = memory.define(name, (long) s.maxMb() << 20, s.chunkKb() * 1024, s.contract());
                 st.roomMaker(this::makeRoom);
             }
         });
         for (MemoryLakeSettings.TableSpec t : props.tables()) {
             if (t.name() == null || t.name().isBlank() || t.store() == null || !stores.containsKey(t.store())) {
-                throw new IllegalArgumentException("drishti.lake.memory.tables: table " + t.name() + " names no store of drishti.lake.memory.stores ("
+                throw new IllegalArgumentException("lake.memory.tables: table " + t.name() + " names no memory store ("
                         + stores.keySet() + ")");
             }
             if (!List.of("replace", "append", "merge").contains(t.mode())) {
-                throw new IllegalArgumentException("drishti.lake.memory.tables: table " + t.name() + ": mode " + t.mode() + " is not replace, append or merge");
+                throw new IllegalArgumentException("lake.memory.tables: table " + t.name() + ": mode " + t.mode() + " is not replace, append or merge");
             }
             if (tables.containsKey(t.name())) {
-                throw new IllegalArgumentException("drishti.lake.memory.tables: two tables are named " + t.name());
+                throw new IllegalArgumentException("lake.memory.tables: two tables are named " + t.name());
             }
             MemoryTable mt = new MemoryTable(t, props.historyKeep());
             if (!owned.contains(t.store())) {
@@ -135,7 +140,7 @@ public final class MemoryLake implements AutoCloseable {
         String field = ref.substring(dot + 1);
         List<String> out = new ArrayList<>();
         try {
-            List<TableUpkeep.Staged> rows = TableUpkeep.rows(LakeWriter.engineFor(t.spec.path(), Map.of()), t.spec.path(), pv -> true);
+            List<TableUpkeep.Staged> rows = TableUpkeep.rows(LakeWriter.engineFor(runtime, t.spec.path(), Map.of()), t.spec.path(), pv -> true);
             for (TableUpkeep.Staged s : rows == null ? List.<TableUpkeep.Staged>of() : rows) {
                 JsonNode doc = JSON.readTree(JSON.readTree(s.line()).path("doc").asText("{}"));
                 JsonNode v = doc.get(field);
@@ -185,7 +190,7 @@ public final class MemoryLake implements AutoCloseable {
                 t.nextRefill = Instant.now().plus(every);
             } else if (t.spec.cron() != null && !t.spec.cron().isBlank()) {
                 if (cron == null) {
-                    throw new IllegalStateException("drishti.lake.memory.tables: table " + t.name() + " has a cron line, and no cron parser was given");
+                    throw new IllegalStateException("lake.memory.tables: table " + t.name() + " has a cron line, and no cron parser was given");
                 }
                 scheduleCron(t, t.spec.cron().trim());
             }
@@ -244,7 +249,7 @@ public final class MemoryLake implements AutoCloseable {
         for (String name : owned) {
             MemoryLakeSettings.Store s = stores.get(name);
             if (Duration.between(idleSince, Instant.now()).toMinutes() >= s.idleTrimMinutes()) {
-                MemoryStores.store(name).pool().trim(0);                     // idle: free chunks go back to the operating system
+                memory.store(name).pool().trim(0);                     // idle: free chunks go back to the operating system
             }
         }
     }
@@ -323,10 +328,10 @@ public final class MemoryLake implements AutoCloseable {
     private Written write(MemoryTable t, List<ObjectNode> docs) throws Exception {
         MemoryLakeSettings.TableSpec spec = t.spec;
         String path = spec.path();
-        MemoryStorage store = MemoryStores.store(spec.store());
+        MemoryStorage store = memory.store(spec.store());
         long before = store.bytesWritten();
         Map<String, String> settings = Map.of("codec", spec.codec());
-        Engine engine = LakeWriter.engineFor(path, settings);
+        Engine engine = LakeWriter.engineFor(runtime, path, settings);
         // id → row; the run's rows grouped by business date, sorted by sort-by (runs of equal values: dictionaries and RLE shrink)
         Map<String, Row> byId = new LinkedHashMap<>();
         for (ObjectNode d : docs) {
@@ -378,7 +383,7 @@ public final class MemoryLake implements AutoCloseable {
         List<String> stats = new ArrayList<>(List.of("id", "business_date"));
         stats.addAll(spec.written());
         LakeManifest m = new LakeManifest(path, List.of("business_date"), columns, spec.written(), mode, 5_000, stats, parts);
-        LakeWriter.Result r = LakeWriter.forTable(path, settings).write(m, n -> { });
+        LakeWriter.Result r = LakeWriter.forTable(runtime, path, settings).write(m, n -> { });
         MemoryUpkeep.expire(engine, store, path, spec.keepVersions());
         t.rows = spec.mode().equals("append") ? t.rows + r.rows() : byId.size();
         t.decodedBytes = spec.mode().equals("append") ? t.decodedBytes + decoded : decoded;
@@ -485,7 +490,7 @@ public final class MemoryLake implements AutoCloseable {
         for (MemoryTable t : mine) {
             if (t.lock.tryLock()) {
                 try {
-                    freed += MemoryUpkeep.expire(LakeWriter.engineFor(t.spec.path(), Map.of()), store, t.spec.path(), t.spec.keepVersions());
+                    freed += MemoryUpkeep.expire(LakeWriter.engineFor(runtime, t.spec.path(), Map.of()), store, t.spec.path(), t.spec.keepVersions());
                 } catch (Exception e) {
                     // not a table yet, or being replaced: nothing to expire
                 } finally {
@@ -557,6 +562,16 @@ public final class MemoryLake implements AutoCloseable {
         return tables.containsKey(name);
     }
 
+    /** The runtime the lake writes and reads with. */
+    com.ash.lake.LakeRuntime runtime() {
+        return runtime;
+    }
+
+    /** The runtime's memory stores. */
+    MemoryStores memory() {
+        return memory;
+    }
+
     /** The stores configured, by name. */
     public Map<String, MemoryLakeSettings.Store> stores() {
         return stores;
@@ -585,14 +600,14 @@ public final class MemoryLake implements AutoCloseable {
         return null;
     }
 
-    /** Admin, Lakes and {@code drishti.py lake memory status}: every store and table. */
+    /** Admin, Lakes and {@code lake memory status}: every store and table. */
     public Map<String, Object> describe() {
         Map<String, Object> out = new LinkedHashMap<>();
         List<Map<String, Object>> ss = new ArrayList<>();
         for (Map.Entry<String, MemoryLakeSettings.Store> e : stores.entrySet()) {
             String name = e.getKey();
             boolean mine = owned.contains(name);
-            MemoryStorage st = mine ? MemoryStores.store(name) : null;
+            MemoryStorage st = mine ? memory.store(name) : null;
             Map<String, Object> s = new LinkedHashMap<>();
             s.put("name", name);
             s.put("owner", mine);
@@ -636,7 +651,7 @@ public final class MemoryLake implements AutoCloseable {
         long length = 0;
         int files = 0;
         if (owned.contains(s.store())) {
-            MemoryStorage st = MemoryStores.store(s.store());
+            MemoryStorage st = memory.store(s.store());
             try {
                 bytes = st.bytesUnder(s.path());
                 length = st.lengthUnder(s.path());
@@ -667,7 +682,7 @@ public final class MemoryLake implements AutoCloseable {
         return m;
     }
 
-    /** Every table's runs, newest first ({@code drishti.py lake memory jobs}). */
+    /** Every table's runs, newest first ({@code lake memory jobs}). */
     public List<Map<String, Object>> jobs(String table, int limit) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (MemoryTable t : tables.values()) {
@@ -693,7 +708,7 @@ public final class MemoryLake implements AutoCloseable {
         List<String> amber = new ArrayList<>();
         List<String> red = new ArrayList<>();
         for (String name : owned) {
-            MemoryStorage st = MemoryStores.store(name);
+            MemoryStorage st = memory.store(name);
             long cap = st.pool().capBytes();
             if (cap > 0 && st.pool().inUseBytes() > cap * 0.85) {
                 amber.add("memory store " + name + " is above 85% of its cap (" + (st.pool().inUseBytes() >> 20) + " of " + (cap >> 20) + " MB)");
@@ -736,7 +751,7 @@ public final class MemoryLake implements AutoCloseable {
     public long capBytes() {
         long n = 0;
         for (String name : owned) {
-            n += MemoryStores.store(name).pool().capBytes();
+            n += memory.store(name).pool().capBytes();
         }
         return n;
     }
@@ -744,7 +759,7 @@ public final class MemoryLake implements AutoCloseable {
     public long usedBytes() {
         long n = 0;
         for (String name : owned) {
-            n += MemoryStores.store(name).pool().allocatedBytes();
+            n += memory.store(name).pool().allocatedBytes();
         }
         return n;
     }
@@ -772,7 +787,7 @@ public final class MemoryLake implements AutoCloseable {
         clock.shutdownNow();
         jobs.shutdownNow();
         for (String name : owned) {
-            MemoryStores.remove(name);                       // the memory goes back now; a restart empties the stores by design
+            memory.remove(name);                       // the memory goes back now; a restart empties the stores by design
         }
     }
 }

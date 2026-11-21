@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,16 +13,14 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
-import com.ash.drishti.testroots.TestRoots;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.ash.drishti.deltalake.write.LakeManifest;
-import com.ash.drishti.deltalake.write.LakeWriter;
-import com.ash.drishti.memlake.store.MemoryStorage;
-import com.ash.drishti.memlake.store.MemoryStores;
-import com.ash.drishti.testkit.FeedFiles;
+import com.ash.lake.delta.write.LakeManifest;
+import com.ash.lake.delta.write.LakeWriter;
+import com.ash.lake.memory.store.MemoryStorage;
+import com.ash.lake.memory.store.MemoryStores;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -40,32 +38,37 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * The memory a table costs (docs/architecture/DATA_ARCHITECTURE.md sections 2 and 5; the measured figures in CLUSTER_GUIDE.md): demo tables (at most 10,000
- * rows each, from data/testdata) written as the disk lake writes them (Snappy) and as the in-memory lake does (sorted by key, zstd), against
+ * The memory a table costs: synthetic tables (10,000
+ * rows each, seeded) written as the disk lake writes them (Snappy) and as the in-memory lake does (sorted by key, zstd), against
  * their decoded JSON. Prints one line a table; asserts only that memory is smaller than the decoded rows and not larger than the disk.
  */
 class MemoryRatiosTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final Path TESTDATA = Path.of(TestRoots.repo(), "data", "testdata").toAbsolutePath().normalize();
 
     @TempDir
     Path tmp;
 
     @AfterEach
     void drop() {
-        MemoryStores.remove("ratios");
+        MemoryRuntime.STORES.remove("ratios");
     }
 
-    private static List<ObjectNode> read(Path folder, int max) throws Exception {
+    /** {@code n} synthetic documents of a table: a key, a few repeated words, numbers, a date and a nested leg list (seeded, so stable). */
+    private static List<ObjectNode> synthetic(String table, String key, int n) {
+        java.util.Random r = new java.util.Random(table.hashCode());
+        String[] words = {"RATES", "FX", "CREDIT", "EQUITY", "COMMODITY"};
         List<ObjectNode> out = new ArrayList<>();
-        for (FeedFiles.Part f : FeedFiles.parts(folder)) {           // its dated files and tars (DATA_LAKE_GUIDE.md section 5.2)
-            for (String line : f.lines()) {
-                if (out.size() >= max) {
-                    return out;
-                }
-                out.add((ObjectNode) JSON.readTree(line));
+        for (int i = 0; i < n; i++) {
+            ObjectNode d = JSON.createObjectNode().put(key, table.toUpperCase(java.util.Locale.ROOT).replaceAll("[^A-Z]", "") + "-" + (100_000 + i));
+            d.put("DESK", "DESK-" + words[r.nextInt(words.length)]).put("BOOK", "BOOK-" + r.nextInt(40)).put("CCY", r.nextBoolean() ? "USD" : "EUR");
+            d.put("AMOUNT", Math.round(r.nextGaussian() * 1e6) / 100.0).put("QUANTITY", r.nextInt(10_000) - 5_000).put("TRADE_DATE", "2026-10-0" + (1 + r.nextInt(9)));
+            d.put("TEXT", words[r.nextInt(words.length)].toLowerCase(java.util.Locale.ROOT) + " headline " + r.nextInt(500));
+            var legs = d.putArray("LEGS");
+            for (int l = 0; l < 2; l++) {
+                legs.addObject().put("LEG", l + 1).put("RATE", Math.round(r.nextDouble() * 1e4) / 1e6).put("NOTIONAL", 1e6 * (1 + r.nextInt(20)));
             }
+            out.add(d);
         }
         return out;
     }
@@ -100,28 +103,21 @@ class MemoryRatiosTest {
 
     @Test
     void memoryPerTableAgainstDiskAndDecoded() throws Exception {
-        MemoryStorage store = MemoryStores.define("ratios", 256L << 20, 64 * 1024, "");
-        String[][] tables = {{"news-and-markets/news", "NEWS_ID"}, {"news-and-markets/quote", "QUOTE_ID"}, {"trades/calypso", "TRADE_ID"},
+        MemoryStorage store = MemoryRuntime.STORES.define("ratios", 256L << 20, 64 * 1024, "");
+        String[][] tables = {{"news-and-markets/news", "NEWS_ID"}, {"news-and-markets/quote", "QUOTE_ID"}, {"trades/trade", "TRADE_ID"},
             {"core/counterparty", "COUNTERPARTY_ID"}, {"market-risk/desk-pnl", "DESK_PNL_ID"}};
         System.out.println("MEMORY RATIOS  table | rows | decoded JSON | disk Parquet (snappy) | memory Parquet (zstd, sorted) | held in 64 KB chunks | decoded/memory");
         for (String[] t : tables) {
-            Path folder = TESTDATA.resolve(t[0]);
-            if (!Files.isDirectory(folder)) {
-                continue;
-            }
-            List<ObjectNode> docs = read(folder, 10_000);
-            if (docs.isEmpty()) {
-                continue;
-            }
+            List<ObjectNode> docs = synthetic(t[0], t[1], 10_000);
             String rows = staged(docs, t[1]);
             long decoded = docs.stream().mapToLong(d -> d.toString().getBytes(StandardCharsets.UTF_8).length).sum();
             Path disk = tmp.resolve(t[0].replace('/', '_'));
-            LakeWriter.forTable(disk.toString(), Map.of()).write(manifest(disk.toString(), rows, docs.size()), n -> { });
+            LakeWriter.forTable(MemoryRuntime.RT, disk.toString(), Map.of()).write(manifest(disk.toString(), rows, docs.size()), n -> { });
             String mem = "mem://ratios/" + t[0].replace('/', '_');
-            LakeWriter.forTable(mem, Map.of()).write(manifest(mem, rows, docs.size()), n -> { });
+            LakeWriter.forTable(MemoryRuntime.RT, mem, Map.of()).write(manifest(mem, rows, docs.size()), n -> { });
             long diskBytes = parquetBytes(disk);
             long memFile = store.filesIn(mem).stream().filter(f -> f.path().endsWith(".parquet") && !f.path().contains("_delta_log"))
-                    .mapToLong(com.ash.drishti.lakeio.FileEntry::size).sum();
+                    .mapToLong(com.ash.lake.spi.FileEntry::size).sum();
             long held = store.bytesUnder(mem);
             System.out.printf(java.util.Locale.ROOT, "MEMORY RATIOS  %s | %,d | %,d | %,d | %,d | %,d | %.1fx%n", t[0], docs.size(), decoded, diskBytes, memFile,
                     held, (double) decoded / memFile);

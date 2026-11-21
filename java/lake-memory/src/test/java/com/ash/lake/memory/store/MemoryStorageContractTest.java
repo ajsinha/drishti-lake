@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,10 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake.store;
+package com.ash.lake.memory.store;
 
-import com.ash.drishti.lakeio.Storage;
-import com.ash.drishti.lakeio.StorageContract;
+import com.ash.lake.memory.MemoryRuntime;
+
+import com.ash.lake.spi.Storage;
+import com.ash.lake.io.StorageContract;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
@@ -27,12 +29,12 @@ class MemoryStorageContractTest extends StorageContract {
 
     @BeforeEach
     void define() {
-        store = MemoryStores.define("contract", 64L << 20, 8192, "TEST-1");
+        store = MemoryRuntime.STORES.define("contract", 64L << 20, 8192, "TEST-1");
     }
 
     @AfterEach
     void drop() {
-        MemoryStores.remove("contract");
+        MemoryRuntime.STORES.remove("contract");
     }
 
     @Override

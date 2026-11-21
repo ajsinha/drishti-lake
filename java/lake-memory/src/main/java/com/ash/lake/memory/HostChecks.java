@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
 import com.sun.management.HotSpotDiagnosticMXBean;
 import java.io.IOException;
@@ -27,7 +27,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * The host checks of a server that holds memory-only data (docs/architecture/DATA_ARCHITECTURE.md sections 3a and 8), for Admin, Health: the JVM's direct-memory
+ * The host checks of a server that holds memory-only data, for Admin, Health: the JVM's direct-memory
  * limit covers the stores' caps (red when not: the stores would refuse writes long before their caps), no swap, no heap dump on
  * out-of-memory and no JFR recording to a disk, the temporary folder on a RAM disk (amber when not).
  */

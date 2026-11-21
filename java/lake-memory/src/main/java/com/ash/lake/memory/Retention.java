@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
-import com.ash.drishti.api.SourcePlugin;
-import com.ash.drishti.api.error.DrishtiException;
-import com.ash.drishti.api.error.ErrorCode;
-import com.ash.drishti.engine.source.SourceRegistry;
+import com.ash.lake.common.LakeError;
+import com.ash.lake.common.LakeException;
+import com.ash.lake.spi.RowSource;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -30,16 +29,16 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 /**
- * Never on disk: the guard (docs/architecture/DATA_ARCHITECTURE.md section 8). A connector whose lake is in memory ({@code mem://}) is
- * memory-only, and so is everything computed from it. One check, {@link #mayPersist}, sits in front of every place Drishti writes, and
+ * Never on disk: the guard. A connector whose lake is in memory ({@code mem://}) is
+ * memory-only, and so is everything computed from it. One check, {@link #mayPersist}, sits in front of every place the host writes, and
  * refuses memory-only data unless the place is allowed: a user's download (streamed, audited) and another node of the cluster answering a
- * request over Drishti*net. Refusals say why, in words, with the contract.
+ * request from another node. Refusals say why, in words, with the contract.
  *
- * <p>One instance per server, reached by the sinks through {@link #current()} (a server without memory stores has the permissive one).
+ * <p>One instance per host, built over its {@link RowSource} and handed to its sinks (a host without memory stores has none).
  */
 public final class Retention {
 
-    /** Where Drishti would write. */
+    /** Where the host would write. */
     public enum Sink {
         LAKE("written to a lake on disk or in S3"),
         DISK_CACHE("cached on disk"),
@@ -59,9 +58,7 @@ public final class Retention {
         }
     }
 
-    private static volatile Retention current = new Retention(null, null, s -> "");
-
-    private final SourceRegistry registry;
+    private final RowSource registry;
     private final Function<String, String> codeFor;
     private final Function<String, String> contractOfStore;
     private volatile long computedAt;
@@ -70,11 +67,11 @@ public final class Retention {
     private final AtomicLong downloads = new AtomicLong();
 
     /**
-     * @param registry the connectors (null: nothing is memory-only)
+     * @param registry the host's connectors (null: nothing is memory-only)
      * @param codeFor a kind's mnemonic ({@code TRD}), or null
      * @param contractOfStore a store's contract
      */
-    public Retention(SourceRegistry registry, Function<String, String> codeFor, Function<String, String> contractOfStore) {
+    public Retention(RowSource registry, Function<String, String> codeFor, Function<String, String> contractOfStore) {
         this(registry, codeFor, contractOfStore, null);
     }
 
@@ -83,7 +80,7 @@ public final class Retention {
         return new Retention(null, null, s -> "", Map.copyOf(kinds));
     }
 
-    private Retention(SourceRegistry registry, Function<String, String> codeFor, Function<String, String> contractOfStore, Map<String, String> fixed) {
+    private Retention(RowSource registry, Function<String, String> codeFor, Function<String, String> contractOfStore, Map<String, String> fixed) {
         this.registry = registry;
         this.codeFor = codeFor;
         this.contractOfStore = contractOfStore;
@@ -91,16 +88,6 @@ public final class Retention {
     }
 
     private final Map<String, String> fixed;
-
-    /** The server's guard. */
-    public static Retention current() {
-        return current;
-    }
-
-    /** Installs the server's guard (at start). */
-    public static void install(Retention r) {
-        current = r == null ? new Retention(null, null, s -> "") : r;
-    }
 
     /** The memory-only kinds and their mnemonics, lower case, with their contracts (recomputed at most every 5 s). */
     Map<String, String> memoryKinds() {
@@ -115,14 +102,11 @@ public final class Retention {
             return memoryKinds;
         }
         Map<String, String> m = new HashMap<>();
-        for (String name : registry.connectorStatuses().keySet()) {
-            SourcePlugin p = registry.connector(name).orElse(null);
-            if (p == null || !p.memoryOnly()) {
-                continue;
-            }
-            String root = registry.applied(name).map(c -> c.settings().getOrDefault("root", "")).orElse("");
-            String contract = root.startsWith("mem://") ? contractOfStore.apply(com.ash.drishti.memlake.store.MemoryStores.storeName(root)) : "";
-            for (String kind : registry.applied(name).map(c -> c.kinds()).orElse(List.of())) {
+        for (RowSource.Served s : registry.memoryOnly()) {
+            String name = s.connector();
+            String root = s.root() == null ? "" : s.root();
+            String contract = root.startsWith("mem://") ? contractOfStore.apply(com.ash.lake.memory.store.MemoryStores.storeName(root)) : "";
+            for (String kind : s.kinds()) {
                 m.put(kind.toLowerCase(Locale.ROOT), contract == null ? "" : contract);
                 String code = codeFor == null ? null : codeFor.apply(kind);
                 if (code != null && !code.isBlank()) {
@@ -195,7 +179,7 @@ public final class Retention {
             return;
         }
         refusals.incrementAndGet();
-        throw new DrishtiException(ErrorCode.MEMORY_ONLY, words(sink, mem, what));
+        throw new LakeException(LakeError.MEMORY_ONLY, words(sink, mem, what));
     }
 
     /** The refusal in words. */

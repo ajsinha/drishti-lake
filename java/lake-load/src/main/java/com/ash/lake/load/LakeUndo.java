@@ -143,26 +143,41 @@ public final class LakeUndo {
     /** Undoes load {@code id} in the Delta tables under {@code root} ({@code only}: these {@code domain/table}s; empty: every one). */
     public static List<Done> undo(com.ash.lake.LakeRuntime runtime, String root, String id, List<String> only, boolean dryRun) throws IOException {
         List<Done> out = new ArrayList<>();
-        for (Path t : deltaTables(Path.of(root))) {
-            String name = Path.of(root).relativize(t).toString().replace('\\', '/');
+        for (String name : deltaTables(runtime, root)) {
             if (!only.isEmpty() && !only.contains(name)) {
                 continue;
             }
-            out.addAll(undoTable(runtime, t.toString(), name, id, dryRun));
+            out.addAll(undoTable(runtime, LakeRetention.tablePath(root, name), name, id, dryRun));
         }
         return out;
     }
 
-    /** The Delta tables under the lake root: {@code <domain>/<table>/_delta_log}. */
-    static List<Path> deltaTables(Path root) throws IOException {
-        List<Path> out = new ArrayList<>();
-        if (!Files.isDirectory(root)) {
+    /** The Delta tables under the lake root, {@code <domain>/<table>} with a {@code _delta_log}, on the local disk or a storage registered with the runtime. */
+    static List<String> deltaTables(com.ash.lake.LakeRuntime runtime, String root) throws IOException {
+        List<String> out = new ArrayList<>();
+        if (!runtime.supports(root)) {                               // a local folder
+            Path base = Path.of(root);
+            if (Files.isDirectory(base)) {
+                try (Stream<Path> domains = Files.list(base)) {
+                    for (Path d : domains.filter(Files::isDirectory).sorted().toList()) {
+                        try (Stream<Path> tables = Files.list(d)) {
+                            tables.filter(t -> Files.isDirectory(t.resolve("_delta_log"))).sorted()
+                                    .forEach(t -> out.add(d.getFileName() + "/" + t.getFileName()));
+                        }
+                    }
+                }
+            }
             return out;
         }
-        try (Stream<Path> domains = Files.list(root)) {
-            for (Path d : domains.filter(Files::isDirectory).sorted().toList()) {
-                try (Stream<Path> tables = Files.list(d)) {
-                    tables.filter(t -> Files.isDirectory(t.resolve("_delta_log"))).sorted().forEach(out::add);
+        com.ash.lake.spi.Storage st = runtime.storage(root);         // a registered storage (mem://)
+        if (!st.isDirectory(root)) {
+            return out;
+        }
+        for (String d : st.directories(root)) {
+            String domain = LakeRetention.tablePath(root, d);
+            for (String t : st.directories(domain)) {
+                if (st.isDirectory(LakeRetention.tablePath(domain, t) + "/_delta_log")) {
+                    out.add(d + "/" + t);
                 }
             }
         }

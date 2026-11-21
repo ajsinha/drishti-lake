@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake.store;
+package com.ash.lake.memory.store;
 
-import com.ash.drishti.lakeio.FileEntry;
-import com.ash.drishti.lakeio.RangeReader;
-import com.ash.drishti.lakeio.Storage;
+import com.ash.lake.spi.FileEntry;
+import com.ash.lake.spi.RangeReader;
+import com.ash.lake.spi.Storage;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A lake held in memory, never on a disk: the paths of one store, {@code mem://<store>/<path>}, answered from a {@link ChunkPool} of
- * direct buffers under a hard cap (docs/architecture/DATA_ARCHITECTURE.md, section 3). The {@link Storage} contract is met exactly: sorted
+ * direct buffers under a hard cap. The {@link Storage} contract is met exactly: sorted
  * listings, status, positional reads over the chunks, whole-file creates visible when closed, a <b>truly exclusive</b>
  * {@link #createIfAbsent} (of two commits of one Delta version exactly one wins) and deletes.
  *

@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,14 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
-import com.ash.drishti.common.RowRetention;
-import com.ash.drishti.deltalake.write.LakeManifest;
-import com.ash.drishti.deltalake.write.LakeWriter;
-import com.ash.drishti.deltalake.write.TableUpkeep;
-import com.ash.drishti.memlake.store.MemoryStorage;
-import com.ash.drishti.memlake.store.MemoryStores;
+import com.ash.lake.common.RowRetention;
+import com.ash.lake.delta.write.LakeManifest;
+import com.ash.lake.delta.write.LakeWriter;
+import com.ash.lake.delta.write.TableUpkeep;
+import com.ash.lake.memory.store.MemoryStorage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.delta.kernel.engine.Engine;
@@ -39,7 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Automated compaction (docs/architecture/DATA_ARCHITECTURE.md section 13a): the memory optimizes itself. Every minute and after every commit, each store's
+ * Automated compaction: the memory optimizes itself. Every minute and after every commit, each store's
  * tables are scored by the memory a rewrite would save; the best one is rewritten (one at a time per store, as one atomic commit; readers
  * on the old version finish on it), and only when the store has room for its new files beside the old ({@code headroom-mb} and the table's
  * size free under the cap), so compaction never pushes a store into eviction. What triggers a rewrite: many small files, rows replaced past
@@ -96,7 +95,7 @@ final class MemoryCompactor {
 
     /** The candidates of a store, best saving first. */
     List<Candidate> candidates(String storeName) {
-        MemoryStorage store = MemoryStores.store(storeName);
+        MemoryStorage store = lake.memory().store(storeName);
         long small = (long) cfg.smallFileMb() << 20;
         List<Candidate> out = new ArrayList<>();
         for (MemoryTable t : lake.tables()) {
@@ -105,7 +104,7 @@ final class MemoryCompactor {
             }
             TableUpkeep.Shape shape;
             try {
-                shape = TableUpkeep.shape(LakeWriter.engineFor(t.spec.path(), Map.of()), t.spec.path(), small);
+                shape = TableUpkeep.shape(LakeWriter.engineFor(lake.runtime(), t.spec.path(), Map.of()), t.spec.path(), small);
             } catch (Exception e) {
                 continue;
             }
@@ -129,22 +128,22 @@ final class MemoryCompactor {
     }
 
     /** How many rows of the table its retention would drop now (0 without a retention). */
-    static int expired(MemoryTable t) {
+    int expired(MemoryTable t) {
         RowRetention r = t.spec.retention();
         if (r == null) {
             return 0;
         }
         try {
-            List<TableUpkeep.Staged> rows = TableUpkeep.rows(LakeWriter.engineFor(t.spec.path(), Map.of()), t.spec.path(), pv -> true);
+            List<TableUpkeep.Staged> rows = TableUpkeep.rows(LakeWriter.engineFor(lake.runtime(), t.spec.path(), Map.of()), t.spec.path(), pv -> true);
             return rows == null ? 0 : r.expired(rows, s -> r.ageOfLine(s.line(), null), Instant.now());
         } catch (Exception e) {
             return 0;
         }
     }
 
-    private static long datesOf(MemoryTable t) {
+    private long datesOf(MemoryTable t) {
         try {
-            return TableUpkeep.rows(LakeWriter.engineFor(t.spec.path(), Map.of()), t.spec.path(), pv -> true).stream()
+            return TableUpkeep.rows(LakeWriter.engineFor(lake.runtime(), t.spec.path(), Map.of()), t.spec.path(), pv -> true).stream()
                     .map(s -> s.partitionValues().get("business_date")).distinct().count();
         } catch (Exception e) {
             return 1;
@@ -152,7 +151,7 @@ final class MemoryCompactor {
     }
 
     private void compactBest(String storeName) {
-        MemoryStorage store = MemoryStores.store(storeName);
+        MemoryStorage store = lake.memory().store(storeName);
         long cap = store.pool().capBytes();
         long headroom = Math.min((long) cfg.headroomMb() << 20, cap / 4);
         for (Candidate c : candidates(storeName)) {
@@ -175,8 +174,8 @@ final class MemoryCompactor {
         long start = System.nanoTime();
         try {
             String path = t.spec.path();
-            MemoryStorage store = MemoryStores.store(t.spec.store());
-            Engine engine = LakeWriter.engineFor(path, Map.of("codec", t.spec.codec()));
+            MemoryStorage store = lake.memory().store(t.spec.store());
+            Engine engine = LakeWriter.engineFor(lake.runtime(), path, Map.of("codec", t.spec.codec()));
             List<TableUpkeep.Staged> rows = TableUpkeep.rows(engine, path, pv -> true);
             if (rows == null) {
                 return false;                                 // a column a staged line cannot carry: left as it is
@@ -216,7 +215,7 @@ final class MemoryCompactor {
             stats.addAll(partitionColumns.stream().filter(c -> !c.equals("id")).toList());
             stats.addAll(promoted);
             LakeManifest m = new LakeManifest(path, partitionColumns, columns, promoted, "replace", 5_000, stats.stream().distinct().toList(), parts);
-            LakeWriter.Result r = LakeWriter.forTable(path, Map.of("codec", t.spec.codec())).write(m, n -> { });
+            LakeWriter.Result r = LakeWriter.forTable(lake.runtime(), path, Map.of("codec", t.spec.codec())).write(m, n -> { });
             MemoryUpkeep.expire(engine, store, path, 1);       // the old files go now; a reader on them keeps its chunks until it ends
             long after = store.bytesUnder(path);
             long saved = before - after;

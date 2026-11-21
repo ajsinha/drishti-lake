@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.memlake;
+package com.ash.lake.memory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import com.ash.drishti.lakeload.LakeLoad;
-import com.ash.drishti.lakeload.LakeRetention;
-import com.ash.drishti.lakeload.TableDump;
-import com.ash.drishti.testroots.TestRoots;
+import com.ash.lake.load.LakeLoad;
+import com.ash.lake.load.LakeRetention;
+import com.ash.lake.load.TableDump;
+import com.ash.lake.tck.TestRoots;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -75,7 +75,7 @@ class DeleteDatesParityTest {
         Files.writeString(cfg, "source:\n  files: '" + in + "'\n  id: TRADE_ID\n  promote: [BOOK]\ntarget:\n  format: " + format + "\n  lake: '" + lake
                 + "'\n  domain: risk\n  kind: trades\n");
         ByteArrayOutputStream said = new ByteArrayOutputStream();
-        assertThat(LakeLoad.run(new String[] {"--config", cfg.toString(), "-q"}, new PrintStream(said, true, StandardCharsets.UTF_8)))
+        assertThat(LakeLoad.run(MemoryRuntime.RT, new String[] {"--config", cfg.toString(), "-q"}, new PrintStream(said, true, StandardCharsets.UTF_8)))
                 .as(said.toString(StandardCharsets.UTF_8)).isZero();
         return lake;
     }
@@ -122,18 +122,18 @@ class DeleteDatesParityTest {
             Path root = root(format);
             TreeSet<String> all = ids(format, root);
             assertThat(all).as(format).hasSize(6);
-            Map<String, Object> dry = LakeRetention.dropDates(root.toString(), format, "risk/trades", LakeRetention.dates("2026-11-16"), true);
+            Map<String, Object> dry = LakeRetention.dropDates(MemoryRuntime.RT, root.toString(), format, "risk/trades", LakeRetention.dates("2026-11-16"), true);
             assertThat(dry.get("held")).as(format).isEqualTo(DATES);
             assertThat(dry.get("dropped")).as(format).isEqualTo(2L);
             assertThat(ids(format, root)).as(format + ": a dry run changes nothing").isEqualTo(all);
-            Map<String, Object> missing = LakeRetention.dropDates(root.toString(), format, "risk/trades", LakeRetention.dates("2026-11-15"), true);
+            Map<String, Object> missing = LakeRetention.dropDates(MemoryRuntime.RT, root.toString(), format, "risk/trades", LakeRetention.dates("2026-11-15"), true);
             assertThat((List<?>) missing.get("dates")).as(format + ": a date not held is not matched").isEmpty();
-            Map<String, Object> done = LakeRetention.dropDates(root.toString(), format, "risk/trades", LakeRetention.dates("2026-11-16"), false);
+            Map<String, Object> done = LakeRetention.dropDates(MemoryRuntime.RT, root.toString(), format, "risk/trades", LakeRetention.dates("2026-11-16"), false);
             assertThat(((List<?>) done.get("dates"))).as(format).hasSize(1);
             assertThat(ids(format, root)).as(format).containsExactly("T00", "T01", "T20", "T21");
-            Map<String, Object> after = LakeRetention.dropDates(root.toString(), format, "risk/trades", LakeRetention.dates("2026-11-01..2026-11-30"), true);
+            Map<String, Object> after = LakeRetention.dropDates(MemoryRuntime.RT, root.toString(), format, "risk/trades", LakeRetention.dates("2026-11-01..2026-11-30"), true);
             assertThat(after.get("held")).as(format + ": the date is gone").isEqualTo(List.of("2026-11-13", "2026-11-17"));
-            LakeRetention.dropDates(root.toString(), format, "risk/trades", LakeRetention.dates("2026-11-14..2026-11-30"), false);
+            LakeRetention.dropDates(MemoryRuntime.RT, root.toString(), format, "risk/trades", LakeRetention.dates("2026-11-14..2026-11-30"), false);
             assertThat(ids(format, root)).as(format + ": a range").containsExactly("T00", "T01");
         }
         deltaRsReads(dir.resolve("lake-delta/risk/trades"), "T00", "T01");
@@ -152,7 +152,7 @@ class DeleteDatesParityTest {
     void theCommandLineSaysWhatItDeleted() throws Exception {
         Path root = load("delta");
         ByteArrayOutputStream said = new ByteArrayOutputStream();
-        int code = LakeRetention.run(new String[] {"--lake", root.toString(), "--format", "delta", "--table", "risk/trades", "--dates", "2026-11-17", "--json"},
+        int code = LakeRetention.run(MemoryRuntime.RT, new String[] {"--lake", root.toString(), "--format", "delta", "--table", "risk/trades", "--dates", "2026-11-17", "--json"},
                 new PrintStream(said, true, StandardCharsets.UTF_8));
         String out = said.toString(StandardCharsets.UTF_8);
         assertThat(code).as(out).isZero();
