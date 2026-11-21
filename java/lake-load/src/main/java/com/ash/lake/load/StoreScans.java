@@ -69,8 +69,31 @@ final class StoreScans {
         return request.wants(d);
     }
 
+    /**
+     * Whether a file of {@code d}, with constant {@code partition} values and text {@code bounds} (logical names), may hold a wanted
+     * row: the request's dates, then its {@code where} pushed down (com.ash.lake.io.read.Pruning). Counted as read or skipped.
+     */
+    boolean keep(LocalDate d, Map<String, String> partition, java.util.function.Function<String, com.ash.lake.read.Bounds> bounds) {
+        if ((d != null && !request.wants(d)) || !com.ash.lake.io.read.Pruning.mayHold(request.where(), d, partition, bounds)) {
+            filesSkipped++;
+            return false;
+        }
+        filesRead++;
+        return true;
+    }
+
+    /** The rows kept, with what was read and skipped. */
+    com.ash.lake.spi.RowScan scan() {
+        return com.ash.lake.spi.RowScan.of(columns(), rows, new com.ash.lake.spi.ScanStats(filesRead, filesSkipped, rowsRead, rows.size()));
+    }
+
+    private long filesRead;
+    private long filesSkipped;
+    private long rowsRead;
+
     /** One row of the table's columns: kept when its date and the filter want it. */
     void add(Object[] full) {
+        rowsRead++;
         if (date >= 0 && !request.dates().isEmpty() && !request.wants((LocalDate) full[date])) {
             return;
         }

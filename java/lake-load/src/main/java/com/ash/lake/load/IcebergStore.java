@@ -154,7 +154,12 @@ public final class IcebergStore implements TableStore {
                 return RowScan.of(rows.columns(), List.of());
             }
             List<Integer> ids = schema.columns().stream().map(NestedField::id).toList();
+            NestedField dateField = schema.field("business_date");
             for (FileTask task : t.plan(at, Expr.TRUE, pool)) {
+                var file = com.ash.lake.iceberg.table.IcebergColumns.dataFile(schema, cols, task);
+                if (!rows.keep(dateOf(task, dateField), file.partition(), file.bounds()::get)) {
+                    continue;                                   // a file the dates or the where's pushdown rule out
+                }
                 try (TaskReader r = t.rows(task, schema, ids, Expr.TRUE, false)) {
                     while (r.hasNext()) {
                         Object[] v = r.next();
@@ -166,7 +171,7 @@ public final class IcebergStore implements TableStore {
                     }
                 }
             }
-            return RowScan.of(rows.columns(), rows.rows());
+            return rows.scan();
         } catch (IOException | RuntimeException e) {
             throw e;
         } catch (Exception e) {
@@ -174,6 +179,21 @@ public final class IcebergStore implements TableStore {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    /** The business date of a planned file, from its partition tuple (null: the spec has no identity field on the date). */
+    private static LocalDate dateOf(FileTask task, NestedField date) {
+        if (date == null) {
+            return null;
+        }
+        var fields = task.spec().fields();
+        for (int i = 0; i < fields.size(); i++) {
+            if (fields.get(i).sourceId() == date.id() && fields.get(i).transform() instanceof com.ash.lake.iceberg.meta.Transform.Identity
+                    && task.file().partition()[i] instanceof Number n) {
+                return LocalDate.ofEpochDay(n.longValue());
+            }
+        }
+        return null;
     }
 
     private static Object plain(Object v) {

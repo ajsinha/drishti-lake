@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# pushdown in TableStore.scan (READ_API.md 2.7, RA-S7): a where on the business date and a promoted text column skips the other date's
+# files (and, partitioned, the other values' files) before reading them; its rows equal the whole scan filtered by hand; ScanStats counts
+# the files skipped, the rows read and returned
+inputs:
+  day/pv.2026-10-27.jsonl: {pv: {n: 40, scenarios: 2, seed: 21}}
+  day/pv.2026-10-28.jsonl: {pv: {n: 30, scenarios: 2, seed: 22, start: '2026-10-28'}}
+configs:
+  main: |
+    source: {files: '${in}/day', id: POSITION_ID, promote: [DESK, LEGAL_ENTITY], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  split: |
+    source: {files: '${in}/day', id: POSITION_ID, partition-by: [LEGAL_ENTITY], promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: by-entity}
+steps:
+  - load: []
+  - store: [scan-stats, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', DESK, DESK-FX]
+  - load: {config: split}
+  - store: [scan-stats, '${store}', '${lake}', risk, by-entity, '2026-10-28', LEGAL_ENTITY, LE-NY]

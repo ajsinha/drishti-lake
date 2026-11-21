@@ -196,21 +196,23 @@ public final class DeltaStore implements TableStore {
         Scan scan = s.getScanBuilder().build();
         Row state = scan.getScanState(engine);
         StructType physical = ScanStateRow.getPhysicalDataReadSchema(state);
-        try (CloseableIterator<FilteredColumnarBatch> files = scan.getScanFiles(engine)) {
+        var facts = DeltaRows.facts(s, cols);
+        try (CloseableIterator<FilteredColumnarBatch> files = DeltaRows.scanFilesWithStats(scan, engine)) {
             while (files.hasNext()) {
                 try (CloseableIterator<Row> fileRows = files.next().getRows()) {
                     while (fileRows.hasNext()) {
                         Row file = fileRows.next();
                         String day = InternalScanFileUtils.getPartitionValues(file).get("business_date");
-                        if (day != null && !rows.wants(LocalDate.parse(day))) {
-                            continue;                                   // a file of a date the scan does not want
+                        DeltaRows.FileFacts f = facts.apply(file);
+                        if (!rows.keep(day == null ? null : LocalDate.parse(day), f.partition(), f.bounds()::get)) {
+                            continue;                                   // a file the dates or the where's pushdown rule out
                         }
                         DeltaRows.read(engine, state, physical, file, cols, partitions, rows::add);
                     }
                 }
             }
         }
-        return RowScan.of(rows.columns(), rows.rows());
+        return rows.scan();
     }
 
     @Override

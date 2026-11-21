@@ -15,18 +15,14 @@
  */
 package com.ash.lake.iceberg.table;
 
-import com.ash.lake.iceberg.meta.PartitionSpec;
 import com.ash.lake.iceberg.scan.FileTask;
-import com.ash.lake.iceberg.types.NestedField;
 import com.ash.lake.iceberg.types.Schema;
 import com.ash.lake.io.read.Problems;
-import com.ash.lake.read.Bounds;
 import com.ash.lake.read.ColumnAsk;
 import com.ash.lake.read.ColumnBlock;
 import com.ash.lake.read.DataFile;
 import com.ash.lake.read.DayFiles;
 import com.ash.lake.read.DocumentSink;
-import com.ash.lake.read.FileFormat;
 import com.ash.lake.read.IdMap;
 import com.ash.lake.read.RowSink;
 import com.ash.lake.read.TableSnapshot;
@@ -166,34 +162,9 @@ final class IcebergSnapshot implements TableSnapshot {
         })));
     }
 
-    /** A manifest entry as a data file: the partition fields other than the date, and the text columns' bounds by logical name. */
+    /** A manifest entry as a data file (IcebergColumns.dataFile: one rule with the store's scan). */
     private DataFile dataFile(FileTask t) {
-        com.ash.lake.iceberg.manifest.DataFile f = t.file();
-        Map<String, String> partition = new LinkedHashMap<>();
-        PartitionSpec spec = t.spec();
-        for (int i = 0; i < spec.fields().size(); i++) {
-            NestedField src = schema.field(spec.fields().get(i).sourceId());
-            if (src != null && !src.name().equals(IcebergLayout.DATE)) {
-                Object v = f.partition()[i];
-                partition.put(src.name(), v == null ? null : v.toString());
-            }
-        }
-        Map<String, Bounds> bounds = new LinkedHashMap<>();
-        for (var c : columns.all()) {
-            if (c.type() == ColumnType.STRING && !c.name().equals(IcebergLayout.DOC) && !partition.containsKey(c.name())) {
-                NestedField field = schema.field(c.name());
-                byte[] lo = f.lowerBounds() == null ? null : f.lowerBounds().get(field.id());
-                byte[] hi = f.upperBounds() == null ? null : f.upperBounds().get(field.id());
-                Long nulls = f.nullValueCounts() == null ? null : f.nullValueCounts().get(field.id());
-                if (lo != null || hi != null || nulls != null) {
-                    bounds.put(c.name(), new Bounds(lo == null ? null : new String(lo, java.nio.charset.StandardCharsets.UTF_8),
-                            hi == null ? null : new String(hi, java.nio.charset.StandardCharsets.UTF_8), nulls));
-                }
-            }
-        }
-        return new DataFile(f.path(), f.fileSizeInBytes(), FileFormat.PARQUET, f.recordCount(), t.hasDeletes(),
-                partition.entrySet().stream().filter(e -> e.getValue() != null)
-                        .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new)), bounds);
+        return IcebergColumns.dataFile(schema, columns, t);
     }
 
     @Override

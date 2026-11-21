@@ -34,8 +34,18 @@ public interface RowScan extends Iterator<Row>, AutoCloseable {
 
     /** A scan over rows already read. */
     static RowScan of(Columns columns, List<Row> rows) {
+        return of(columns, rows, ScanStats.UNKNOWN);
+    }
+
+    /** A scan over rows already read, with what reading them read and skipped. */
+    static RowScan of(Columns columns, List<Row> rows, ScanStats stats) {
         Iterator<Row> it = rows.iterator();
         return new RowScan() {
+            @Override
+            public ScanStats stats() {
+                return stats;
+            }
+
             @Override
             public Columns columns() {
                 return columns;

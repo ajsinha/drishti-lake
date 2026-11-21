@@ -15,6 +15,7 @@
  */
 package com.ash.lake.iceberg.table;
 
+import com.ash.lake.iceberg.scan.FileTask;
 import com.ash.lake.iceberg.types.NestedField;
 import com.ash.lake.iceberg.types.Schema;
 import com.ash.lake.iceberg.types.Type;
@@ -57,6 +58,36 @@ public final class IcebergColumns {
             }
             default -> ColumnType.OTHER;
         };
+    }
+
+    /** A manifest entry as the read API's data file: the partition fields other than the date, and the text columns' bounds by logical name. */
+    public static com.ash.lake.read.DataFile dataFile(Schema schema, Columns columns, FileTask t) {
+        com.ash.lake.iceberg.manifest.DataFile f = t.file();
+        java.util.Map<String, String> partition = new java.util.LinkedHashMap<>();
+        com.ash.lake.iceberg.meta.PartitionSpec spec = t.spec();
+        for (int i = 0; i < spec.fields().size(); i++) {
+            NestedField src = schema.field(spec.fields().get(i).sourceId());
+            if (src != null && !src.name().equals(IcebergLayout.DATE)) {
+                Object v = f.partition()[i];
+                partition.put(src.name(), v == null ? null : v.toString());
+            }
+        }
+        java.util.Map<String, com.ash.lake.read.Bounds> bounds = new java.util.LinkedHashMap<>();
+        for (var c : columns.all()) {
+            if (c.type() == ColumnType.STRING && !c.name().equals(IcebergLayout.DOC) && !partition.containsKey(c.name())) {
+                NestedField field = schema.field(c.name());
+                byte[] lo = f.lowerBounds() == null ? null : f.lowerBounds().get(field.id());
+                byte[] hi = f.upperBounds() == null ? null : f.upperBounds().get(field.id());
+                Long nulls = f.nullValueCounts() == null ? null : f.nullValueCounts().get(field.id());
+                if (lo != null || hi != null || nulls != null) {
+                    bounds.put(c.name(), new com.ash.lake.read.Bounds(lo == null ? null : new String(lo, java.nio.charset.StandardCharsets.UTF_8),
+                            hi == null ? null : new String(hi, java.nio.charset.StandardCharsets.UTF_8), nulls));
+                }
+            }
+        }
+        return new com.ash.lake.read.DataFile(f.path(), f.fileSizeInBytes(), com.ash.lake.read.FileFormat.PARQUET, f.recordCount(), t.hasDeletes(),
+                partition.entrySet().stream().filter(e -> e.getValue() != null)
+                        .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue, (a, b) -> a, java.util.LinkedHashMap::new)), bounds);
     }
 
 }

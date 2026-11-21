@@ -31,6 +31,7 @@ read/problem-recorded-and-cleared
 read/purge-then-read
 read/reachable-and-missing
 read/same-after-reopen-differs-per-table
+read/scan-skips-files
 read/tables-and-new-tables
 rejects/counted-and-named
 rejects/too-many-stop-the-load

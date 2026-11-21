@@ -237,15 +237,22 @@ public final class FilesStore implements TableStore {
             picks[i] = all.indexOf(out.get(i).name());
         }
         List<Row> rows = new ArrayList<>();
+        Map<LocalDate, com.fasterxml.jackson.databind.JsonNode> stats = statsAsOf(table, request.asOf());
+        long[] count = new long[3];                              // files read, files skipped, rows read
         for (Map.Entry<LocalDate, Object> e : daysAsOf(table, request.asOf()).entrySet()) {
-            if (!request.wants(e.getKey())) {
+            LocalDate date = e.getKey();
+            com.fasterxml.jackson.databind.JsonNode st = stats.get(date);
+            // a date is one file: pruned by its date and by its commit's statistics (FilesStats), as the Parquet stores prune files
+            if (!request.wants(date) || !com.ash.lake.io.read.Pruning.mayHold(request.where(), date, Map.of(), c -> bounds(st, c))) {
+                count[1]++;
                 continue;
             }
-            LocalDate date = e.getKey();
+            count[0]++;
             readDay(e.getValue(), line -> {
                 if (line.isBlank()) {
                     return;
                 }
+                count[2]++;
                 JsonlDay.Line l;
                 try {
                     l = JsonlDay.line(line.getBytes(StandardCharsets.UTF_8), "id", JsonlFormat.DEFAULT);
@@ -266,7 +273,41 @@ public final class FilesStore implements TableStore {
                 rows.add(new Row(out, v));
             });
         }
-        return RowScan.of(out, rows);
+        return RowScan.of(out, rows, new com.ash.lake.spi.ScanStats(count[0], count[1], count[2], rows.size()));
+    }
+
+    /** Each date's commit statistics at the request's version (none for a table without a log, or a commit before statistics). */
+    private static Map<LocalDate, com.fasterxml.jackson.databind.JsonNode> statsAsOf(TableRef table, AsOf asOf) throws IOException {
+        FilesLog log = new FilesLog(domainDir(table), table.table());
+        List<FilesLog.Commit> commits = log.commits();
+        long version = Long.MAX_VALUE;
+        if (!asOf.latest() && !commits.isEmpty()) {
+            List<TableVersion> versions = new ArrayList<>();
+            commits.forEach(c -> versions.add(new TableVersion(c.version(), java.time.Instant.ofEpochMilli(c.at()))));
+            TableVersion at = asOf.resolve(versions);
+            version = at == null ? -1 : at.version();
+        }
+        Map<LocalDate, com.fasterxml.jackson.databind.JsonNode> out = new java.util.HashMap<>();
+        for (FilesLog.Commit c : commits) {
+            if (c.version() <= version) {
+                if (c.stats() == null) {
+                    out.remove(c.date());
+                } else {
+                    out.put(c.date(), c.stats());
+                }
+            }
+        }
+        return out;
+    }
+
+    /** A text column's bounds in a date's commit statistics (FilesStats: min, max, nulls); null when not stated. */
+    private static com.ash.lake.read.Bounds bounds(com.fasterxml.jackson.databind.JsonNode stats, String column) {
+        com.fasterxml.jackson.databind.JsonNode b = stats == null ? null : stats.path("columns").get(column);
+        if (b == null) {
+            return null;
+        }
+        return new com.ash.lake.read.Bounds(b.hasNonNull("min") ? b.get("min").asText() : null, b.hasNonNull("max") ? b.get("max").asText() : null,
+                b.hasNonNull("nulls") ? b.get("nulls").asLong() : null);
     }
 
     /** A line's values: its id, date and document, then the table's typed columns from its {@code columns} (missing: null). */

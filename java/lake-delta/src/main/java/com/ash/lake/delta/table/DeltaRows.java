@@ -183,4 +183,41 @@ public final class DeltaRows {
         return v.getString(r);
     }
 
+
+    /** What a scan's pushdown knows of one file before reading it: its partition values and text columns' statistics, by logical name. */
+    public record FileFacts(Map<String, String> partition, Map<String, com.ash.lake.read.Bounds> bounds) {}
+
+    /**
+     * The rule of the read API's {@code DataFile} for the scan files of {@code s} (scanned with their statistics): partition values
+     * other than {@code business_date} and the text columns' bounds (a value of 32 characters or more not stated), by logical name.
+     */
+    public static java.util.function.Function<Row, FileFacts> facts(Snapshot s, Columns cols) {
+        Map<String, String> phys = DeltaTable.physicalNames(s);
+        Map<String, String> logical = new java.util.HashMap<>();
+        phys.forEach((l, p) -> logical.put(p, l));
+        return r -> {
+            Map<String, String> partition = new java.util.LinkedHashMap<>();
+            InternalScanFileUtils.getPartitionValues(r).forEach((k, v) -> {
+                String name = logical.getOrDefault(k, k);
+                if (!name.equals("business_date")) {
+                    partition.put(name, v == null || v.isEmpty() ? null : v);
+                }
+            });
+            Map<String, com.ash.lake.read.Bounds> bounds = new java.util.LinkedHashMap<>();
+            for (Column c : cols.all()) {
+                if (c.type() == ColumnType.STRING && !c.name().equals("doc") && !partition.containsKey(c.name())) {
+                    String[] b = DeltaTable.textBounds(r, phys.getOrDefault(c.name(), c.name()));
+                    if (b[0] != null || b[1] != null || b[2] != null) {
+                        bounds.put(c.name(), new com.ash.lake.read.Bounds(b[0], b[1], b[2] == null ? null : Long.valueOf(b[2])));
+                    }
+                }
+            }
+            return new FileFacts(partition, bounds);
+        };
+    }
+
+    /** The scan files of {@code scan} with their statistics (the add actions' {@code stats}), as the read API's layout reads them. */
+    public static io.delta.kernel.utils.CloseableIterator<FilteredColumnarBatch> scanFilesWithStats(Scan scan, Engine engine) {
+        return scan instanceof io.delta.kernel.internal.ScanImpl si ? si.getScanFiles(engine, true) : scan.getScanFiles(engine);
+    }
 }

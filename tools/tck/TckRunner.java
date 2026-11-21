@@ -377,6 +377,7 @@ public final class TckRunner {
                 case "dates" -> store.dates(RT, t);   // lake-only
                 case "versions" -> store.versions(RT, t).size() + " versions";   // lake-only
                 case "scan-at" -> scanAt(store, t, a[5], a.length > 6 && a[6].equals("time"));   // lake-only
+                case "scan-stats" -> scanStats(store, t, LocalDate.parse(a[5]), a[6], a[7]);   // lake-only: pushdown (READ_API.md 2.7)
                 case "delete-row" -> DeleteRow.run(a);   // lake-only: a row deleted as other writers do (READ_API.md 6)
                 default -> a[0].startsWith("read-") ? ReadVerbs.run(store, a) : null;   // lake-only: the read API (READ_API.md section 6)
             };   // lake-only
@@ -406,6 +407,30 @@ public final class TckRunner {
         StringBuilder out = new StringBuilder();   // lake-only
         ids.forEach((d, l) -> { java.util.Collections.sort(l); out.append(d).append(": ").append(l.size()).append(' ').append(l).append('\n'); });   // lake-only
         return out.toString().strip();   // lake-only
+    }   // lake-only
+
+    /**   // lake-only
+     * A scan with {@code business_date = date and column = value} pushed down: its rows against the whole scan filtered by hand, and   // lake-only
+     * what its {@code ScanStats} say (files skipped, every row it returned counted, no more rows read than the whole scan's).   // lake-only
+     */   // lake-only
+    static String scanStats(com.ash.lake.spi.TableStore store, com.ash.lake.spi.TableRef t, LocalDate date, String column, String value) throws java.io.IOException {   // lake-only
+        var where = com.ash.lake.spi.Expr.and(com.ash.lake.spi.Expr.eq("business_date", date), com.ash.lake.spi.Expr.eq(column, value));   // lake-only
+        List<String> all = new ArrayList<>();   // lake-only
+        List<String> got = new ArrayList<>();   // lake-only
+        com.ash.lake.spi.ScanStats whole;   // lake-only
+        try (var rows = store.scan(RT, t, com.ash.lake.spi.ScanRequest.all())) {   // lake-only
+            rows.forEachRemaining(r -> { if (where.test(r)) all.add(String.valueOf(r.get("id"))); });   // lake-only
+            whole = rows.stats();   // lake-only
+        }   // lake-only
+        com.ash.lake.spi.ScanStats s;   // lake-only
+        try (var rows = store.scan(RT, t, com.ash.lake.spi.ScanRequest.all().where(where))) {   // lake-only
+            rows.forEachRemaining(r -> got.add(String.valueOf(r.get("id"))));   // lake-only
+            s = rows.stats();   // lake-only
+        }   // lake-only
+        java.util.Collections.sort(all);   // lake-only
+        java.util.Collections.sort(got);   // lake-only
+        return got.size() + " rows equal=" + got.equals(all) + " skipped>0=" + (s.filesSkipped() > 0) + " returned=" + (s.rowsReturned() == got.size())   // lake-only
+                + " read-less=" + (s.rowsRead() < whole.rowsRead()) + " whole-skips=" + whole.filesSkipped();   // lake-only
     }   // lake-only
 
     /** A files table's rows through the files store. */   // lake-only

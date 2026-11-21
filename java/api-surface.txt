@@ -1366,6 +1366,7 @@ com.ash.lake.spi.RowScan :: public abstract com.ash.lake.spi.Columns com.ash.lak
 com.ash.lake.spi.RowScan :: public abstract void com.ash.lake.spi.RowScan.close()
 com.ash.lake.spi.RowScan :: public default com.ash.lake.spi.ScanStats com.ash.lake.spi.RowScan.stats()
 com.ash.lake.spi.RowScan :: public static com.ash.lake.spi.RowScan com.ash.lake.spi.RowScan.of(com.ash.lake.spi.Columns,java.util.List<com.ash.lake.spi.Row>)
+com.ash.lake.spi.RowScan :: public static com.ash.lake.spi.RowScan com.ash.lake.spi.RowScan.of(com.ash.lake.spi.Columns,java.util.List<com.ash.lake.spi.Row>,com.ash.lake.spi.ScanStats)
 com.ash.lake.spi.RowSource :: public abstract java.util.List<java.util.Map<java.lang.String, java.lang.Object>> com.ash.lake.spi.RowSource.documents(java.lang.String,java.lang.String) throws java.lang.Exception
 com.ash.lake.spi.RowSource :: public abstract java.util.List<java.util.Map<java.lang.String, java.lang.Object>> com.ash.lake.spi.RowSource.fetch(java.lang.String,java.lang.String,java.util.List<java.lang.String>) throws java.lang.Exception
 com.ash.lake.spi.RowSource :: public default java.lang.String com.ash.lake.spi.RowSource.mark(java.lang.String,java.lang.String)
