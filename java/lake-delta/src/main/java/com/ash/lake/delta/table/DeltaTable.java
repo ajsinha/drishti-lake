@@ -56,9 +56,10 @@ final class DeltaTable {
      * @param schema the table's columns (promoted ones beside id and doc)
      * @param deletionVectors true when a file carries a deletion vector (column reads then go through documents)
      * @param idScanState the scan state for reading the id column alone, with deletion vectors applied
+     * @param snapshot the Kernel's snapshot the layout is of
      */
     record Layout(long version, long timestamp, Row scanState, NavigableMap<LocalDate, List<Row>> files, StructType schema,
-            boolean deletionVectors, Row idScanState, Map<String, String> physicalNames) {
+            boolean deletionVectors, Row idScanState, Map<String, String> physicalNames, Snapshot snapshot) {
 
         /**
          * A column's name in the data files, in the add actions' {@code partitionValues} and in their statistics: its
@@ -240,6 +241,31 @@ final class DeltaTable {
         }
         identity = id;
         return id;
+    }
+
+    /** The table's id from the snapshot's metadata ({@code metaData.id}): the same on every storage and replica (D2). */
+    static String metadataId(Snapshot s) {
+        return ((io.delta.kernel.internal.SnapshotImpl) s).getMetadata().getId();
+    }
+
+    Engine engine() {
+        return engine;
+    }
+
+    /** The rows of a file its deletion vector removes (row indexes in the file), or null when it has none (D1). */
+    io.delta.kernel.internal.deletionvectors.RoaringBitmapArray deleted(Row fileRow) {
+        io.delta.kernel.internal.actions.DeletionVectorDescriptor dv = InternalScanFileUtils.getDeletionVectorDescriptorFromRow(fileRow);
+        return dv == null ? null : io.delta.kernel.internal.deletionvectors.DeletionVectorUtils.loadNewDvAndBitmap(engine, path, dv)._2;
+    }
+
+    /** {@code read} with the row index column last when {@code deleted} is not null (a raw read that must leave deleted rows out). */
+    static StructType withRowIndex(StructType read, Object deleted) {
+        return deleted == null ? read : read.add(io.delta.kernel.types.StructField.DEFAULT_ROW_INDEX_COLUMN);
+    }
+
+    /** Whether row {@code r} of a batch read with {@link #withRowIndex} is live. */
+    static boolean live(io.delta.kernel.internal.deletionvectors.RoaringBitmapArray deleted, io.delta.kernel.data.ColumnVector rowIndex, int r) {
+        return deleted == null || !deleted.contains(rowIndex.getLong(r));
     }
 
     /**
@@ -429,7 +455,7 @@ final class DeltaTable {
     }
 
     /** {@code numRecords} of a scan file's add action statistics, or null when it has none. */
-    private static Long numRecords(Row scanFile) {
+    static Long numRecords(Row scanFile) {
         try {
             Row add = scanFile.getStruct(InternalScanFileUtils.ADD_FILE_ORDINAL);
             int at = add.getSchema().indexOf("stats");
@@ -455,12 +481,20 @@ final class DeltaTable {
         if (s == null) {
             return Optional.empty();                     // nothing had been written yet at that time
         }
+        return Optional.of(layout(s));
+    }
+
+    /** The layout of the Kernel's snapshot {@code s}: its files by business date, newest load last. */
+    Layout layout(Snapshot s) {
         Scan scan = s.getScanBuilder().withReadSchema(new StructType().add(idColumn, StringType.STRING).add(docColumn, StringType.STRING)).build();
         NavigableMap<LocalDate, List<Row>> byDate = new TreeMap<>();
         boolean dvs = false;
         Map<String, String> names = physicalNames(s);
         String datePhys = names.getOrDefault(dateColumn, dateColumn);
-        try (CloseableIterator<FilteredColumnarBatch> it = scan.getScanFiles(engine)) {
+        // with the statistics: a date's rows and the files' bounds come from the log alone (the read API's DayFiles)
+        CloseableIterator<FilteredColumnarBatch> scanFiles = scan instanceof io.delta.kernel.internal.ScanImpl si ? si.getScanFiles(engine, true)
+                : scan.getScanFiles(engine);
+        try (CloseableIterator<FilteredColumnarBatch> it = scanFiles) {
             while (it.hasNext()) {
                 try (CloseableIterator<Row> rows = it.next().getRows()) {
                     while (rows.hasNext()) {
@@ -478,8 +512,8 @@ final class DeltaTable {
         String loadPhys = names.getOrDefault(LOAD_ID, LOAD_ID);
         byDate.values().forEach(files -> newestLast(files, loadPhys));
         Row idScanState = s.getScanBuilder().withReadSchema(new StructType().add(idColumn, StringType.STRING)).build().getScanState(engine);
-        return Optional.of(new Layout(s.getVersion(), s.getTimestamp(engine), scan.getScanState(engine), byDate, s.getSchema(), dvs,
-                idScanState, names));
+        return new Layout(s.getVersion(), s.getTimestamp(engine), scan.getScanState(engine), byDate, s.getSchema(), dvs,
+                idScanState, names, s);
     }
 
     /**
@@ -613,14 +647,17 @@ final class DeltaTable {
             int fileIndex = fi;
             // a partition column (PRODUCT_TYPE=Cash/) is not in the Parquet file: its one value for the file is in the log
             Map<String, String> partition = InternalScanFileUtils.getPartitionValues(file);
-            raw(file, layout.physical(schema), Optional.empty(), batch -> {
+            var deleted = deleted(file);
+            int rowIndexAt = paths.size() + 1;
+            raw(file, withRowIndex(layout.physical(schema), deleted), Optional.empty(), batch -> {
                 int n = batch.getSize();
                 io.delta.kernel.data.ColumnVector idv = batch.getColumnVector(0);
+                io.delta.kernel.data.ColumnVector rix = deleted == null ? null : batch.getColumnVector(rowIndexAt);
                 boolean[] keep = new boolean[n];
                 int kept = 0;
                 for (int r = 0; r < n; r++) {
                     String id = idv.isNullAt(r) ? "" : idv.getString(r);
-                    keep[r] = seen(shadow, id, fileIndex);                  // an older load's copy of an id a newer load wrote: not seen
+                    keep[r] = live(deleted, rix, r) && seen(shadow, id, fileIndex);                  // an older load's copy of an id a newer load wrote: not seen
                     if (keep[r]) {
                         ids.add(id);
                         kept++;
@@ -674,7 +711,7 @@ final class DeltaTable {
      * EXPOSURE_GUIDE.md section 15.3) and some text columns, streamed to {@code sink} batch by batch (VAR_GUIDE.md section 29.3): one
      * buffer a file, reused for every row, so a date of millions of vectors is never held here; several files decode at once when
      * {@code sink} came from {@link com.ash.lake.rows.VectorReads#parallel}, delivered in file order. A float32 element is widened to a
-     * double exactly. Read as stored (no deletion vectors: the vector tables are written without them); partition values come from the log.
+     * double exactly. A deletion vector leaves its rows out (the row index read beside the columns); partition values come from the log.
      */
     void vectors(Layout layout, LocalDate date, String vectorColumn, List<String> textColumns, com.ash.lake.rows.VectorSink sink) {
         vectors(layout, date, vectorColumn, textColumns, f -> true, sink);
@@ -760,10 +797,14 @@ final class DeltaTable {
         for (int c = 0; c < texts.length; c++) {
             fixed[c] = partition.get(textColumns.get(c));
         }
+        var deleted = deleted(file);
+        StructType schema = withRowIndex(read, deleted);
+        int rowIndexAt = texts.length + 2;
         java.util.function.Consumer<ColumnarBatch> each = batch -> {
             int n = batch.getSize();
             io.delta.kernel.data.ColumnVector idv = batch.getColumnVector(0);
             io.delta.kernel.data.ColumnVector vec = batch.getColumnVector(1);
+            io.delta.kernel.data.ColumnVector rix = deleted == null ? null : batch.getColumnVector(rowIndexAt);
             io.delta.kernel.data.ColumnVector[] tvs = new io.delta.kernel.data.ColumnVector[texts.length];
             for (int c = 0; c < texts.length; c++) {
                 tvs[c] = batch.getColumnVector(c + 2);
@@ -773,8 +814,8 @@ final class DeltaTable {
                     texts[c] = fixed[c] != null ? fixed[c] : tvs[c].isNullAt(r) ? null : text(tvs[c], r);
                 }
                 String id = idv.isNullAt(r) ? "" : idv.getString(r);
-                if (!seen(shadow, id, fileIndex)) {
-                    continue;                                           // an older load's copy of an id a newer load wrote
+                if (!live(deleted, rix, r) || !seen(shadow, id, fileIndex)) {
+                    continue;                                           // deleted, or an older load's copy of an id a newer load wrote
                 }
                 if (vec.isNullAt(r)) {
                     sink.row(id, buf[0], -1, texts);
@@ -785,11 +826,11 @@ final class DeltaTable {
             }
         };
         if (piece.to() == Piece.WHOLE) {
-            raw(file, read, Optional.empty(), each);
+            raw(file, schema, Optional.empty(), each);
             return;
         }
         com.ash.lake.delta.NativeEngine ne = (com.ash.lake.delta.NativeEngine) engine;
-        try (CloseableIterator<ColumnarBatch> batches = ne.readRowGroups(InternalScanFileUtils.getAddFileStatus(file), read, piece.from(),
+        try (CloseableIterator<ColumnarBatch> batches = ne.readRowGroups(InternalScanFileUtils.getAddFileStatus(file), schema, piece.from(),
                 piece.to())) {
             while (batches.hasNext()) {
                 each.accept(batches.next());
@@ -812,10 +853,13 @@ final class DeltaTable {
         io.delta.kernel.expressions.Predicate eq = new io.delta.kernel.expressions.Predicate("=",
                 new io.delta.kernel.expressions.Column(layout.phys(idColumn)), io.delta.kernel.expressions.Literal.ofString(id));
         Map<String, double[]> out = new LinkedHashMap<>();
-        raw(files.get(fileIndex), layout.physical(schema), Optional.of(eq), batch -> {
+        var deleted = deleted(files.get(fileIndex));
+        int rowIndexAt = vectorColumns.size() + 1;
+        raw(files.get(fileIndex), withRowIndex(layout.physical(schema), deleted), deleted == null ? Optional.of(eq) : Optional.empty(), batch -> {
             io.delta.kernel.data.ColumnVector idv = batch.getColumnVector(0);
+            io.delta.kernel.data.ColumnVector rix = deleted == null ? null : batch.getColumnVector(rowIndexAt);
             for (int r = 0; r < batch.getSize() && out.isEmpty(); r++) {
-                if (idv.isNullAt(r) || !id.equals(idv.getString(r))) {
+                if (idv.isNullAt(r) || !id.equals(idv.getString(r)) || !live(deleted, rix, r)) {
                     continue;
                 }
                 for (int c = 0; c < vectorColumns.size(); c++) {
@@ -850,10 +894,13 @@ final class DeltaTable {
             schema = schema.add(c, vectorType(layout, c));
         }
         Map<String, Map<String, double[]>> out = new java.util.HashMap<>();
-        raw(files.get(fileIndex), layout.physical(schema), Optional.empty(), batch -> {
+        var deleted = deleted(files.get(fileIndex));
+        int rowIndexAt = vectorColumns.size() + 1;
+        raw(files.get(fileIndex), withRowIndex(layout.physical(schema), deleted), Optional.empty(), batch -> {
             io.delta.kernel.data.ColumnVector idv = batch.getColumnVector(0);
+            io.delta.kernel.data.ColumnVector rix = deleted == null ? null : batch.getColumnVector(rowIndexAt);
             for (int r = 0; r < batch.getSize() && out.size() < ids.size(); r++) {
-                if (idv.isNullAt(r) || !ids.contains(idv.getString(r))) {
+                if (idv.isNullAt(r) || !ids.contains(idv.getString(r)) || !live(deleted, rix, r)) {
                     continue;
                 }
                 Map<String, double[]> vs = new LinkedHashMap<>();

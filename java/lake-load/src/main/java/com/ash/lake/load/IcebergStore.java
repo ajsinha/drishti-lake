@@ -68,6 +68,11 @@ public final class IcebergStore implements TableStore {
     }
 
     @Override
+    public com.ash.lake.read.LakeReader open(com.ash.lake.LakeRuntime runtime, com.ash.lake.read.LakeAddress address) {
+        return com.ash.lake.iceberg.table.IcebergLakeReader.open(runtime, address);
+    }
+
+    @Override
     public String format() {
         return FORMAT;
     }
@@ -95,35 +100,8 @@ public final class IcebergStore implements TableStore {
     public Columns columns(LakeRuntime runtime, TableRef table) throws IOException {
         try (Catalog c = catalog(runtime, table)) {
             com.ash.lake.iceberg.Table t = c.load(table.table()).orElseThrow(() -> new IOException("no Iceberg table at " + table.location()));
-            return columns(t.metadata().schema());
+            return com.ash.lake.iceberg.table.IcebergColumns.columns(t.metadata().schema());
         }
-    }
-
-    static Columns columns(Schema schema) {
-        List<Column> out = new ArrayList<>();
-        for (NestedField f : schema.columns()) {
-            out.add(new Column(f.name(), type(f.type())));
-        }
-        return Columns.of(out);
-    }
-
-    static ColumnType type(Type t) {
-        return switch (t.id()) {
-            case STRING, UUID -> ColumnType.STRING;
-            case DOUBLE, FLOAT -> ColumnType.DOUBLE;
-            case LONG -> ColumnType.LONG;
-            case INT -> ColumnType.INT;
-            case BOOLEAN -> ColumnType.BOOLEAN;
-            case DATE -> ColumnType.DATE;
-            case TIMESTAMP, TIMESTAMPTZ -> ColumnType.TIMESTAMP;
-            case BINARY, FIXED -> ColumnType.BINARY;
-            case LIST -> {
-                Type e = ((Type.ListType) t).element();
-                yield e.id() == Type.Id.STRING ? ColumnType.STRING_LIST : e.id() == Type.Id.DOUBLE || e.id() == Type.Id.FLOAT ? ColumnType.DOUBLE_LIST
-                        : ColumnType.OTHER;
-            }
-            default -> ColumnType.OTHER;
-        };
     }
 
     @Override
@@ -170,7 +148,7 @@ public final class IcebergStore implements TableStore {
             com.ash.lake.iceberg.Table t = found.get();
             Snapshot at = snapshot(t, table, request.asOf());
             Schema schema = at == null ? t.metadata().schema() : t.metadata().schemaFor(at);
-            Columns cols = columns(schema);
+            Columns cols = com.ash.lake.iceberg.table.IcebergColumns.columns(schema);
             StoreScans rows = new StoreScans(cols, request);
             if (at == null) {
                 return RowScan.of(rows.columns(), List.of());

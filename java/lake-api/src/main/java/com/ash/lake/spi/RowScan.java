@@ -27,6 +27,11 @@ public interface RowScan extends Iterator<Row>, AutoCloseable {
     @Override
     void close();
 
+    /** What the scan read and skipped; {@link ScanStats#UNKNOWN} when the store does not count. */
+    default ScanStats stats() {
+        return ScanStats.UNKNOWN;
+    }
+
     /** A scan over rows already read. */
     static RowScan of(Columns columns, List<Row> rows) {
         Iterator<Row> it = rows.iterator();

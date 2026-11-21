@@ -16,6 +16,7 @@
 package com.ash.lake.load;
 
 import com.ash.lake.LakeRuntime;
+import com.ash.lake.delta.table.DeltaRows;
 import com.ash.lake.delta.write.LakeWriter;
 import com.ash.lake.spi.AsOf;
 import com.ash.lake.spi.Capabilities;
@@ -172,48 +173,7 @@ public final class DeltaStore implements TableStore {
     @Override
     public Columns columns(LakeRuntime runtime, TableRef table) throws IOException {
         Snapshot s = snapshot(runtime, table, new Engine[1]).orElseThrow(() -> new IOException("no Delta table at " + table.location()));
-        return columns(s.getSchema());
-    }
-
-    static Columns columns(StructType schema) {
-        List<Column> out = new ArrayList<>();
-        for (StructField f : schema.fields()) {
-            out.add(new Column(f.getName(), type(f.getDataType())));
-        }
-        return Columns.of(out);
-    }
-
-    static ColumnType type(DataType t) {
-        if (t instanceof StringType) {
-            return ColumnType.STRING;
-        }
-        if (t instanceof DoubleType || t instanceof FloatType) {
-            return ColumnType.DOUBLE;
-        }
-        if (t instanceof LongType) {
-            return ColumnType.LONG;
-        }
-        if (t instanceof IntegerType) {
-            return ColumnType.INT;
-        }
-        if (t instanceof BooleanType) {
-            return ColumnType.BOOLEAN;
-        }
-        if (t instanceof DateType) {
-            return ColumnType.DATE;
-        }
-        if (t instanceof TimestampType || t instanceof TimestampNTZType) {
-            return ColumnType.TIMESTAMP;
-        }
-        if (t instanceof BinaryType) {
-            return ColumnType.BINARY;
-        }
-        if (t instanceof ArrayType a) {
-            DataType e = a.getElementType();
-            return e instanceof StringType ? ColumnType.STRING_LIST : e instanceof DoubleType || e instanceof FloatType ? ColumnType.DOUBLE_LIST
-                    : ColumnType.OTHER;
-        }
-        return ColumnType.OTHER;
+        return DeltaRows.columns(s.getSchema());
     }
 
     @Override
@@ -230,7 +190,7 @@ public final class DeltaStore implements TableStore {
         }
         Engine engine = e[0];
         Snapshot s = found.get();
-        Columns cols = columns(s.getSchema());
+        Columns cols = DeltaRows.columns(s.getSchema());
         StoreScans rows = new StoreScans(cols, request);
         Set<String> partitions = Set.copyOf(s.getPartitionColumnNames());
         Scan scan = s.getScanBuilder().build();
@@ -245,7 +205,7 @@ public final class DeltaStore implements TableStore {
                         if (day != null && !rows.wants(LocalDate.parse(day))) {
                             continue;                                   // a file of a date the scan does not want
                         }
-                        read(engine, state, physical, file, cols, rows, partitions);
+                        DeltaRows.read(engine, state, physical, file, cols, partitions, rows::add);
                     }
                 }
             }
@@ -253,86 +213,14 @@ public final class DeltaStore implements TableStore {
         return RowScan.of(rows.columns(), rows.rows());
     }
 
-    /**
-     * The rows of one data file. A partition column's empty string is null, as the Delta protocol reads it (and Spark and delta-rs with
-     * it): a writer may record a null partition value as {@code ""}.
-     */
-    private static void read(Engine engine, Row state, StructType physical, Row file, Columns cols, StoreScans rows, Set<String> partitions)
-            throws IOException {
-        FileStatus fs = InternalScanFileUtils.getAddFileStatus(file);
-        try (CloseableIterator<FileReadResult> raw = engine.getParquetHandler().readParquetFiles(Utils.singletonCloseableIterator(fs), physical,
-                Optional.empty());
-             CloseableIterator<FilteredColumnarBatch> data = Scan.transformPhysicalData(engine, state, file, raw.map(FileReadResult::getData))) {
-            while (data.hasNext()) {
-                FilteredColumnarBatch b = data.next();
-                StructType schema = b.getData().getSchema();
-                int[] at = new int[schema.length()];
-                for (int c = 0; c < at.length; c++) {
-                    at[c] = cols.indexOf(schema.at(c).getName());
-                }
-                boolean[] partition = new boolean[at.length];
-                for (int c = 0; c < at.length; c++) {
-                    partition[c] = partitions.contains(schema.at(c).getName());
-                }
-                Optional<ColumnVector> sel = b.getSelectionVector();
-                for (int r = 0; r < b.getData().getSize(); r++) {
-                    if (sel.isPresent() && (sel.get().isNullAt(r) || !sel.get().getBoolean(r))) {
-                        continue;
-                    }
-                    Object[] v = new Object[cols.size()];
-                    for (int c = 0; c < at.length; c++) {
-                        if (at[c] >= 0) {
-                            Object x = value(b.getData().getColumnVector(c), r);
-                            v[at[c]] = partition[c] && "".equals(x) ? null : x;
-                        }
-                    }
-                    rows.add(v);
-                }
-            }
-        }
-    }
-
-    private static Object value(ColumnVector v, int r) {
-        if (v.isNullAt(r)) {
-            return null;
-        }
-        DataType t = v.getDataType();
-        if (t instanceof DoubleType) {
-            return v.getDouble(r);
-        }
-        if (t instanceof FloatType) {
-            return (double) v.getFloat(r);
-        }
-        if (t instanceof LongType || t instanceof TimestampType || t instanceof TimestampNTZType) {
-            return v.getLong(r);
-        }
-        if (t instanceof IntegerType) {
-            return v.getInt(r);
-        }
-        if (t instanceof DateType) {
-            return LocalDate.ofEpochDay(v.getInt(r));
-        }
-        if (t instanceof BooleanType) {
-            return v.getBoolean(r);
-        }
-        if (t instanceof BinaryType) {
-            return v.getBinary(r);
-        }
-        if (t instanceof ArrayType) {
-            ArrayValue a = v.getArray(r);
-            ColumnVector e = a.getElements();
-            List<Object> out = new ArrayList<>();
-            for (int i = 0; i < a.getSize(); i++) {
-                out.add(value(e, i));
-            }
-            return out;
-        }
-        return v.getString(r);
-    }
-
     @Override
     public TableWriter writer(WriteSpec spec) throws IOException {
         return new DeltaTarget(spec);
+    }
+
+    @Override
+    public com.ash.lake.read.LakeReader open(LakeRuntime runtime, com.ash.lake.read.LakeAddress address) {
+        return com.ash.lake.delta.table.DeltaLakeReader.open(runtime, address);
     }
 
     @Override

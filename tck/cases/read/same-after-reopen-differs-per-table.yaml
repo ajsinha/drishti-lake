@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# a table's identity: the format's own id, the same through a second reader in a second runtime, another table's differs
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 5, scenarios: 2, seed: 11}}
+  other/pv.2026-10-27.jsonl: {pv: {n: 4, scenarios: 2, seed: 12}}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  other: |
+    source: {files: '${in}/other/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: other-pv}
+steps:
+  - load: []
+  - load: {config: other}
+  - store: [read-identity, '${store}', '${lake}', risk, scenario-pv, other-pv]

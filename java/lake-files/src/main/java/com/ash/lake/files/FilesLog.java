@@ -49,7 +49,12 @@ final class FilesLog {
      * One commit: the version, the date, {@code replace|append|delete|undo|retention}, the load ids, the batch, the rows, the content file
      * and when it was committed (epoch milliseconds; 0 when the commit does not say, then the time of its file).
      */
-    record Commit(long version, LocalDate date, String op, List<String> loads, String batch, long rows, String content, long at) {
+    record Commit(long version, LocalDate date, String op, List<String> loads, String batch, long rows, String content, long at,
+            JsonNode stats) {
+
+        Commit(long version, LocalDate date, String op, List<String> loads, String batch, long rows, String content, long at) {
+            this(version, date, op, loads, batch, rows, content, at, null);
+        }
 
         ObjectNode json() {
             ObjectNode o = JSON.createObjectNode().put("version", version).put("date", date.toString()).put("op", op).put("at", at);
@@ -62,6 +67,9 @@ final class FilesLog {
             if (content != null) {
                 o.put("content", content);
             }
+            if (stats != null) {
+                o.set("stats", stats);
+            }
             return o;
         }
 
@@ -70,7 +78,7 @@ final class FilesLog {
             o.path("loads").forEach(n -> loads.add(n.asText()));
             return new Commit(o.path("version").asLong(), LocalDate.parse(o.path("date").asText()), o.path("op").asText(), List.copyOf(loads),
                     o.hasNonNull("batch") ? o.get("batch").asText() : null, o.path("rows").asLong(), o.hasNonNull("content") ? o.get("content").asText() : null,
-                    o.path("at").asLong(0));
+                    o.path("at").asLong(0), o.get("stats"));
         }
     }
 
@@ -111,17 +119,32 @@ final class FilesLog {
     }
 
     /** Writes the table's columns (a new table, or the load columns added), moved into place whole. */
+    /** The table's id ({@code columns.json}'s {@code id}, written at creation and by the first commit after), or null (F2). */
+    String id() throws IOException {
+        if (!exists()) {
+            return null;
+        }
+        JsonNode id = JSON.readTree(dir.resolve("columns.json").toFile()).get("id");
+        return id == null || id.isNull() ? null : id.asText();
+    }
+
     void columns(Columns cols) throws IOException {
+        Path tmp = columnsFile(cols);
+        locked(() -> Files.move(tmp, dir.resolve("columns.json"), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE));
+    }
+
+    /** {@code columns.json} for {@code cols} written beside it (its id kept, or a new one), to be moved into place. */
+    private Path columnsFile(Columns cols) throws IOException {
         Files.createDirectories(dir);
-        ObjectNode o = JSON.createObjectNode();
+        String id = id();
+        ObjectNode o = JSON.createObjectNode().put("id", id == null ? java.util.UUID.randomUUID().toString() : id);
         ArrayNode a = o.putArray("columns");
         cols.all().forEach(c -> a.addObject().put("name", c.name()).put("type", c.type().name().toLowerCase(Locale.ROOT)));
         Path tmp = Files.createTempFile(dir, "columns-", ".part");      // one per writer: two writers never share a temporary file
         JSON.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), o);
-        locked(() -> Files.move(tmp, dir.resolve("columns.json"), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE));
+        return tmp;
     }
 
-    /** Every commit, oldest first. */
     List<Commit> commits() throws IOException {
         List<Commit> out = new ArrayList<>();
         if (!Files.isDirectory(dir)) {
@@ -131,7 +154,7 @@ final class FilesLog {
             for (Path p : s.filter(p -> p.getFileName().toString().matches("\\d+\\.json")).toList()) {
                 Commit c = Commit.of(JSON.readTree(p.toFile()));
                 out.add(c.at() > 0 ? c : new Commit(c.version(), c.date(), c.op(), c.loads(), c.batch(), c.rows(), c.content(),
-                        Files.getLastModifiedTime(p).toMillis()));
+                        Files.getLastModifiedTime(p).toMillis(), c.stats()));
             }
         }
         out.sort(java.util.Comparator.comparingLong(Commit::version));
@@ -198,7 +221,13 @@ final class FilesLog {
             if (content != null) {
                 Files.move(content, dir.resolve(name), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             }
-            Commit c = new Commit(n, date, op, List.copyOf(loads), batch, rows, name, System.currentTimeMillis());
+            Columns cols = columns();
+            if (cols != null && id() == null) {
+                Files.move(columnsFile(cols), dir.resolve("columns.json"), StandardCopyOption.REPLACE_EXISTING,   // a table written
+                        StandardCopyOption.ATOMIC_MOVE);                // before ids: its next commit gives it one (F2), under the lock held
+            }
+            JsonNode stats = name == null || cols == null ? null : FilesStats.of(dir.resolve(name), cols);
+            Commit c = new Commit(n, date, op, List.copyOf(loads), batch, rows, name, System.currentTimeMillis(), stats);
             Files.write(dir.resolve(n + ".json"), JSON.writeValueAsBytes(c.json()), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             publish(c);
             return c;

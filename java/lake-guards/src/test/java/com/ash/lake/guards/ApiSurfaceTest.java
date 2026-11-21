@@ -47,6 +47,7 @@ class ApiSurfaceTest {
     static final Map<String, String> PACKAGES = Map.of(
             "com.ash.lake", "lake-api",
             "com.ash.lake.spi", "lake-api",
+            "com.ash.lake.read", "lake-api",
             "com.ash.lake.config", "lake-config",
             "com.ash.lake.load", "lake-load",
             "com.ash.lake.inbox", "lake-load",

@@ -72,6 +72,11 @@ public final class FilesStore implements TableStore {
     }
 
     @Override
+    public com.ash.lake.read.LakeReader open(com.ash.lake.LakeRuntime runtime, com.ash.lake.read.LakeAddress address) {
+        return new FilesLakeReader(address);
+    }
+
+    @Override
     public String format() {
         return FORMAT;
     }
@@ -134,7 +139,7 @@ public final class FilesStore implements TableStore {
         return columnsOf(table);
     }
 
-    private static Columns columnsOf(TableRef table) throws IOException {
+    static Columns columnsOf(TableRef table) throws IOException {
         Columns c = new FilesLog(domainDir(table), table.table()).columns();
         return c == null ? BASE : c;
     }
@@ -265,7 +270,7 @@ public final class FilesStore implements TableStore {
     }
 
     /** A line's values: its id, date and document, then the table's typed columns from its {@code columns} (missing: null). */
-    private static Object[] values(Columns all, String id, LocalDate date, String doc, String line) throws IOException {
+    static Object[] values(Columns all, String id, LocalDate date, String doc, String line) throws IOException {
         Object[] v = new Object[all.size()];
         v[0] = id;
         v[1] = date;

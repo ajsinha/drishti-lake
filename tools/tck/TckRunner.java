@@ -377,11 +377,12 @@ public final class TckRunner {
                 case "dates" -> store.dates(RT, t);   // lake-only
                 case "versions" -> store.versions(RT, t).size() + " versions";   // lake-only
                 case "scan-at" -> scanAt(store, t, a[5], a.length > 6 && a[6].equals("time"));   // lake-only
-                default -> throw new IllegalArgumentException("unknown store op " + a[0]);   // lake-only
+                default -> a[0].startsWith("read-") ? ReadVerbs.run(store, a) : null;   // lake-only: the read API (READ_API.md section 6)
             };   // lake-only
+            if (done == null) throw new IllegalArgumentException("unknown store op " + a[0]);   // lake-only
             out.println(done);   // lake-only
             return 0;   // lake-only
-        } catch (UnsupportedOperationException | java.io.IOException e) {   // lake-only
+        } catch (UnsupportedOperationException | com.ash.lake.common.LakeException | java.io.IOException e) {   // lake-only
             out.println(e.getMessage());   // lake-only
             return 1;   // lake-only
         }   // lake-only
@@ -443,3 +444,197 @@ public final class TckRunner {
         }
     }
 }
+
+/**   // lake-only
+ * The read API's verbs for the parity kit (READ_API.md section 6): each opens the lake through {@code TableStore.open} and prints what it   // lake-only
+ * read in a form that does not depend on the store (counts, and digests of sorted text), so the lines of every store compare.   // lake-only
+ */   // lake-only
+final class ReadVerbs {   // lake-only
+    private static final Map<String, Map<LocalDate, String>> STAMPS = new java.util.HashMap<>();   // lake-only
+
+    static String run(com.ash.lake.spi.TableStore store, String[] a) throws java.io.IOException {   // lake-only
+        List<String> args = List.of(a).subList(5, a.length);   // lake-only
+        try (var lake = store.open(TckRunner.RT, com.ash.lake.read.LakeAddress.of(a[2], a[3]))) {   // lake-only
+            return switch (a[0]) {   // lake-only
+                case "read-tables" -> lake.tables() + " new " + lake.newTables(java.util.Set.of(a[4]));   // lake-only
+                case "read-health" -> { var h = lake.health(java.time.Instant.now()); yield "reachable=" + h.reachable() + " memory=" + h.memoryOnly() + " engine=" + !h.engine().isEmpty(); }   // lake-only
+                case "read-days" -> days(lake, a[2] + "|" + a[4], a[4]);   // lake-only
+                case "read-ids" -> ids(snap(lake, a[4]), LocalDate.parse(args.get(0)));   // lake-only
+                case "read-doc" -> docs(snap(lake, a[4]), LocalDate.parse(args.get(0)));   // lake-only
+                case "read-columns" -> columns(snap(lake, a[4]), LocalDate.parse(args.get(0)), args.subList(1, args.size()));   // lake-only
+                case "read-vectors" -> vectors(snap(lake, a[4]), LocalDate.parse(args.get(0)), args.get(1), args.subList(2, args.size()));   // lake-only
+                case "read-identity" -> identity(store, a, lake);   // lake-only
+                case "read-purge" -> purge(lake, a[4], LocalDate.parse(args.get(0)));   // lake-only
+                case "read-problems" -> problems(lake, a[4], LocalDate.parse(args.get(0)));   // lake-only
+                default -> null;   // lake-only
+            };   // lake-only
+        }   // lake-only
+    }   // lake-only
+
+    static com.ash.lake.read.TableSnapshot snap(com.ash.lake.read.LakeReader lake, String table) throws java.io.IOException {   // lake-only
+        return lake.table(table).snapshot(com.ash.lake.spi.AsOf.LATEST).orElseThrow(() -> new java.io.IOException("no table " + table));   // lake-only
+    }   // lake-only
+
+    static String digest(List<String> lines) {   // lake-only
+        List<String> sorted = new ArrayList<>(lines);   // lake-only
+        java.util.Collections.sort(sorted);   // lake-only
+        try {   // lake-only
+            var md = java.security.MessageDigest.getInstance("SHA-256");   // lake-only
+            for (String l : sorted) {   // lake-only
+                md.update(l.getBytes(StandardCharsets.UTF_8));   // lake-only
+                md.update((byte) 10);   // lake-only
+            }   // lake-only
+            return java.util.HexFormat.of().formatHex(md.digest()).substring(0, 12);   // lake-only
+        } catch (java.security.NoSuchAlgorithmException e) {   // lake-only
+            throw new IllegalStateException(e);   // lake-only
+        }   // lake-only
+    }   // lake-only
+
+    /** Per date its stated rows and deletes; whether its stamp changed since the last read-days of the table in this case. */   // lake-only
+    static String days(com.ash.lake.read.LakeReader lake, String key, String table) throws java.io.IOException {   // lake-only
+        var s = snap(lake, table);   // lake-only
+        Map<LocalDate, String> was = STAMPS.get(key);   // lake-only
+        Map<LocalDate, String> now = new TreeMap<>();   // lake-only
+        StringBuilder out = new StringBuilder("version-dates " + s.dates().size());   // lake-only
+        for (LocalDate d : s.dates()) {   // lake-only
+            var day = s.day(d).orElseThrow();   // lake-only
+            now.put(d, day.stamp());   // lake-only
+            String again = snap(lake, table).day(d).orElseThrow().stamp();   // lake-only
+            out.append("\n").append(d).append(": rows=").append(day.filesUncounted() > 0 ? "unstated" : String.valueOf(day.rows())).append(" deletes=").append(day.deletes())   // lake-only
+                    .append(" files>0=").append(!day.files().isEmpty()).append(" stamp ").append(again.equals(day.stamp()) ? "stable" : "UNSTABLE")   // lake-only
+                    .append(was == null ? "" : was.containsKey(d) && was.get(d).equals(day.stamp()) ? ", unchanged" : ", changed");   // lake-only
+        }   // lake-only
+        STAMPS.put(key, now);   // lake-only
+        return out.toString();   // lake-only
+    }   // lake-only
+
+    static String ids(com.ash.lake.read.TableSnapshot s, LocalDate d) throws java.io.IOException {   // lake-only
+        var m = s.ids(d);   // lake-only
+        int files = s.day(d).map(x -> x.files().size()).orElse(0);   // lake-only
+        List<String> lines = new ArrayList<>();   // lake-only
+        boolean ok = true;   // lake-only
+        for (int i = 0; i < m.size(); i++) {   // lake-only
+            lines.add(m.id(i));   // lake-only
+            int f = m.file(m.id(i));   // lake-only
+            ok &= f >= 0 && f < files && (i == 0 || m.id(i - 1).compareTo(m.id(i)) < 0);   // lake-only
+        }   // lake-only
+        Path tmp = Files.createTempFile("tck-idmap", ".bin");   // lake-only
+        String mapped;   // lake-only
+        try (var mm = com.ash.lake.read.IdMaps.write(m, tmp)) {   // lake-only
+            boolean same = mm.size() == m.size() && mm.file("ABSENT") == -1;   // lake-only
+            for (int i = 0; i < m.size() && same; i++) {   // lake-only
+                same = mm.id(i).equals(m.id(i)) && mm.file(m.id(i)) == m.file(m.id(i));   // lake-only
+            }   // lake-only
+            mm.close();   // lake-only
+            mapped = "mapped=" + same + " closed=" + mm.closed();   // lake-only
+        } finally {   // lake-only
+            Files.deleteIfExists(tmp);   // lake-only
+        }   // lake-only
+        return m.size() + " ids " + digest(lines) + " sorted-and-filed=" + ok + " absent=" + m.file("ABSENT") + " " + mapped;   // lake-only
+    }   // lake-only
+
+    static String docs(com.ash.lake.read.TableSnapshot s, LocalDate d) throws java.io.IOException {   // lake-only
+        var m = s.ids(d);   // lake-only
+        List<String> byId = new ArrayList<>();   // lake-only
+        List<String> filled = new ArrayList<>();   // lake-only
+        for (int i = 0; i < m.size(); i++) {   // lake-only
+            String id = m.id(i);   // lake-only
+            String doc = s.document(d, m.file(id), id).orElse("<none>");   // lake-only
+            byId.add(id + "\t" + doc);   // lake-only
+            if (i < 3 && !s.vectorColumns().isEmpty()) {   // lake-only
+                var v = s.vectorsOf(d, m.file(id), java.util.Set.of(id), List.copyOf(s.vectorColumns())).getOrDefault(id, Map.of());   // lake-only
+                filled.add(id + "\t" + com.ash.lake.read.Documents.withVectors(doc, v));   // lake-only
+            }   // lake-only
+        }   // lake-only
+        List<String> all = new ArrayList<>();   // lake-only
+        s.documents(d, (id, json) -> all.add(id + "\t" + json));   // lake-only
+        return byId.size() + " documents " + digest(byId) + " all=" + digest(all).equals(digest(byId)) + " filled " + digest(filled)   // lake-only
+                + " absent=" + s.document(d, 0, "ABSENT").isPresent();   // lake-only
+    }   // lake-only
+
+    static String columns(com.ash.lake.read.TableSnapshot s, LocalDate d, List<String> asks) throws java.io.IOException {   // lake-only
+        List<com.ash.lake.read.ColumnAsk> list = new ArrayList<>();   // lake-only
+        for (String x : asks) {   // lake-only
+            String path = x.substring(0, x.indexOf(':'));   // lake-only
+            list.add(new com.ash.lake.read.ColumnAsk(path, s.promoted().getOrDefault(path, path), x.endsWith(":n")));   // lake-only
+        }   // lake-only
+        var b = s.columns(d, list);   // lake-only
+        StringBuilder out = new StringBuilder(b.ids().length + " rows");   // lake-only
+        for (var ask : list) {   // lake-only
+            List<String> lines = new ArrayList<>();   // lake-only
+            int empty = 0;   // lake-only
+            for (int i = 0; i < b.ids().length; i++) {   // lake-only
+                Object v = ask.numeric() ? (Object) b.numbers().get(ask.path())[i] : b.texts().get(ask.path())[i];   // lake-only
+                empty += v == null || (v instanceof Double x && x.isNaN()) ? 1 : 0;   // lake-only
+                lines.add(b.ids()[i] + "\t" + v);   // lake-only
+            }   // lake-only
+            out.append('\n').append(ask.path()).append(": ").append(digest(lines)).append(" empty=").append(empty);   // lake-only
+        }   // lake-only
+        return out.toString();   // lake-only
+    }   // lake-only
+
+    static String vectors(com.ash.lake.read.TableSnapshot s, LocalDate d, String column, List<String> texts) throws java.io.IOException {   // lake-only
+        StringBuilder out = new StringBuilder();   // lake-only
+        List<String> order1 = null;   // lake-only
+        for (int decoders : new int[] {1, 4}) {   // lake-only
+            List<String> lines = new ArrayList<>();   // lake-only
+            List<String> order = new ArrayList<>();   // lake-only
+            int[] nulls = {0};   // lake-only
+            s.vectors(com.ash.lake.read.VectorRequest.of(d, column, texts).parallel(decoders, 1L << 20), (id, values, length, t) -> {   // lake-only
+                order.add(id);   // lake-only
+                StringBuilder l = new StringBuilder(id).append('|').append(length);   // lake-only
+                for (int i = 0; i < length; i++) {   // lake-only
+                    l.append(',').append(values[i]);   // lake-only
+                }   // lake-only
+                nulls[0] += length < 0 ? 1 : 0;   // lake-only
+                lines.add(l.append('|').append(String.join("/", java.util.Arrays.stream(t).map(String::valueOf).toList())).toString());   // lake-only
+            });   // lake-only
+            if (order1 == null) {   // lake-only
+                order1 = order;   // lake-only
+                out.append(lines.size()).append(" rows ").append(digest(lines)).append(" null-vectors=").append(nulls[0]);   // lake-only
+            } else {   // lake-only
+                out.append(" decoders-4-same-order=").append(order.equals(order1));   // lake-only
+            }   // lake-only
+        }   // lake-only
+        return out.toString();   // lake-only
+    }   // lake-only
+
+    static String identity(com.ash.lake.spi.TableStore store, String[] a, com.ash.lake.read.LakeReader lake) throws java.io.IOException {   // lake-only
+        var one = lake.table(a[4]).identity();   // lake-only
+        var other = com.ash.lake.LakeRuntime.builder().options(com.ash.lake.LakeOptions.fromProcess()).storage(TckRunner.MEMORY).build();   // lake-only
+        try (var again = store.open(other, com.ash.lake.read.LakeAddress.of(a[2], a[3]))) {   // lake-only
+            var two = again.table(a[4]).identity();   // lake-only
+            String differs = a.length > 5 ? " differs-from-" + a[5] + "=" + !lake.table(a[5]).identity().text().equals(one.text()) : "";   // lake-only
+            return "kind-is-the-format=" + one.kind().equals(store.format()) + " stable=" + one.equals(two) + differs;   // lake-only
+        }   // lake-only
+    }   // lake-only
+
+    static String purge(com.ash.lake.read.LakeReader lake, String table, LocalDate d) throws java.io.IOException {   // lake-only
+        String before = ids(snap(lake, table), d);   // lake-only
+        lake.purge();   // lake-only
+        String after = ids(snap(lake, table), d);   // lake-only
+        lake.purge(d);   // lake-only
+        String again = ids(snap(lake, table), d);   // lake-only
+        return "same=" + (before.equals(after) && after.equals(again));   // lake-only
+    }   // lake-only
+
+    /** A date's first data file moved away: the read fails with its reason and is listed; moved back: the problem is cleared. */   // lake-only
+    static String problems(com.ash.lake.read.LakeReader lake, String table, LocalDate d) throws java.io.IOException {   // lake-only
+        var s = snap(lake, table);   // lake-only
+        var file = s.day(d).orElseThrow().files().get(0).local().orElseThrow();   // lake-only
+        Path aside = file.resolveSibling(file.getFileName() + ".aside");   // lake-only
+        Files.move(file, aside);   // lake-only
+        String failed;   // lake-only
+        try {   // lake-only
+            s.ids(d);   // lake-only
+            failed = "read";   // lake-only
+        } catch (RuntimeException e) {   // lake-only
+            failed = "failed " + String.valueOf(e.getMessage()).split(" ")[0];   // lake-only: the code (LK-1006)
+        }   // lake-only
+        boolean listed = !lake.problems().isEmpty() && lake.problems().all().get(0).where().equals(d.toString());   // lake-only
+        Files.move(aside, file);   // lake-only
+        s.ids(d);   // lake-only
+        return failed + " listed=" + listed + " cleared=" + lake.problems().isEmpty();   // lake-only
+    }   // lake-only
+}   // lake-only
+

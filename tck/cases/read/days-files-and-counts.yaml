@@ -1,0 +1,18 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# per date the stated rows, deletes and files; after a replace of one date only that date's stamp changes
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 20, scenarios: 3, seed: 4}}
+  pv.2026-10-28.jsonl: {pv: {n: 11, scenarios: 3, seed: 14, start: '2026-10-28'}}
+  again/pv.2026-10-27.jsonl: {pv: {n: 7, scenarios: 3, seed: 5}}
+configs:
+  main: |
+    source: {files: '${in}/pv.*.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  again: |
+    source: {files: '${in}/again/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+steps:
+  - load: []
+  - store: [read-days, '${store}', '${lake}', risk, scenario-pv]
+  - load: {config: again}
+  - store: [read-days, '${store}', '${lake}', risk, scenario-pv]

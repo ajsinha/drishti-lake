@@ -1,0 +1,21 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# a date's data file moved away: the read fails with its reason and problems() lists the date; moved back, the next read clears it
+not-on:
+  mem: the case moves a data file on the local disk aside (DataFile.local); a memory lake has no local file
+  s3: the case moves a data file on the local disk aside (DataFile.local); an object store's file is not on this disk
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 8, scenarios: 2, seed: 3}}
+config: |
+  source:
+    files: '${in}/*.jsonl'
+    id: POSITION_ID
+    promote: [LEGAL_ENTITY, DESK, TT_BOOK, TRADE_ID, QUANTITY, BASE_PV, CCY]
+    vectors: [SCENARIO_PV]
+  target:
+    format: ${store}
+    lake: '${lake}'
+    domain: risk
+    kind: scenario-pv
+steps:
+  - load: []
+  - store: [read-problems, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']

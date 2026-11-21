@@ -84,7 +84,7 @@ def run(cp, classes, side, root, warm, runs):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--ref-cp", help="the reference class path file (Drishti's plugins at the freeze, built in a scratch folder)")
-    ap.add_argument("--sides", default="ref,internal")
+    ap.add_argument("--sides", default="ref,internal,api")
     ap.add_argument("--stores", default="delta,iceberg")
     ap.add_argument("--n", type=int, default=10_000)
     ap.add_argument("--scenarios", type=int, default=509)
@@ -120,6 +120,8 @@ def main(argv=None):
         for store in a.stores.split(","):
             root = root_of(load(lake_cp, work, store, a.n, a.scenarios), store)
             for side in sides:
+                if store not in SIDES and side != "api":
+                    continue                                     # the files store has only the read API (published, RA-10)
                 cp, classes = compiled[side]
                 cls = API + ":" + store if side == "api" else (HOST_SIDES if side == "ref" else SIDES)[store]
                 for r in run(cp, classes, cls, root, a.warmups, a.runs):

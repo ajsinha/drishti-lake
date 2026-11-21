@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# the read API's discovery: a lake's tables, and a table loaded after the reader knew the others is new
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 10, scenarios: 3, seed: 1}}
+  other/pv.2026-10-27.jsonl: {pv: {n: 4, scenarios: 3, seed: 2}}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  other: |
+    source: {files: '${in}/other/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: other-pv}
+steps:
+  - load: []
+  - store: [read-tables, '${store}', '${lake}', risk, scenario-pv]
+  - load: {config: other}
+  - store: [read-tables, '${store}', '${lake}', risk, scenario-pv]

@@ -19,6 +19,16 @@ modes/dry-run-date-from-and-mode
 modes/key-override
 names/ready-file-business-date
 names/special-characters
+read/all-rows-in-file-order
+read/by-id-and-all
+read/days-files-and-counts
+read/ids-and-file-of-id
+read/numbers-texts-nulls
+read/problem-recorded-and-cleared
+read/purge-then-read
+read/reachable-and-missing
+read/same-after-reopen-differs-per-table
+read/tables-and-new-tables
 rejects/counted-and-named
 rejects/too-many-stop-the-load
 retention/max-rows

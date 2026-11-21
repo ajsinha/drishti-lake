@@ -125,6 +125,12 @@ final class NativeKindTable extends KindTable {
         return s.orElseThrow(() -> new IllegalStateException(kind + " has no snapshot " + snapshotId + " (expired?)"));
     }
 
+    /** The schema of snapshot {@code snapshotId}. */
+    Schema schemaOf(long snapshotId) {
+        Table t = table().orElseThrow();
+        return t.metadata().schemaFor(snapshot(t, snapshotId));
+    }
+
     @Override
     Layout layout(long snapshotId, boolean stats) {
         Table t = table().orElseThrow();

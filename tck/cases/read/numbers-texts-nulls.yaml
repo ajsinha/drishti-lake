@@ -1,0 +1,21 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# promoted columns as arrays: numbers (a missing one NaN), texts (a missing one null), an id-like field kept as text
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 25, scenarios: 2, seed: 9}}
+  gaps.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-9000001","BUSINESS_DATE":"2026-10-27","DESK":"DESK-FX","TRADE_ID":7,"SCENARIO_PV":[1.5,2.5]}
+    {"POSITION_ID":"P-9000002","BUSINESS_DATE":"2026-10-27","QUANTITY":12.25,"CCY":"JPY","SCENARIO_PV":null}
+config: |
+  source:
+    files: '${in}/*.jsonl'
+    id: POSITION_ID
+    promote: [LEGAL_ENTITY, DESK, TT_BOOK, TRADE_ID, QUANTITY, BASE_PV, CCY]
+    vectors: [SCENARIO_PV]
+  target:
+    format: ${store}
+    lake: '${lake}'
+    domain: risk
+    kind: scenario-pv
+steps:
+  - load: []
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t', 'QUANTITY:n', 'BASE_PV:n', 'TRADE_ID:t', 'CCY:t', 'LEGAL_ENTITY:t']

@@ -197,6 +197,11 @@ class TableStoreTest {
         }
 
         @Override
+        public com.ash.lake.read.LakeReader open(com.ash.lake.LakeRuntime runtime, com.ash.lake.read.LakeAddress address) throws java.io.IOException {
+            return d.open(runtime, address);
+        }
+
+        @Override
         public String format() {
             return d.format();
         }

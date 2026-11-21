@@ -27,7 +27,9 @@ public enum LakeError {
     /** A data file and its {@code .ready} refused by the checks, or a file of the same name already waiting in the inbox. */
     READY_REFUSED("LK-1004", 409),
     /** Memory-only data the place it would go cannot take (a disk, a cache, an outside service): only a download may leave. */
-    MEMORY_ONLY("LK-1005", 403);
+    MEMORY_ONLY("LK-1005", 403),
+    /** A table's log or a date's files cannot be read now (a file missing, a table moved, access refused): the reason says which. */
+    UNREADABLE("LK-1006", 503);
 
     private final String code;
     private final int status;

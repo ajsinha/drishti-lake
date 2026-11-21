@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# every document by id equals the date's documents read whole; vector markers filled from vectorsOf; an absent id has none
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 30, scenarios: 5, seed: 8}}
+  pv.2026-10-28.jsonl: {pv: {n: 9, scenarios: 5, seed: 18, start: '2026-10-28'}}
+config: |
+  source:
+    files: '${in}/*.jsonl'
+    id: POSITION_ID
+    promote: [LEGAL_ENTITY, DESK, TT_BOOK, TRADE_ID, QUANTITY, BASE_PV, CCY]
+    vectors: [SCENARIO_PV]
+  target:
+    format: ${store}
+    lake: '${lake}'
+    domain: risk
+    kind: scenario-pv
+steps:
+  - load: []
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-28']

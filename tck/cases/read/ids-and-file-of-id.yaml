@@ -1,0 +1,18 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# a date's ids sorted with their files, an absent id -1; two loads of one date (append): the newest load's copy wins; the mapped form equal
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 15, scenarios: 2, seed: 6}}
+  more/pv.2026-10-27.jsonl: {pv: {n: 5, scenarios: 2, seed: 7}}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  more: |
+    source: {files: '${in}/more/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: append}
+steps:
+  - load: []
+  - store: [read-ids, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - load: {config: more}
+  - store: [read-ids, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
