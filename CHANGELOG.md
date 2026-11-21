@@ -5,6 +5,9 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **The old Delta entry points removed**: `NewTables` deleted, `LakeStore` package-private (the Delta reader's own); a host lists, opens
+  and finds new tables through the read API (`LakeReader.tables`, `newTables`, `health`). `LakeStoreTest` is `DeltaLakeOpenTest` on
+  the read API.
 - **float32 vectors on every store**: `target.layout.vector-type: float32` (default `double`; Java and Python loaders) makes a new
   table's vectors `list<float>` (Delta, Iceberg; the files store's column type `float_list`, its values rounded to float as Parquet holds
   them); an existing table keeps its own element type. `ColumnType.FLOAT_LIST` (and `ColumnType.vector()`) in the SPI: Delta and Iceberg

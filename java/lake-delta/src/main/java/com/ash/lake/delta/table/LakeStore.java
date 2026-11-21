@@ -30,7 +30,7 @@ import java.util.Map;
  * providers, no Hadoop file system). The Hadoop engine is not in the product (LK-9): Azure and Google Cloud Storage arrive as
  * {@code StorageProvider}s; {@code engine: hadoop} is refused naming that.
  */
-public interface LakeStore extends AutoCloseable {
+interface LakeStore extends AutoCloseable {
 
     /** The Delta table URI for {@code kind}. */
     String table(String kind);

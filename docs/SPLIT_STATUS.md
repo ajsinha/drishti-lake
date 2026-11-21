@@ -71,9 +71,7 @@ Built (decisions RA-1 to RA-12 accepted): RA-S0 (section 10 checked, today's num
 read by id through a per-snapshot id index; Delta's newest-load order no longer depends on the load id's length, and loads of one millisecond go by commit order on every store (`LoadOrder`). 14 `read/*` cases and
 `layout/partition-by-beside-the-date` equal on every store and the memory rows; I2 (Iceberg row-group pieces) and of RA-S9 the cases
 (20 of 20; `float32-and-null-vector` with the loader's `target.layout.vector-type: float32` on every store), `TwoRuntimesTest` and
-`StartOnFewCoresTest`, `docs/BENCHMARK.md`. Open: Delta's and the files store's bench rows on a quiet machine (load under 6); the old
-entry points (`LakeStore`, `NewTables`: tests in `lake-load` still use them; the table packages are outside the API surface) after
-G4; RA-S8 last (RA-9, its half-page design first).
+`StartOnFewCoresTest`, `docs/BENCHMARK.md`. The old entry points are gone (G3): `NewTables` deleted, `LakeStore` package-private (the Delta reader's own), their test on the read API (`DeltaLakeOpenTest`). Open: Delta's and the files store's bench rows on a quiet machine (load under 6); RA-S8 last (RA-9, its half-page design first).
 
 
 Designed in [READ_API](design/READ_API.md): the API, every host call mapped to it, the defects each store closes, the cases, the
