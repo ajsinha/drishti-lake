@@ -1,6 +1,0 @@
-# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
-# Step L7, part 2: the Delta lake opener (native path only, LK-9); MOVE_ALLOWLIST section 3.
-plugins/drishti-plugin-delta/src/main/java/com/ash/drishti/plugin/delta/LakeStore.java
-plugins/drishti-plugin-delta/src/main/java/com/ash/drishti/plugin/delta/NamedTables.java
-plugins/drishti-plugin-delta/src/main/java/com/ash/drishti/plugin/delta/NativeLake.java
-plugins/drishti-plugin-delta/src/main/java/com/ash/drishti/plugin/delta/NewTables.java
