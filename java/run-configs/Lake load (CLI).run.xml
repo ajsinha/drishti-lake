@@ -1,0 +1,20 @@
+<!--
+  Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved.
+  Drishti Lake. Proprietary: see LICENSE.
+
+  Lake load (CLI): the loader command line (LakeLoad). The repository carries no lake config yet, so it prints its usage: set Program arguments to option config <your lake file> option plan (or option dry-run).
+  Use it when: you try the loader on a lake file of your own.
+  Shared, so it is in git: copy the configuration (Ctrl+D) to change it; a pull overwrites this file.
+-->
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Lake load (CLI)" type="Application" factoryName="Application" folderName="Lake">
+    <option name="MAIN_CLASS_NAME" value="com.ash.lake.load.LakeLoad" />
+    <module name="lake-load" />
+    <option name="VM_PARAMETERS" value="" />
+    <option name="PROGRAM_PARAMETERS" value="--help" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

@@ -57,6 +57,16 @@ cd java && ./mvnw clean verify      # JDK 21 or later; about two minutes, four t
 
 Every path a test writes is under the module's `target/`; Maven's own temporary files go to `java/build-tmp/` (ignored).
 
+## Build and run in the IDE
+
+JDK 21 as the project SDK and **Maven, Runner, JRE: Use Project JDK** (the same steps as Drishti Rachana's [Build and run in the IDE](https://github.com/ajsinha/drishti-rachana/blob/g2/integration/java/README.md#build-and-run-in-the-ide), which also covers the Windows `PKIX` / `Windows-ROOT` fix, `JAVA_HOME`, and the install order **Rachana (tag) → Lake (tag) → Drishti**; artifacts in `~/.m2/repository/com/ash/lake`, Windows `C:\Users\<user>\.m2\repository`).
+
+| IDE | What runs what |
+|---|---|
+| **IntelliJ IDEA** (open `java/pom.xml`) | `java/run-configs/`, folder **Lake**: **Lake build all**, **Lake test**, **Lake install release** (a release tag only), **Lake load (CLI)** and **Lake check (CLI)** (the loader and the check; no sample lake config is in the repository yet, so give them your own `--config`) |
+| **PyCharm** (open the repository root) | `tools/run-configs/`: **Lake TCK (this repository)** and **Lake check (build, TCK twice, reference)**. The Python package `drishti_lake` is planned, so it has no launchers yet |
+| **VS Code** | **File, Open Workspace from File**, `drishti-lake.code-workspace`: Maven tasks, TCK tasks, and Run and Debug for the two Java programs and the TCK; recommended: Extension Pack for Java, Python |
+
 ## Documents
 
 | Document | What |
