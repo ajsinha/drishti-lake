@@ -3,7 +3,7 @@
 # Drishti Lake. Proprietary: see the LICENSE file at the root of this repository.
 """The repository's one check (the CI entry point, run locally; there is no hosted CI): delta-rs at hand (uv with the pins of
 tools/ci/interop-pins.txt), the build with every test and guard, the Delta interop tests ran with none skipped (both directions with
-delta-rs), then the parity kit twice (its results must be stable), its coverage and additive gates (tools/ci/coverage.py), and against the reference results of the freeze commit (the split's
+delta-rs), the Python path's tests, then the parity kit twice (with its Python row) (its results must be stable), its coverage and additive gates (tools/ci/coverage.py), and against the reference results of the freeze commit (the split's
 proof).
 
     python3 tools/ci/check.py [--skip-build] [--reference tck/results/reference-9ce7c3170.jsonl.gz] [--scratch DIR]
@@ -58,6 +58,13 @@ def interop_ran():
     return ok
 
 
+def python_tests():
+    """pytest over python/tests with the pins (delta-rs, pyarrow), Polars and PyYAML, through uv (offline first: the cache)."""
+    uv = shutil.which("uv") or str(Path.home() / ".local" / "bin" / "uv")
+    withs = [x for p in pins() + ["polars==2.1.0", "pyyaml", "pytest==8.4.2"] for x in ("--with", p)]
+    return [uv, "run", "--offline", "--quiet", "--no-project"] + withs + ["python", "-I", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"]
+
+
 def step(name, cmd, **kw):
     print(f"== {name}", flush=True)
     r = subprocess.run(cmd, **kw)
@@ -83,6 +90,8 @@ def main(argv=None):
             ok &= step("build, tests and guards", ["./mvnw", "-q", "-o", "clean", "verify"], cwd=ROOT / "java", env=env)
         print("== Delta interop with delta-rs, both directions", flush=True)
         ok &= interop_ran()
+        ok &= step("the Python path's tests (python/tests: the shared name and date cases, Polars and the plain writer equal)",
+                   python_tests(), cwd=ROOT / "python")
         scratch.mkdir(parents=True, exist_ok=True)               # after the build: its clean removes java/target
         one, two = scratch / "tck-1.jsonl", scratch / "tck-2.jsonl"
         tck = [sys.executable, str(ROOT / "tools" / "tck" / "tck.py")]

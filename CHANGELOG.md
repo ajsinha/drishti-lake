@@ -184,4 +184,16 @@ Entries are written per release; unreleased work is listed first.
   `America/New_York`, `LakeOptions.businessZone()`), taken once per load; it was the JVM's default zone. The same zone for the inbox's
   routes and checks, the memory lake's `today` dates and lake maintain's guard (`--zone` still wins there). `BusinessZoneTest`: a date
   that is tomorrow in `Etc/GMT+12` and today in `Pacific/Kiritimati` is refused in the one and loaded in the other.
-- Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).
+- **L10, first part: the Python path, `drishti_lake` (LK-7).** `python/` builds the wheel `drishti-lake` (`uv build`; deltalake 1.6.6,
+  pyarrow 26.0.1, PyYAML; Polars 2.1.0 optional). One command, the Java loader's: `python -m drishti_lake load --config FILE` with
+  `LakeLoad`'s flags, the same configuration file (the same keys, refused in the same words), the same rules (`filedate`: names, dates,
+  the `.ready` file, tars, the business zone's today, no future date; `rowrule`: rejects in the Java loader's words, the id as text, the
+  document text, flatten, vectors, promoted types; loader rows; the rows' own date in a replace; `latest-by`; `rejects.max-pct`; a
+  batch appended once), the same summary keys and exit codes, the same locks; one commit per business date through delta-rs. Polars
+  builds the Arrow table when installed, pyarrow otherwise: the same table (a test). Delta on the local disk only for now; anything else
+  is refused naming the Java loader. The kit's **Python row** (`<case>@delta^python`, `tck.py --loaders java,python`): every Delta case's
+  loads by the Python path must equal the Java line of the same run (`compare_results.py`; `tck/python-differences.txt` only shrinks:
+  empty) — 25 of 25 equal, incl. undo, retention, time travel and concurrent writers over Python-written tables. `python/tests`
+  (pytest, in `check.py`): the shared `names.json` cases, Polars and the plain writer equal, the business zone, no host word. The host's
+  Python callers' mapping in SPLIT_STATUS.
+- Not moved yet, on purpose (each with its step): the contracts tool (L11); the Python path's lake files, maintenance and archive guards (L10, later parts).

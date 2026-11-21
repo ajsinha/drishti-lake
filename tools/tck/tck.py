@@ -89,34 +89,46 @@ S3 = "~s3"     # the matrix's S3 row: a case's lake on s3:// (S3Mock in the runn
 ROW = {"mem": MEM, "s3": S3}
 
 
-def step(s, work, env):
-    """One step of a case: {load|undo|retention|store: args}, or {parallel: [steps]} (writers started together)."""
+def step(s, work, env, loader="java"):
+    """One step of a case: {load|undo|retention|store: args}, or {parallel: [steps]} (writers started together). ``loader``: who runs
+    its loads (the matrix's loader column: java, or python for the Python path; every other step is the Java tools')."""
     (op, arg), = s.items()
     if op == "parallel":
-        return {"op": "parallel", "steps": [step(x, work, env) for x in arg]}
+        return {"op": "parallel", "steps": [step(x, work, env, loader) for x in arg]}
     arg = arg or []
     if op == "load":
         cfg = "main"
         if isinstance(arg, dict):
             cfg, arg = arg.get("config", "main"), arg.get("args", [])
-        return {"op": op, "args": ["--config", str(work / f"{cfg}.yaml")] + subst(arg, env)}
+        out = {"op": op, "args": ["--config", str(work / f"{cfg}.yaml")] + subst(arg, env)}
+        if loader != "java":
+            out["loader"] = loader
+        return out
     return {"op": op, "args": subst(arg, env)}
 
 
-def jobs(cases, scratch, stores=None, storages=("local",)):
+PYTHON = "^python"   # the matrix's Python row (LK-7): a case's loads by the Python path, its lake on the local disk, Delta (design 3.3)
+
+
+def jobs(cases, scratch, stores=None, storages=("local",), loaders=("java",)):
     out = []
-    for f, storage in [(f, s) for f in cases for s in storages]:
+    rows = [(f, s, "java") for f in cases for s in storages if "java" in loaders]
+    if "python" in loaders:
+        rows += [(f, "local", "python") for f in cases]
+    for f, storage, loader in rows:
         c = yaml.safe_load(f.read_text(encoding="utf-8"))
         name = str(f.relative_to(CASES).with_suffix(""))
         for store in c.get("stores", ["delta", "iceberg", "files"]):
             if stores is not None and store not in stores:
                 continue
+            if loader == "python" and store != "delta":
+                continue                                             # the Python path writes Delta tables
             if storage != "local" and (store not in ("delta", "iceberg") or c.get("local-only")):
                 continue                                             # the memory and S3 rows: Delta and Iceberg tables (files: local disk)
             if storage in (c.get("not-on") or {}):
                 continue                                             # a storage the case cannot run on, with the reason in the case
-            cid = f"{name}@{store}" + ROW.get(storage, "")
-            work = scratch / cid.replace("/", "_").replace("~", "_")
+            cid = f"{name}@{store}" + ROW.get(storage, "") + (PYTHON if loader == "python" else "")
+            work = scratch / cid.replace("/", "_").replace("~", "_").replace("^", "_")
             work.mkdir(parents=True)
             memory = f"tck{len(out)}" if storage == "mem" else ""
             remote = f"mem://{memory}" if memory else f"s3://tck/{len(out)}" if storage == "s3" else None
@@ -127,7 +139,7 @@ def jobs(cases, scratch, stores=None, storages=("local",)):
             configs = c.get("configs") or {"main": c["config"]}
             for k, y in configs.items():
                 (work / f"{k}.yaml").write_text(subst(y, env), encoding="utf-8")
-            steps = [step(s, work, env) for s in c["steps"]]
+            steps = [step(s, work, env, loader) for s in c["steps"]]
             dumps = []
             for t in c.get("tables", ["risk/scenario-pv"]):
                 dom, tab = t.split("/")
@@ -156,6 +168,18 @@ def s3_classpath():
     return os.pathsep.join(module_cp(ROOT / "java", "lake-tck"))
 
 
+def python_command(scratch):
+    """The Python path's command for the runner (-Dtck.python): the wheel built from python/ into the scratch folder, run by uv with the
+    pins of tools/ci/interop-pins.txt and Polars (the path uses Polars when it is installed), offline first."""
+    uv = shutil.which("uv") or str(Path.home() / ".local" / "bin" / "uv")
+    dist = scratch / "dist"
+    subprocess.run([uv, "build", "--offline", "--quiet", "--wheel", "--out-dir", str(dist), str(ROOT / "python")], check=True)
+    wheel = next(dist.glob("drishti_lake-*.whl"))
+    pins = [l.strip() for l in (ROOT / "tools" / "ci" / "interop-pins.txt").read_text().splitlines() if l.strip() and not l.startswith("#")]
+    withs = [x for p in pins + [str(wheel), "polars==2.1.0", "pyyaml"] for x in ("--with", p)]
+    return [uv, "run", "--offline", "--quiet", "--no-project"] + withs + ["python", "-I", "-m", "drishti_lake", "load"]
+
+
 def module_cp(java, m):
     jar = next(j for j in sorted((java / m / "target").glob(m + "-*.jar")) if not j.name.endswith("-tests.jar"))
     return [str(jar)] + [p for p in (java / m / "target" / "tck-classpath.txt").read_text().strip().split(os.pathsep)
@@ -171,6 +195,8 @@ def main(argv=None):
     ap.add_argument("--storages", default="local,mem,s3",
                     help="local, mem, s3 (comma separated; the reference: local; the host's kit has no memory or S3 row)")
     ap.add_argument("--stores", help="run these stores only (comma separated; the reference: delta,iceberg); default every store a case names")
+    ap.add_argument("--loaders", default="java,python",
+                    help="java, python (comma separated; the reference: java): the Python row runs each Delta case's loads by the Python path")
     a = ap.parse_args(argv)
     cases = sorted(CASES.rglob("*.yaml"))
     if a.only:
@@ -178,7 +204,8 @@ def main(argv=None):
     cp = Path(a.classpath_file).read_text().strip() if a.classpath_file else product_classpath()
     scratch = Path(tempfile.mkdtemp(prefix="lake-tck-", dir=os.environ.get("LAKE_TCK_TMP")))   # the caller's scratch folder
     try:
-        js = jobs(cases, scratch, set(a.stores.split(",")) if a.stores else None, a.storages.split(","))
+        loaders = a.loaders.split(",")
+        js = jobs(cases, scratch, set(a.stores.split(",")) if a.stores else None, a.storages.split(","), loaders)
         java = str(Path(JAVA_HOME) / "bin" / "java")
         results = []
         # one runner for the local and memory rows; the S3 row in its own, with the simulator's class path (never on the others')
@@ -188,11 +215,11 @@ def main(argv=None):
                 continue
             jf, rf, log = scratch / f"jobs-{group}.jsonl", scratch / f"results-{group}.jsonl", scratch / f"runner-{group}.log"
             jf.write_text("".join(json.dumps(j) + "\n" for j, _, _, _ in mine), encoding="utf-8")
-            extra = []
+            extra = [f"-Dtck.python={json.dumps(python_command(scratch))}"] if any(j[0]["case"].endswith(PYTHON) for j in mine) else []
             run_cp = cp
             if group == "s3":
                 run_cp = cp + os.pathsep + s3_classpath()
-                extra = [f"-Dtck.s3={scratch / 's3mock'}"]
+                extra += [f"-Dtck.s3={scratch / 's3mock'}"]
             with open(log, "w") as lf:
                 p = subprocess.run([java, "-Xmx2g", f"-Djava.io.tmpdir={scratch}"] + extra + ["-cp", run_cp, a.runner, str(jf), str(rf)],
                                    cwd=scratch, stdout=lf, stderr=subprocess.STDOUT)

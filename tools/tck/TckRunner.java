@@ -129,7 +129,9 @@ public final class TckRunner {
             a.addAll(List.of("--summary", summary.toString(), "-q"));
         }
         String[] argv = a.toArray(new String[0]);
-        int code = switch (op) {
+        int code;
+        if (step.path("loader").asText("").equals("python")) code = python(argv, ps); else   // the matrix's Python row (LK-7)   // lake-only
+        code = switch (op) {
             case "load" -> LakeLoad.run(RT, argv, ps);
             case "undo" -> LakeUndo.run(RT, argv, ps);
             case "retention" -> LakeRetention.run(RT, argv, ps);
@@ -196,6 +198,21 @@ public final class TckRunner {
         }
         return r;
     }
+
+    /**   // lake-only
+     * A load by the Python path ({@code drishti_lake}): the command {@code -Dtck.python} names (a JSON list: uv, the built wheel, its   // lake-only
+     * pins; tools/tck/tck.py), with the step's arguments; what it prints is what it said, its exit code the step's.   // lake-only
+     */   // lake-only
+    static int python(String[] argv, PrintStream ps) throws Exception {   // lake-only
+        List<String> cmd = new ArrayList<>();   // lake-only
+        JSON.readTree(System.getProperty("tck.python")).forEach(x -> cmd.add(x.asText()));   // lake-only
+        cmd.addAll(List.of(argv));   // lake-only
+        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();   // lake-only
+        byte[] said = p.getInputStream().readAllBytes();   // lake-only
+        int code = p.waitFor();   // lake-only
+        ps.print(new String(said, StandardCharsets.UTF_8));   // lake-only
+        return code;   // lake-only
+    }   // lake-only
 
     /** The parts of a load summary that do not change from run to run (no times, ids, paths or sizes). */
     static JsonNode stable(JsonNode s) {

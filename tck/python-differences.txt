@@ -1,0 +1,4 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# Cases of the Python row (<case>@delta^python: its loads by the Python path) whose answer may differ from their Delta case here, or
+# that the Python path cannot run yet: "<case@delta^python> <step>: <why>". This list ONLY SHRINKS (compare_results.py: a listed case
+# that gives the Delta case's answer must leave it).

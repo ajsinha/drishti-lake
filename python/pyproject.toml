@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved.
+# Drishti Lake. Proprietary: see the LICENSE file at the root of this repository.
+[build-system]
+requires = ["hatchling==1.32.3"]
+build-backend = "hatchling.build"
+
+[project]
+name = "drishti-lake"
+version = "0.9.0.dev0"
+description = "Drishti Lake's Python path: the Java loader's rules and configuration, writing Delta tables (Polars when installed)"
+requires-python = ">=3.11"
+license = {text = "Proprietary"}
+dependencies = ["deltalake==1.6.6", "pyarrow==26.0.1", "pyyaml>=6.0"]
+
+[project.optional-dependencies]
+polars = ["polars==2.1.0"]
+zstd = ["zstandard>=0.25"]
+
+[project.scripts]
+drishti-lake = "drishti_lake.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["drishti_lake"]
