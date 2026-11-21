@@ -347,6 +347,15 @@ final class DeltaTable {
      * each null when not stated. A value of 32 characters or more may be cut by the writer: not used (not stated).
      */
     static String[] textBounds(Row scanFile, String physical) {
+        return textBounds(scanFile, physical, 32);
+    }
+
+    /**
+     * As above, a value of {@code cut} characters or more not stated. The load order uses every stated value (no cut): a load id
+     * ({@code <run>.<file>}) is 32 characters or more with a 7-digit process id and a tenth run in one process, and a writer that cuts
+     * keeps its first characters, the run's time, which is what orders two loads.
+     */
+    static String[] textBounds(Row scanFile, String physical, int cut) {
         String[] out = new String[3];
         try {
             Row add = scanFile.getStruct(InternalScanFileUtils.ADD_FILE_ORDINAL);
@@ -370,9 +379,9 @@ final class DeltaTable {
                     } else if (t == com.fasterxml.jackson.core.JsonToken.FIELD_NAME && depth == 2 && physical.equals(p.currentName())) {
                         p.nextToken();
                         String v = p.getValueAsString();
-                        if ("minValues".equals(section) && v != null && v.length() < 32) {
+                        if ("minValues".equals(section) && v != null && v.length() < cut) {
                             out[0] = v;
-                        } else if ("maxValues".equals(section) && v != null && v.length() < 32) {
+                        } else if ("maxValues".equals(section) && v != null && v.length() < cut) {
                             out[1] = v;
                         } else if ("nullCount".equals(section)) {
                             out[2] = p.getValueAsString();
@@ -397,7 +406,7 @@ final class DeltaTable {
     /** As above, the load id column named {@code loadColumn} in the statistics (its physical name on a column-mapped table). */
     static void newestLast(List<Row> files, String loadColumn) {
         files.sort(java.util.Comparator.comparing((Row f) -> {
-            String max = textBounds(f, loadColumn)[1];
+            String max = textBounds(f, loadColumn, Integer.MAX_VALUE)[1];
             return max == null ? "" : max;
         }).thenComparingLong(f -> InternalScanFileUtils.getAddFileStatus(f).getModificationTime())
                 .thenComparing(f -> InternalScanFileUtils.getAddFileStatus(f).getPath()));
@@ -415,7 +424,7 @@ final class DeltaTable {
     static boolean severalLoads(List<Row> files, String loadColumn) {
         String run = null;
         for (Row f : files) {
-            String[] b = textBounds(f, loadColumn);
+            String[] b = textBounds(f, loadColumn, Integer.MAX_VALUE);
             if (b[0] == null || b[1] == null) {
                 return true;
             }

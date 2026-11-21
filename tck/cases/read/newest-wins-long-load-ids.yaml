@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# two loads of one date (append), the first's load id 31 characters, the second's 32 (a 7-digit process id, a tenth run in one process):
+# the newest load's copy wins whatever the length of the load id (Delta orders by every stated value, not only those under 32)
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 15, scenarios: 2, seed: 6}}
+  more/pv.2026-10-27.jsonl: {pv: {n: 5, scenarios: 2, seed: 7}}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  more: |
+    source: {files: '${in}/more/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: append}
+steps:
+  - load: {args: [--run-id, 20261121T131500.123-1234567-9]}
+  - load: {config: more, args: [--run-id, 20261121T131501.000-1234567-10]}
+  - store: [read-ids, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t']
