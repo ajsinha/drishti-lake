@@ -9,8 +9,9 @@ freeze commit, make_reference.py).
 Every case must give the same line, byte for byte, except those listed in known-differences.txt beside this script (each with the step
 that made it and why). Exit 0 when that holds and every case here ran (status ok); 1 otherwise. A listed case that no longer differs is
 reported, so the list stays true. A case of a store the host never had (BEYOND: its jars cannot run it, make_reference.py --stores) has no
-reference line: it must run here (status ok); check.py holds it stable over two runs. A case of the memory row (`<case>@<store>~mem`, its
-lake on mem://) must give the same line as the reference's local case, its name aside."""
+reference line, nor does a case added here: each must run here (status ok); check.py holds them stable over two runs. A case of the memory row (`<case>@<store>~mem`, its
+lake on mem://) must give the same line as the reference's local case, its name aside. A case of the files store must give the same line
+as its Delta case here (the stores are feature-identical), its name aside."""
 import gzip, json, sys
 from pathlib import Path
 
@@ -40,7 +41,9 @@ def main(argv):
     for c, local in mem.items():                                 # the memory row: the reference's local line under this name
         if local in ref:
             ref[c] = ref[local].replace(json.dumps(local)[1:-1], json.dumps(c)[1:-1], 1)
-    beyond = sorted(c for c in set(new) - set(ref) if c.rpartition("@")[2] in BEYOND)
+    cases_ref = {c.rpartition("@")[0] for c in ref}
+    beyond = sorted(c for c in set(new) - set(ref)                 # a store, or a case, the host's kit never had
+                    if c.rpartition("@")[2] in BEYOND or c.split(MEM)[0].rpartition("@")[0] not in cases_ref)
     only_here = sorted(set(new) - set(ref) - set(beyond))
     if set(ref) - set(new) or only_here:
         print(f"case sets differ: only in the reference {sorted(set(ref) - set(new))[:5]}, only here {only_here[:5]}")
@@ -59,12 +62,17 @@ def main(argv):
         else:
             print(f"DIFFERS: {c}\n  reference: {ref[c][:400]}\n  lake:      {new[c][:400]}")
             bad += 1
+    for c in sorted(x for x in new if x.endswith("@files")):        # the files store equals the Delta store, case by case
+        d = c[:-len("@files")] + "@delta"
+        if d in new and new[d].replace(json.dumps(d)[1:-1], json.dumps(c)[1:-1], 1) != new[c]:
+            print(f"DIFFERS from its Delta case: {c}\n  delta: {new[d][:400]}\n  files: {new[c][:400]}")
+            bad += 1
     failed = sorted(c for c in new if json.loads(new[c]).get("status") != "ok")
     if failed:
         print(f"not ok here: {failed}")
         bad += 1
     print(f"{same} identical ({len(mem)} of them the memory row), {differ} different, {len(known)} known differences listed; "
-          f"{len(beyond)} beyond the reference ({', '.join(sorted(BEYOND))})")
+          f"{len(beyond)} beyond the reference (the {', '.join(sorted(BEYOND))} store, and cases added here)")
     return 1 if bad else 0
 
 

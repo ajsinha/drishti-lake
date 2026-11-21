@@ -15,6 +15,10 @@
  */
 package com.ash.lake.files;
 
+import com.ash.lake.rows.PromotedValues;
+import com.ash.lake.spi.Column;
+import com.ash.lake.spi.ColumnType;
+import com.ash.lake.spi.Columns;
 import com.ash.lake.spi.LoadRow;
 import com.ash.lake.spi.TableWriter;
 import com.ash.lake.spi.WriteSpec;
@@ -25,7 +29,6 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -33,44 +36,89 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The loader's writer into the files store: each writer thread's rows go to a part file beside the day
- * ({@code <table>.jsonl.<name>.part}), one line per row ({@code {"domain", "kind", "id", "date", "doc"}}); the commit joins the parts
- * in the loader's order (after the day's present lines, for an append) into {@code <table>.jsonl.tmp} and moves it onto the day file in
- * one atomic rename, so a reader sees the old day or the new one. A date a replace leaves empty has no day file after the commit.
+ * The loader's writer into the files store: each writer thread's rows go to a part file in the table's log folder, one line per row
+ * ({@code {"domain", "kind", "id", "date", "doc", "columns"}}, {@code columns} holding the table's typed columns: partition values,
+ * promoted values, vectors and the load columns); the commit joins the parts in the loader's order (after the day's present lines, for an
+ * append) into the date's next version ({@link FilesLog}) and publishes the day file. A new table's columns are this load's, as Delta
+ * makes them; an existing table keeps its columns (a column the load brings is left out and reported) and gains the load columns.
  */
 final class FilesWriter implements TableWriter {
 
     private final WriteSpec spec;
-    private final Path domainDir;
+    private final FilesLog log;
     private final List<String> leftOut = new ArrayList<>();
+    private Columns columns;
+    private boolean columnsChanged;
+    /** Per column after the first three: 'p' partition, 'c' promoted, 'v' vector, 'l' load id, 's' source file, 0 none; and its index. */
+    private char[] kind;
+    private int[] index;
 
     FilesWriter(WriteSpec spec, Path root) {
         this.spec = spec;
-        this.domainDir = root.resolve(spec.domain());
+        this.log = new FilesLog(root.resolve(spec.domain()), spec.table());
     }
 
+    static final String LOAD_ID = "_load_id";
+    static final String SOURCE_FILE = "_source_file";
+
     @Override
-    public void open(LoadColumns columns) {
-        leftOut.addAll(spec.partition());
-        leftOut.addAll(columns.promoted());
-        leftOut.addAll(spec.vectors());
+    public void open(LoadColumns c) throws IOException {
+        List<Column> wanted = new ArrayList<>(FilesStore.BASE.all());
+        spec.partition().forEach(p -> wanted.add(new Column(p, ColumnType.STRING)));
+        for (int i = 0; i < c.promoted().size(); i++) {
+            wanted.add(new Column(c.promoted().get(i), c.list()[i] ? ColumnType.STRING_LIST : c.numeric()[i] ? ColumnType.DOUBLE : ColumnType.STRING));
+        }
+        spec.vectors().forEach(v -> wanted.add(new Column(v, ColumnType.DOUBLE_LIST)));
+        if (spec.loadColumns()) {
+            wanted.add(new Column(LOAD_ID, ColumnType.STRING));
+            wanted.add(new Column(SOURCE_FILE, ColumnType.STRING));
+        }
+        Columns before = log.columns();
+        if (before == null) {
+            columns = Columns.of(wanted);
+            columnsChanged = true;
+        } else {
+            List<Column> cols = new ArrayList<>(before.all());
+            if (spec.loadColumns()) {
+                for (String l : List.of(LOAD_ID, SOURCE_FILE)) {
+                    if (before.indexOf(l) < 0) {
+                        cols.add(new Column(l, ColumnType.STRING));       // a table made before the load columns gains them
+                        columnsChanged = true;
+                    }
+                }
+            }
+            columns = Columns.of(cols);
+            wanted.stream().map(Column::name).filter(n -> columns.indexOf(n) < 0).forEach(leftOut::add);
+        }
+        kind = new char[columns.size()];
+        index = new int[columns.size()];
+        for (int i = 3; i < columns.size(); i++) {
+            String n = columns.get(i).name();
+            kind[i] = n.equals(LOAD_ID) ? 'l' : n.equals(SOURCE_FILE) ? 's' : 0;
+            find(n, spec.partition(), 'p', i);
+            find(n, spec.vectors(), 'v', i);
+            find(n, spec.promoted(), 'c', i);
+        }
+    }
+
+    private void find(String name, List<String> in, char k, int i) {
+        int at = in.indexOf(name);
+        if (kind[i] == 0 && at >= 0) {
+            kind[i] = k;
+            index[i] = at;
+        }
     }
 
     @Override
     public void begin(LocalDate date) {
     }
 
-    private Path day(LocalDate date) {
-        return domainDir.resolve(date.toString()).resolve(spec.table() + ".jsonl");
-    }
-
     @Override
     public FileOut newFile(LocalDate date, String[] partitionValues, String name) throws IOException {
-        Path day = day(date);
-        Files.createDirectories(day.getParent());
-        Path part = day.resolveSibling(day.getFileName() + "." + name.replaceAll("[^A-Za-z0-9._-]", "_") + ".part");
+        Path part = log.newContent();
         byte[] head = ("{\"domain\":" + quote(spec.domain()) + ",\"kind\":" + quote(spec.table()) + ",\"id\":").getBytes(StandardCharsets.UTF_8);
         byte[] dated = (",\"date\":\"" + date + "\",\"doc\":").getBytes(StandardCharsets.UTF_8);
+        byte[] cols = ",\"columns\":".getBytes(StandardCharsets.UTF_8);
         OutputStream out = new BufferedOutputStream(Files.newOutputStream(part), 1 << 16);
         return new FileOut() {
             private long rows;
@@ -80,13 +128,16 @@ final class FilesWriter implements TableWriter {
             public void write(LoadRow row) throws IOException {
                 byte[] id = quote(new String(row.id(), StandardCharsets.UTF_8)).getBytes(StandardCharsets.UTF_8);
                 byte[] doc = row.doc();
+                byte[] values = FilesLog.JSON.writeValueAsBytes(values(row));
                 out.write(head);
                 out.write(id);
                 out.write(dated);
                 out.write(doc);
+                out.write(cols);
+                out.write(values);
                 out.write('}');
                 out.write('\n');
-                bytes += head.length + id.length + dated.length + doc.length + 2;
+                bytes += head.length + id.length + dated.length + doc.length + cols.length + values.length + 2;
                 rows++;
             }
 
@@ -103,46 +154,97 @@ final class FilesWriter implements TableWriter {
         };
     }
 
+    /** The row's typed columns (nulls left out: a reader reads a missing column as null). */
+    private Map<String, Object> values(LoadRow row) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (int i = 3; i < columns.size(); i++) {
+            Column c = columns.get(i);
+            int k = index[i];
+            Object v = switch (kind[i]) {
+                case 'p' -> row.partition(k);
+                case 'v' -> vector(row.vector(k));
+                case 'l' -> text(row.loadId());
+                case 's' -> text(row.sourceFile());
+                case 'c' -> c.type() == ColumnType.DOUBLE ? PromotedValues.number(row, k)
+                        : c.type() == ColumnType.STRING_LIST ? PromotedValues.list(row, k) : PromotedValues.text(row, k);
+                default -> null;
+            };
+            if (v != null) {
+                out.put(c.name(), v);
+            }
+        }
+        return out;
+    }
+
+    private static List<Double> vector(double[] v) {
+        if (v == null) {
+            return null;
+        }
+        List<Double> out = new ArrayList<>(v.length);
+        for (double d : v) {
+            out.add(Double.isNaN(d) ? null : d);
+        }
+        return out;
+    }
+
+    private static String text(byte[] b) {
+        return b == null ? null : new String(b, StandardCharsets.UTF_8);
+    }
+
     private static String quote(String s) {
         return "\"" + new String(JsonStringEncoder.getInstance().quoteAsString(s)) + "\"";
     }
 
     @Override
     public long commit(LocalDate date, List<WrittenFile> files) throws IOException {
-        Path day = day(date);
-        if (files.isEmpty()) {
-            if (!spec.appends()) {
-                Files.deleteIfExists(day);
-            }
-            return 0;
+        if (columnsChanged) {
+            log.columns(columns);
+            columnsChanged = false;
         }
-        Path tmp = day.resolveSibling(day.getFileName() + ".tmp");
-        try (OutputStream out = Files.newOutputStream(tmp)) {
-            if (spec.appends() && Files.isRegularFile(day)) {
-                Files.copy(day, out);
-            }
-            for (WrittenFile f : files) {
-                Files.copy((Path) f.handle(), out);
+        boolean append = spec.appends();
+        if (files.isEmpty() && (append || !Files.isRegularFile(log.day(date)))) {
+            return -1;                                             // nothing to add, or nothing to remove
+        }
+        Path content = null;
+        long rows = 0;
+        if (!files.isEmpty()) {
+            content = log.newContent();
+            try (OutputStream out = Files.newOutputStream(content)) {
+                if (append && Files.isRegularFile(log.day(date))) {
+                    rows += FilesStore.count(log.day(date));
+                    Files.copy(log.day(date), out);
+                }
+                for (WrittenFile f : files) {
+                    Files.copy((Path) f.handle(), out);
+                    rows += f.rows();
+                }
             }
         }
-        Files.move(tmp, day, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        FilesLog.Commit c = log.commit(date, append ? "append" : "replace", spec.loadIds(), append ? spec.batchId() : null, rows, content);
         for (WrittenFile f : files) {
             Files.deleteIfExists((Path) f.handle());
         }
-        return 0;
+        return c.version();
     }
 
     @Override
-    public boolean appended(LocalDate date) {
-        return false;
+    public boolean appended(LocalDate date) throws IOException {
+        String batch = spec.batchId();
+        return batch != null && log.commits().stream().anyMatch(c -> c.op().equals("append") && batch.equals(c.batch()) && c.date().equals(date));
     }
 
     @Override
     public Map<String, String> columnTypes() {
         Map<String, String> out = new LinkedHashMap<>();
-        out.put("id", "string");
-        out.put("business_date", "date");
-        out.put("doc", "string");
+        for (Column c : columns.all()) {
+            out.put(c.name(), switch (c.type()) {
+                case DOUBLE -> "double";
+                case DATE -> "date";
+                case STRING_LIST -> "list";
+                case DOUBLE_LIST -> "vector";
+                default -> "string";
+            });
+        }
         return out;
     }
 

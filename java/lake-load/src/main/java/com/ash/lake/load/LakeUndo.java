@@ -149,6 +149,36 @@ public final class LakeUndo {
             }
             out.addAll(undoTable(runtime, LakeRetention.tablePath(root, name), name, id, dryRun));
         }
+        for (String name : filesTables(runtime, root)) {                // the files store's tables, through the store
+            if (!only.isEmpty() && !only.contains(name)) {
+                continue;
+            }
+            int slash = name.indexOf('/');
+            var table = new com.ash.lake.spi.TableRef(Path.of(root).toAbsolutePath().toString(), name.substring(0, slash), name.substring(slash + 1));
+            for (com.ash.lake.spi.DateChange c : Stores.of(runtime, com.ash.lake.files.FilesStore.FORMAT).undo(runtime, table, id, dryRun)) {
+                out.add(new Done(name, c.date().toString(), c.removed(), c.restored(), c.restored() > 0, c.version()));
+            }
+        }
+        return out;
+    }
+
+    /** The files store's tables under a local lake root: {@code <domain>/_log/<table>/columns.json}. */
+    static List<String> filesTables(com.ash.lake.LakeRuntime runtime, String root) throws IOException {
+        List<String> out = new ArrayList<>();
+        if (runtime.supports(root) || !Files.isDirectory(Path.of(root))) {
+            return out;
+        }
+        try (Stream<Path> domains = Files.list(Path.of(root))) {
+            for (Path d : domains.filter(Files::isDirectory).sorted().toList()) {
+                Path logs = d.resolve("_log");
+                if (Files.isDirectory(logs)) {
+                    try (Stream<Path> tables = Files.list(logs)) {
+                        tables.filter(t -> Files.isRegularFile(t.resolve("columns.json"))).sorted()
+                                .forEach(t -> out.add(d.getFileName() + "/" + t.getFileName()));
+                    }
+                }
+            }
+        }
         return out;
     }
 

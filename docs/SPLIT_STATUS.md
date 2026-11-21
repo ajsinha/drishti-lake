@@ -43,7 +43,13 @@ runtime to every call (`LakeLoad.run(runtime, ..)`, `DataLoadSettings`, `Catalog
 
 ## Next steps
 
-1. The files store's six gaps closed (owner: Delta, Iceberg and files feature-identical); then L9 to L14. `JsonlLoader`
+1. The files store's last gap, `TIME_TRAVEL` (an SPI read of an earlier version for all three stores, and its parity case); then
+   L9 to L14. Five gaps are closed (owner, 2026-11-21: Delta, Iceberg and files feature-identical): the files store keeps a log per table
+   (`<root>/<domain>/_log/<table>/`: `columns.json`, `<n>.json` per commit, `<n>.jsonl` the date's content at that version; the day file
+   published from it), its lines carry the typed columns (promoted, `list<string>`, vectors, load columns; one rule with Delta's,
+   `PromotedValues`), an append's batch is committed once, undo goes through the store (`LakeUndo` finds files tables), deletes and row
+   retention commit to the log; every parity case runs on all three stores and the files line must equal the Delta line
+   (`compare_results.py`). `JsonlLoader`
    (rows already wrapped with domain and kind) is a second writer of the files store beside the loader's `FilesWriter`: L10 folds it
    into the loader (one way per job).
 2. The parity kit grows toward the 60% harvest as each step goes (child tables, list columns, promoted columns, flatten, latest-by,

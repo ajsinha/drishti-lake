@@ -107,14 +107,7 @@ final class TargetRules {
             return null;
         }
         if (type.id() == Type.Id.DOUBLE) {
-            if (tag == LoadRow.NUM) {
-                return r.num(i);
-            }
-            try {
-                return Double.parseDouble(new String(r.text(i), StandardCharsets.UTF_8).trim());
-            } catch (NumberFormatException e) {
-                return null;
-            }
+            return com.ash.lake.rows.PromotedValues.number(r, i);
         }
         if (type.id() == Type.Id.LIST) {
             return listValue(r, i, tag, (Type.ListType) type);
@@ -139,17 +132,7 @@ final class TargetRules {
         if (!(type.element() instanceof Type.Primitive p) || p.id() != Type.Id.STRING) {
             return null;
         }
-        if (tag == LoadRow.NUM) {
-            return List.of(r.numText(i));
-        }
-        String text = new String(r.text(i), StandardCharsets.UTF_8);
-        if (tag == LoadRow.STR) {
-            return List.of(r.text(i));
-        }
-        List<String> values = com.ash.lake.rows.ListValues.of(text);
-        if (values == null) {
-            return List.of(r.text(i));                                  // an object or a nested list: its JSON text, the one element
-        }
+        List<String> values = com.ash.lake.rows.PromotedValues.list(r, i);
         List<byte[]> out = new ArrayList<>(values.size());
         for (String v : values) {
             out.add(v.getBytes(StandardCharsets.UTF_8));

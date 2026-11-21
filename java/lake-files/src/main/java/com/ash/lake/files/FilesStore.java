@@ -50,24 +50,21 @@ import java.util.stream.Stream;
  * The files store (LK-8): one JSON-lines file per table and business date, {@code <root>/<domain>/<date>/<table>.jsonl}, a line per
  * record ({@code {"domain", "kind", "id", "date", "doc"}}, or a plain document whose {@code id} names it), as the file connector reads
  * it ({@link JsonlDay}). A date is written whole into a file beside it and moved into place, so a reader sees the old day or the new one.
- * Its rows are {@code id}, {@code business_date} and {@code doc}; what a plain file cannot do is declared in {@link #capabilities()}.
- * Local folders only.
+ * Its rows are {@code id}, {@code business_date}, {@code doc} and the table's typed columns (each line's {@code columns}); its log
+ * ({@link FilesLog}) keeps every version of a date with the load and batch that wrote it, for undo, a batch's retry and reading an earlier
+ * version. A table of day files without a log (written by hand) reads as {@code id}, {@code business_date} and {@code doc}. Local folders
+ * only.
  */
 public final class FilesStore implements TableStore {
 
     public static final String FORMAT = "files";
 
-    /** The columns every table of this store has. */
-    public static final Columns COLUMNS = Columns.of(List.of(new Column("id", ColumnType.STRING), new Column("business_date", ColumnType.DATE),
+    /** The columns every table of this store has (first, in this order). */
+    public static final Columns BASE = Columns.of(List.of(new Column("id", ColumnType.STRING), new Column("business_date", ColumnType.DATE),
             new Column("doc", ColumnType.STRING)));
 
     private static final Capabilities CAPABILITIES = Capabilities.allBut(
-            Capability.APPEND_BATCH_ONCE, "a day file records no batch: an append could not be told from its retry (append without a batch id)",
-            Capability.UNDO, "a day file records neither the load that wrote it nor the day before it: a load cannot be taken out",
-            Capability.TIME_TRAVEL, "a day file is replaced whole: no earlier version is kept",
-            Capability.SCHEMA_EVOLUTION, "a record is its document: there are no columns to add",
-            Capability.PROMOTED_COLUMNS, "a record is its document: promoted fields are read from it, not kept beside it",
-            Capability.TYPED_LIST_COLUMNS, "a record is its document: lists and vectors stay inside it");
+            Capability.TIME_TRAVEL, "no operation of the store reads an earlier version yet (the log keeps every version)");
 
     private FilesStore() {
     }
@@ -136,7 +133,12 @@ public final class FilesStore implements TableStore {
         if (!exists(runtime, table)) {
             throw new IOException("no files table at " + domainDir(table) + "/<date>/" + table.table() + ".jsonl");
         }
-        return COLUMNS;
+        return columnsOf(table);
+    }
+
+    private static Columns columnsOf(TableRef table) throws IOException {
+        Columns c = new FilesLog(domainDir(table), table.table()).columns();
+        return c == null ? BASE : c;
     }
 
     @Override
@@ -146,6 +148,11 @@ public final class FilesStore implements TableStore {
             out.put(e.getKey(), lines(e.getValue()));
         }
         return out;
+    }
+
+    /** The rows of a day file. */
+    static long count(Path f) throws IOException {
+        return lines(f);
     }
 
     private static long lines(Path f) throws IOException {
@@ -160,10 +167,11 @@ public final class FilesStore implements TableStore {
      */
     @Override
     public RowScan scan(LakeRuntime runtime, TableRef table, ScanRequest request) throws IOException {
-        Columns out = request.columns().isEmpty() ? COLUMNS : project(request.columns());
+        Columns all = columnsOf(table);
+        Columns out = request.columns().isEmpty() ? all : project(all, request.columns());
         int[] picks = new int[out.size()];
         for (int i = 0; i < picks.length; i++) {
-            picks[i] = COLUMNS.indexOf(out.get(i).name());
+            picks[i] = all.indexOf(out.get(i).name());
         }
         List<Row> rows = new ArrayList<>();
         for (Map.Entry<LocalDate, Path> e : days(table).entrySet()) {
@@ -186,7 +194,7 @@ public final class FilesStore implements TableStore {
                     if (l.id() == null) {
                         continue;
                     }
-                    Row whole = new Row(COLUMNS, new Object[] {l.id(), e.getKey(), new String(l.doc(), StandardCharsets.UTF_8)});
+                    Row whole = new Row(all, values(all, l.id(), e.getKey(), new String(l.doc(), StandardCharsets.UTF_8), line));
                     if (!request.where().test(whole)) {
                         continue;
                     }
@@ -201,23 +209,41 @@ public final class FilesStore implements TableStore {
         return RowScan.of(out, rows);
     }
 
-    private static Columns project(List<String> names) {
+    /** A line's values: its id, date and document, then the table's typed columns from its {@code columns} (missing: null). */
+    private static Object[] values(Columns all, String id, LocalDate date, String doc, String line) throws IOException {
+        Object[] v = new Object[all.size()];
+        v[0] = id;
+        v[1] = date;
+        v[2] = doc;
+        if (all.size() > 3 && line.contains("\"columns\"")) {
+            com.fasterxml.jackson.databind.JsonNode cols = FilesLog.JSON.readTree(line).path("columns");
+            for (int i = 3; i < v.length; i++) {
+                com.fasterxml.jackson.databind.JsonNode n = cols.get(all.get(i).name());
+                v[i] = n == null || n.isNull() ? null : switch (all.get(i).type()) {
+                    case DOUBLE -> n.asDouble();
+                    case STRING_LIST -> { List<String> l = new ArrayList<>(); n.forEach(x -> l.add(x.asText())); yield l; }
+                    case DOUBLE_LIST -> { List<Double> l = new ArrayList<>(); n.forEach(x -> l.add(x.isNull() ? null : x.asDouble())); yield l; }
+                    default -> n.isTextual() ? n.asText() : n.toString();
+                };
+            }
+        }
+        return v;
+    }
+
+    private static Columns project(Columns all, List<String> names) {
         List<Column> cols = new ArrayList<>();
         for (String n : names) {
-            int i = COLUMNS.indexOf(n);
+            int i = all.indexOf(n);
             if (i < 0) {
-                throw new IllegalArgumentException("no column " + n + " in a files table (it has " + COLUMNS.names() + ")");
+                throw new IllegalArgumentException("no column " + n + " in a files table (it has " + all.names() + ")");
             }
-            cols.add(COLUMNS.get(i));
+            cols.add(all.get(i));
         }
         return Columns.of(cols);
     }
 
     @Override
     public TableWriter writer(WriteSpec spec) {
-        if (spec.appends() && spec.batchId() != null) {
-            CAPABILITIES.require(FORMAT, Capability.APPEND_BATCH_ONCE);
-        }
         if (!spec.slice().isEmpty()) {
             throw new UnsupportedOperationException("the files store holds one day file per table: a shared table's slice " + spec.slice()
                     + " cannot be replaced alone");
@@ -241,10 +267,83 @@ public final class FilesStore implements TableStore {
         return (List<Map<String, Object>>) got.get("dates");
     }
 
+    /**
+     * Undoes load {@code loadId} as the Delta store does: each date whose rows hold the load loses them, and a date the load replaced gets
+     * back the rows it had before (the version before the load's commit), with the rows later loads appended kept. One commit per date.
+     */
     @Override
-    public List<DateChange> undo(LakeRuntime runtime, TableRef table, String loadId, boolean dryRun) {
-        CAPABILITIES.require(FORMAT, Capability.UNDO);
-        return List.of();
+    public List<DateChange> undo(LakeRuntime runtime, TableRef table, String loadId, boolean dryRun) throws IOException {
+        FilesLog log = new FilesLog(domainDir(table), table.table());
+        List<DateChange> out = new ArrayList<>();
+        if (!log.exists()) {
+            return out;
+        }
+        List<FilesLog.Commit> commits = log.commits();
+        for (Map.Entry<LocalDate, Path> e : days(table).entrySet()) {
+            List<String> keep = new ArrayList<>();
+            long removed = 0;
+            for (String line : java.nio.file.Files.readAllLines(e.getValue(), StandardCharsets.UTF_8)) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                if (loadId.equals(FilesLog.JSON.readTree(line).path("columns").path(FilesWriter.LOAD_ID).asText(null))) {
+                    removed++;
+                } else {
+                    keep.add(line);
+                }
+            }
+            if (removed == 0) {
+                continue;
+            }
+            List<String> restored = List.of();
+            FilesLog.Commit wrote = null;
+            for (FilesLog.Commit c : commits) {
+                if (c.date().equals(e.getKey()) && c.op().equals("replace") && c.loads().stream().anyMatch(l -> l.equals(loadId))) {
+                    wrote = c;
+                }
+            }
+            if (wrote != null) {
+                restored = log.lines(log.at(commits, e.getKey(), wrote.version() - 1));
+            }
+            List<String> content = new ArrayList<>(restored);
+            content.addAll(keep);
+            long version = -1;
+            if (!dryRun) {
+                version = rewrite(log, e.getKey(), "undo", List.of(loadId), content).version();
+            }
+            out.add(new DateChange(e.getKey(), removed, restored.size(), version));
+        }
+        return out;
+    }
+
+    /** Commits {@code lines} as the date's next version ({@code op}: {@code undo}, {@code retention}); none: the date removed. */
+    static FilesLog.Commit rewrite(FilesLog log, LocalDate date, String op, List<String> loads, List<String> lines) throws IOException {
+        Path content = null;
+        if (!lines.isEmpty()) {
+            content = log.newContent();
+            java.nio.file.Files.write(content, (String.join("\n", lines) + "\n").getBytes(StandardCharsets.UTF_8));
+        }
+        return log.commit(date, op, loads, null, lines.size(), content);
+    }
+
+    /**
+     * The day {@code date} of the table {@code domain/table} of the lake at {@code root} rewritten with {@code lines} in one commit (the
+     * lake's row retention); a table without a log has its day file replaced atomically.
+     */
+    public static void rewriteDay(String root, String domain, String table, LocalDate date, List<String> lines, String op) throws IOException {
+        FilesLog log = new FilesLog(domain.isEmpty() ? local(root) : local(root).resolve(domain), table);
+        if (log.exists()) {
+            rewrite(log, date, op, List.of(), lines);
+            return;
+        }
+        Path f = log.day(date);
+        if (lines.isEmpty()) {
+            java.nio.file.Files.deleteIfExists(f);
+            return;
+        }
+        Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
+        java.nio.file.Files.write(tmp, (String.join("\n", lines) + "\n").getBytes(StandardCharsets.UTF_8));
+        java.nio.file.Files.move(tmp, f, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
     }
 
     /**
@@ -279,8 +378,13 @@ public final class FilesStore implements TableStore {
             }
         }
         if (!dryRun) {
+            FilesLog log = new FilesLog(base, table);
             for (Path f : gone) {
-                Files.delete(f);
+                if (log.exists()) {
+                    log.commit(LocalDate.parse(f.getParent().getFileName().toString()), "delete", List.of(), null, 0, null);   // the date's versions kept
+                } else {
+                    Files.delete(f);
+                }
             }
         }
         Map<String, Object> out = new LinkedHashMap<>();

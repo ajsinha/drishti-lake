@@ -92,7 +92,7 @@ def jobs(cases, scratch, stores=None, storages=("local",)):
     for f, storage in [(f, s) for f in cases for s in storages]:
         c = yaml.safe_load(f.read_text(encoding="utf-8"))
         name = str(f.relative_to(CASES).with_suffix(""))
-        for store in c.get("stores", ["delta", "iceberg"]):
+        for store in c.get("stores", ["delta", "iceberg", "files"]):
             if stores is not None and store not in stores:
                 continue
             if storage == "mem" and (store not in ("delta", "iceberg") or c.get("local-only")):

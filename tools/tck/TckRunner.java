@@ -131,7 +131,6 @@ public final class TckRunner {
                 if (!text.isEmpty() && (code != 0 || !op.equals("load"))) {
                     s.put("said", text);                    // a refusal's reason, an upkeep's answer (paths become ${work})
                 }
-                if (code != 0 && op.equals("load") && "files".equals(job.path("dumps").path(0).path("format").asText())) s.put("refused", said.toString(StandardCharsets.UTF_8).replaceAll("(?s).*error=\"([^\"]*)\".*", "$1").strip());   // lake-only: a capability case's reason
                 if (summary != null) {
                     if (Files.size(summary) > 0) {
                         s.set("summary", stable(JSON.readTree(summary.toFile())));

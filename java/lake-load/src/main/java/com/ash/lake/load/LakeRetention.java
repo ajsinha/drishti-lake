@@ -385,14 +385,8 @@ public final class LakeRetention {
             if (dryRun) {
                 continue;
             }
-            Path f = where.get(e.getKey());
-            if (keep.isEmpty()) {
-                Files.delete(f);                                   // a day left empty: its file goes
-                continue;
-            }
-            Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
-            Files.write(tmp, (String.join("\n", keep) + "\n").getBytes(StandardCharsets.UTF_8));
-            Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);   // a running server never reads half a day
+            // one commit of the table's log (a day left empty: its day file goes); a running server never reads half a day
+            com.ash.lake.files.FilesStore.rewriteDay(root, domain, kind, java.time.LocalDate.parse(e.getKey()), keep, "retention");
         }
         return out;
     }

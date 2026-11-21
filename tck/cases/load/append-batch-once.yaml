@@ -1,6 +1,5 @@
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
-# the files store cannot UNDO (declared): the store refuses with the reason, the table unchanged
-stores: [files]
+# an append naming its batch is committed once per date: the second run of batch b1 is skipped, on every store
 inputs:
   pv.2026-10-27.jsonl: {pv: {n: 12, scenarios: 2, dates: 1, seed: 1}}
   pv.2026-10-28.jsonl: {pv: {n: 12, scenarios: 2, dates: 1, seed: 2, start: '2026-10-28'}}
@@ -15,7 +14,8 @@ config: |
     lake: '${lake}'
     domain: risk
     kind: scenario-pv
-    mode: replace
+    mode: append
+    batch-id: b1
 steps:
   - load: []
-  - store: [undo, files, '${lake}', risk, scenario-pv, any-load]
+  - load: []
