@@ -118,4 +118,8 @@ Entries are written per release; unreleased work is listed first.
   store's second writer) is deleted; parity case `load/loader-rows` equal on Delta, Iceberg, files and the memory row. For the host's
   adapter (G4): `data load --store files` becomes the loader with `format: loader-rows`, one table a load (a tar's
   `<kind>/<date>/` members as the loader's archives).
+- **L12, first part: the host's bill of materials gone.** `spring-boot-dependencies` is no longer imported; `java/pom.xml` pins the
+  product's own versions (39 libraries, and 25 for the S3 mock alone, test support, leaving with it at L9), each the version the build
+  resolved with the bill, so every module's resolved dependencies are unchanged (checked: `dependency:list` before and after equal).
+  The exemption is removed from `SPLIT_EXEMPTIONS.md`.
 - Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).

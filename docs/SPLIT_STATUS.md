@@ -17,7 +17,7 @@ retired from Drishti in G4, so `LakeStore` comes here with the native path only 
 | L6 | per-instance runtime | **done** | `LakeRuntime` replaces `LakeOptions.current()`, `LakeCatalog.current()`, `StorageProviders` (`ServiceLoader`), `Lakes.useProperties`, `NamedLakeSettings.useView` and the static caches; no static registry, `ServiceLoader` or hidden system-property read left in main code; `TwoRuntimesTest`; `StartOnFewCoresTest` green; kit 30/30 |
 | L7 | table layer | **done** | `LakeCheck` (now `lake-load`) and `LakeUndo` read Delta through the Kernel (snapshot, commit range) and Iceberg through iceberg-core: official-libraries list empty; hostcompat 6 → 0 (`com.ash.lake.rows`, module gone); persisted names written `lake.*`, read both; TCK 15 → 16 cases, kit 32/32. part 2: `LakeStore`, `NativeLake`, `NamedTables`, `NewTables` moved with history, native path only (`engine: hadoop` refused, LK-9), `LakeStoreTest`; Hadoop on the class path reviewed (until L12). part 3: the `TableStore` SPI (`com.ash.lake.spi`, product types only), the loader writes through `Stores.of(runtime, format)`; `java/api-surface.txt` + `ApiSurfaceTest` (no library type in a public signature; any API change rewrites the file in the same commit) |
 | L8 | stores | **done** | part 1: the files store moved (`JsonlDay`, `JsonlFormat`, `JsonlLoader`, 10 commits) into `lake-files`; `FilesStore` a full `TableStore`. Part 2: the memory lake moved with its history (`tools/split/l8b-paths.txt`, 28 commits; `MemoryBinding` stays in the host) into `lake-memory` (`com.ash.lake.memory`, `.store`): the host's connectors behind `RowSource` (`lake-api`: documents, fetch by ids, mark, memory-only connectors) for `ReplenishSource` and `Retention` (`LK-1005`); `MemoryStores` per runtime, held by the `MemoryStorageProvider` the host registers (`.storage(..)`; no static store, no `ServiceLoader`); `MemoryRowSourceTest` (two runtimes, two sets of stores); the parity kit's memory row (`<case>@<store>~mem`, Delta and Iceberg on `mem://`) equal to the reference's local results (32 of 32); undo and retention find tables through the runtime's storage |
-| L9 to L14 | TCK, Python, contracts, API, docs, release | not started | |
+| L9 to L14 | TCK, Python, contracts, API, docs, release | L12 begun: the host's bill of materials replaced by the product's own pinned versions (resolved dependencies unchanged); the rest not started | |
 
 ## What the move left for later (each listed with its step)
 
@@ -25,7 +25,8 @@ retired from Drishti in G4, so `LakeStore` comes here with the native path only 
   `LoaderRows`, `MinioServer`, `ConditionalWrites` and the Python path's Delta-feature fixtures (with the TCK cases that use them).
 - **Moved but owing the host** ([SPLIT_EXEMPTIONS](../java/SPLIT_EXEMPTIONS.md)): 41 host types in `hostcompat` (L4: settings, TLS,
   proxy, errors, small utilities; L5: packs and modules; L7: row and column types); 79 files with a host word; 2 parked checks; the
-  host's Spring Boot bill of materials for versions only (L12).
+  host's Spring Boot bill of materials for versions only (gone at L12: the product pins its own). Now: 0 host types, 68 host-word
+  files, 1 parked check.
 - **Tests that stayed in Drishti** (they test its adapters or read through its `SourcePlugin`s): their table-layer cases are harvested
   into the TCK at L2 and L9, so nothing they prove is lost.
 

@@ -17,7 +17,6 @@ go down from its value at the move. **This list only shrinks**; at `v1.0.0` it i
 
 | What | Where | Until |
 |---|---|---|
-| `org.springframework.boot:spring-boot-dependencies` imported as a bill of materials (versions only: the host's parent chose Jackson, SLF4J, JUnit, AssertJ, Logback and the libraries' shared transitive versions; no Spring artifact reaches a compile or run-time class path, the enforcer says so) | `java/pom.xml` | L12: `lake-bom` pins its own versions |
 | `org.jetbrains.kotlin:kotlin-bom` (the host's override of its parent's Kotlin version, for the S3 mock) | `java/pom.xml` | with the S3 mock |
 | `com.adobe.testing:s3mock` (a Spring Boot application; test support only, in `lake-tck`, whose enforcer run is off for that reason) | `lake-tck`, test scope elsewhere | L9: the TCK's storage cases decide the S3 simulator |
 | Hadoop client (`hadoop-client-api`, `hadoop-client-runtime`) on the class path of `lake-io` and `lake-delta`: Parquet's writer and the Delta kernel's defaults name Hadoop types; no Hadoop file system is used (`NoHadoopFileSystemTest`; the Hadoop engine is not in the product, LK-9, `LakeStore` native only) | `lake-io`, `lake-delta` | L12 (reviewed at L7: `parquet-hadoop` and the Kernel's default engine need Hadoop's `Configuration` on the class path; a Hadoop-free Parquet path is the way out) |

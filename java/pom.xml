@@ -52,10 +52,6 @@
     <caffeine.version>3.2.4</caffeine.version>
     <testcontainers.version>2.0.5</testcontainers.version>
     <s3mock.version>4.12.4</s3mock.version>
-    <!-- SPLIT EXEMPTION (SPLIT_EXEMPTIONS.md): the versions the host's Spring Boot parent chose for Jackson, SLF4J, JUnit, AssertJ,
-         Logback and the libraries' shared transitive dependencies, imported as a bill of materials (versions only: no Spring
-         artifact on any class path but the S3 mock's, test scope). Leaves at L12, when lake-bom pins its own. -->
-    <host-boot-bom.version>3.5.16</host-boot-bom.version>
     <kotlin.version>2.2.21</kotlin.version>
     <lake.test.forks>4</lake.test.forks>
     <argLine></argLine>
@@ -68,10 +64,73 @@
         <groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-bom</artifactId><version>${kotlin.version}</version>
         <type>pom</type><scope>import</scope>
       </dependency>
-      <dependency>
-        <groupId>org.springframework.boot</groupId><artifactId>spring-boot-dependencies</artifactId><version>${host-boot-bom.version}</version>
-        <type>pom</type><scope>import</scope>
-      </dependency>
+      <!-- the product's own versions (L12: the host's bill of materials is gone; each is the version the build resolved with it,
+           so the class paths are unchanged): the libraries' shared transitive dependencies, Jackson, SLF4J, Logback, JUnit, AssertJ -->
+      <dependency><groupId>ch.qos.logback</groupId><artifactId>logback-classic</artifactId><version>1.5.34</version></dependency>
+      <dependency><groupId>ch.qos.logback</groupId><artifactId>logback-core</artifactId><version>1.5.34</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-annotations</artifactId><version>2.21</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-core</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.dataformat</groupId><artifactId>jackson-dataformat-xml</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.dataformat</groupId><artifactId>jackson-dataformat-yaml</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.datatype</groupId><artifactId>jackson-datatype-jdk8</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.datatype</groupId><artifactId>jackson-datatype-jsr310</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>com.fasterxml.jackson.module</groupId><artifactId>jackson-module-parameter-names</artifactId><version>2.21.4</version></dependency>
+      <dependency><groupId>commons-codec</groupId><artifactId>commons-codec</artifactId><version>1.18.0</version></dependency>
+      <dependency><groupId>commons-pool</groupId><artifactId>commons-pool</artifactId><version>1.6</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-buffer</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-codec</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-codec-http</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-codec-http2</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-common</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-handler</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-resolver</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-transport</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-transport-classes-epoll</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>io.netty</groupId><artifactId>netty-transport-native-unix-common</artifactId><version>4.1.135.Final</version></dependency>
+      <dependency><groupId>net.bytebuddy</groupId><artifactId>byte-buddy</artifactId><version>1.17.8</version></dependency>
+      <dependency><groupId>org.apache.commons</groupId><artifactId>commons-lang3</artifactId><version>3.17.0</version></dependency>
+      <dependency><groupId>org.apache.httpcomponents</groupId><artifactId>httpcore</artifactId><version>4.4.16</version></dependency>
+      <dependency><groupId>org.apache.httpcomponents.client5</groupId><artifactId>httpclient5</artifactId><version>5.5.2</version></dependency>
+      <dependency><groupId>org.apache.httpcomponents.core5</groupId><artifactId>httpcore5</artifactId><version>5.3.6</version></dependency>
+      <dependency><groupId>org.apache.httpcomponents.core5</groupId><artifactId>httpcore5-h2</artifactId><version>5.3.6</version></dependency>
+      <dependency><groupId>org.assertj</groupId><artifactId>assertj-core</artifactId><version>3.27.7</version></dependency>
+      <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.12.2</version></dependency>
+      <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter-api</artifactId><version>5.12.2</version></dependency>
+      <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter-engine</artifactId><version>5.12.2</version></dependency>
+      <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter-params</artifactId><version>5.12.2</version></dependency>
+      <dependency><groupId>org.junit.platform</groupId><artifactId>junit-platform-commons</artifactId><version>1.12.2</version></dependency>
+      <dependency><groupId>org.junit.platform</groupId><artifactId>junit-platform-engine</artifactId><version>1.12.2</version></dependency>
+      <dependency><groupId>org.reactivestreams</groupId><artifactId>reactive-streams</artifactId><version>1.0.4</version></dependency>
+      <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-api</artifactId><version>2.0.18</version></dependency>
+      <dependency><groupId>org.testcontainers</groupId><artifactId>testcontainers</artifactId><version>2.0.5</version></dependency>
+      <dependency><groupId>org.yaml</groupId><artifactId>snakeyaml</artifactId><version>2.4</version></dependency>
+      <!-- the S3 mock's (a Spring Boot application, test support only; leaves with it, L9) -->
+      <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-commons</artifactId><version>1.15.12</version></dependency>
+      <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-observation</artifactId><version>1.15.12</version></dependency>
+      <dependency><groupId>jakarta.annotation</groupId><artifactId>jakarta.annotation-api</artifactId><version>2.1.1</version></dependency>
+      <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-api</artifactId><version>2.24.3</version></dependency>
+      <dependency><groupId>org.apache.logging.log4j</groupId><artifactId>log4j-to-slf4j</artifactId><version>2.24.3</version></dependency>
+      <dependency><groupId>org.apache.tomcat.embed</groupId><artifactId>tomcat-embed-core</artifactId><version>10.1.55</version></dependency>
+      <dependency><groupId>org.apache.tomcat.embed</groupId><artifactId>tomcat-embed-el</artifactId><version>10.1.55</version></dependency>
+      <dependency><groupId>org.apache.tomcat.embed</groupId><artifactId>tomcat-embed-websocket</artifactId><version>10.1.55</version></dependency>
+      <dependency><groupId>org.jspecify</groupId><artifactId>jspecify</artifactId><version>1.0.0</version></dependency>
+      <dependency><groupId>org.slf4j</groupId><artifactId>jul-to-slf4j</artifactId><version>2.0.18</version></dependency>
+      <dependency><groupId>org.springframework</groupId><artifactId>spring-aop</artifactId><version>6.2.19</version></dependency>
+      <dependency><groupId>org.springframework</groupId><artifactId>spring-beans</artifactId><version>6.2.19</version></dependency>
+      <dependency><groupId>org.springframework</groupId><artifactId>spring-context</artifactId><version>6.2.19</version></dependency>
+      <dependency><groupId>org.springframework</groupId><artifactId>spring-core</artifactId><version>6.2.19</version></dependency>
+      <dependency><groupId>org.springframework</groupId><artifactId>spring-expression</artifactId><version>6.2.19</version></dependency>
+      <dependency><groupId>org.springframework</groupId><artifactId>spring-jcl</artifactId><version>6.2.19</version></dependency>
+      <dependency><groupId>org.springframework</groupId><artifactId>spring-web</artifactId><version>6.2.19</version></dependency>
+      <dependency><groupId>org.springframework</groupId><artifactId>spring-webmvc</artifactId><version>6.2.19</version></dependency>
+      <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot</artifactId><version>3.5.16</version></dependency>
+      <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-autoconfigure</artifactId><version>3.5.16</version></dependency>
+      <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter</artifactId><version>3.5.16</version></dependency>
+      <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-json</artifactId><version>3.5.16</version></dependency>
+      <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-logging</artifactId><version>3.5.16</version></dependency>
+      <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-tomcat</artifactId><version>3.5.16</version></dependency>
+      <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId><version>3.5.16</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-api</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-io</artifactId><version>${project.version}</version></dependency>
       <dependency><groupId>com.ash.lake</groupId><artifactId>lake-config</artifactId><version>${project.version}</version></dependency>
