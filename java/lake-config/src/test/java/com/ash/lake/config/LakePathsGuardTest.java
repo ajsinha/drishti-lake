@@ -40,29 +40,16 @@ class LakePathsGuardTest {
     private static final Set<String> SPELT_ALLOWED = Set.of("CliLauncher.java");
     private static final Pattern SPLITS = Pattern.compile("LakeTable::parent|\\bt\\.parent\\(\\)");
 
-    private static Path repo() {
-        Path p = Path.of(TestRoots.module());
-        while (!Files.isDirectory(p.resolve("lake/drishti-lakeio"))) {
-            p = p.getParent();
-        }
-        return p;
-    }
-
+    /** This repository's main sources (java/<module>/src/main/java). */
     private static List<Path> sources() throws IOException {
-        Path root = repo();
+        Path java = Path.of(TestRoots.repo(), "java");
         List<Path> out = new ArrayList<>();
-        List<String> tops = new ArrayList<>(List.of("kernel", "compute", "lake", "net", "packaging", "testing", "plugins"));   // the subject folders
-        try (Stream<Path> domains = Files.list(root.resolve("modules"))) {         // modules/<domain>/java/<part>: the domain modules' sources
-            domains.filter(d -> Files.isDirectory(d.resolve("java"))).forEach(d -> tops.add(root.relativize(d.resolve("java")).toString()));
-        }
-        for (String top : tops) {
-            try (Stream<Path> mods = Files.list(root.resolve(top))) {
-                for (Path m : (Iterable<Path>) mods.filter(d -> top.startsWith("modules") || d.getFileName().toString().startsWith("drishti-"))::iterator) {
-                    Path main = m.resolve("src/main/java");
-                    if (Files.isDirectory(main)) {
-                        try (Stream<Path> w = Files.walk(main)) {
-                            w.filter(f -> f.toString().endsWith(".java")).forEach(out::add);
-                        }
+        try (Stream<Path> mods = Files.list(java)) {
+            for (Path m : (Iterable<Path>) mods.filter(d -> d.getFileName().toString().startsWith("lake-"))::iterator) {
+                Path main = m.resolve("src/main/java");
+                if (Files.isDirectory(main)) {
+                    try (Stream<Path> w = Files.walk(main)) {
+                        w.filter(f -> f.toString().endsWith(".java")).forEach(out::add);
                     }
                 }
             }

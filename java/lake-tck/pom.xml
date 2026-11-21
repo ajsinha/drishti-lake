@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
+
+  Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
+  All rights reserved.
+
+  PROPRIETARY AND CONFIDENTIAL.
+
+  This file is the confidential and proprietary property of Ashutosh Sinha.
+  Unauthorised copying, use, modification, distribution or disclosure of this
+  file, via any medium, is strictly prohibited except with the express prior
+  written permission of the copyright holder.
+
+  See the LICENSE file in the root of this repository for the full terms.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.ash.lake</groupId>
+    <artifactId>lake-parent</artifactId>
+    <version>0.9.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>lake-tck</artifactId>
+  <name>Drishti Lake: test support (S3 mock and simulators, TLS and proxy fixtures, rows); the conformance kit grows here (L2, L9)</name>
+
+  <dependencies>
+    <dependency><groupId>com.ash.lake</groupId><artifactId>lake-hostcompat</artifactId></dependency>
+    <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>
+    <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter-api</artifactId></dependency>
+    <dependency><groupId>software.amazon.awssdk</groupId><artifactId>s3</artifactId><version>${awssdk.version}</version></dependency>
+    <dependency><groupId>com.adobe.testing</groupId><artifactId>s3mock</artifactId><version>${s3mock.version}</version></dependency>
+    <dependency><groupId>org.testcontainers</groupId><artifactId>testcontainers</artifactId><version>${testcontainers.version}</version></dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- the S3 mock is a Spring Boot application: this module is test support only, never a run-time dependency -->
+      <plugin>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions><execution><id>enforce-rules</id><phase>none</phase></execution></executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

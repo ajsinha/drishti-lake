@@ -41,13 +41,13 @@ import org.junit.jupiter.api.io.TempDir;
 class DataInboxLoaderTest {
 
     static final Path REPO = repo();
-    static final Path ARCHIVES = REPO.resolve("tools/lake/testdata/archives");
+    static final Path ARCHIVES = REPO.resolve("tck/fixtures/archives");
 
     @TempDir Path tmp;
 
     static Path repo() {
         Path p = Path.of(TestRoots.module());
-        while (p != null && !Files.isDirectory(p.resolve("tools/lake/testdata/archives"))) {
+        while (p != null && !Files.isDirectory(p.resolve("tck/fixtures/archives"))) {
             p = p.getParent();
         }
         return p;

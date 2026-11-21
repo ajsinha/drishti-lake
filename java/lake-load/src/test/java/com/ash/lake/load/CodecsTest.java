@@ -113,6 +113,7 @@ class CodecsTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Disabled("SPLIT EXEMPTION (parked, SPLIT_EXEMPTIONS.md): reads the host's shipped packs; L5 (LakeCatalog) gives it a pack of the kit's own")
     void aPackGivesTheDomainTableLayoutKeyAndFlattenedFieldsAsLakeBuildReadsThem() throws IOException {
         com.ash.lake.hostcompat.ConfigResolution packs = com.ash.lake.hostcompat.ConfigResolution.repository(
                 java.nio.file.Path.of(TestRoots.module()).getParent().getParent());   // where each shipped pack is (its module's folder)

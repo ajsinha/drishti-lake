@@ -15,6 +15,7 @@
  */
 package com.ash.lake.load;
 
+import com.ash.lake.tck.TestRoots;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -47,7 +48,7 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class ArchivesTest {
 
-    static final Path FIX = PythonPathEqualityTest.REPO.resolve("tools/lake/testdata/archives");
+    static final Path FIX = Path.of(TestRoots.repo(), "tck", "fixtures", "archives");
     static final ObjectMapper JSON = new ObjectMapper();
 
     @TempDir

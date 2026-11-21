@@ -164,8 +164,8 @@ class LakesTest {
         assertEquals("rest", s.get("catalog"));
         assertEquals("http://c:8181", s.get("uri"));
         assertEquals("risk", s.get("domain"));
-        Lake demo = Lakes.read(tmp.resolve("no-such-folder"), k -> null).get("demo");      // the jar's copy of config/lakes/demo.yaml
-        assertEquals(List.of("business_date", "PRODUCT_TYPE"), demo.require("trading", "trade", "trade_endur").partitionColumns());
+        // SPLIT EXEMPTION (parked check, SPLIT_EXEMPTIONS.md): the host's shipped demo lake (drishti/lakes/demo.yaml) stayed in the
+        // host; its check goes to the host's adapter at L5 (LakeCatalog).
     }
 
     @Test
