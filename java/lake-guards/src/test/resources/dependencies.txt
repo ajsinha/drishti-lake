@@ -8,8 +8,8 @@ lake-config com.fasterxml.jackson.dataformat:jackson-dataformat-yaml
 lake-delta com.ash.lake:lake-io
 lake-delta io.delta:delta-kernel-api
 lake-delta io.delta:delta-kernel-defaults
-lake-delta org.apache.hadoop:hadoop-client-api      until L7
-lake-delta org.apache.hadoop:hadoop-client-runtime  until L7
+lake-delta org.apache.hadoop:hadoop-client-api        until L12 (reviewed at L7: Parquet and the Kernel default engine name Hadoop types; no Hadoop file system)
+lake-delta org.apache.hadoop:hadoop-client-runtime    until L12 (reviewed at L7: Parquet and the Kernel default engine name Hadoop types; no Hadoop file system)
 lake-delta com.github.ben-manes.caffeine:caffeine
 lake-delta com.fasterxml.jackson.core:jackson-databind
 lake-delta org.slf4j:slf4j-api
@@ -30,8 +30,8 @@ lake-io com.fasterxml.jackson.dataformat:jackson-dataformat-yaml
 lake-io com.github.ben-manes.caffeine:caffeine
 lake-io org.apache.parquet:parquet-hadoop
 lake-io org.apache.parquet:parquet-column
-lake-io org.apache.hadoop:hadoop-client-api         until L7
-lake-io org.apache.hadoop:hadoop-client-runtime     until L7
+lake-io org.apache.hadoop:hadoop-client-api        until L12 (reviewed at L7: Parquet and the Kernel default engine name Hadoop types; no Hadoop file system)
+lake-io org.apache.hadoop:hadoop-client-runtime    until L12 (reviewed at L7: Parquet and the Kernel default engine name Hadoop types; no Hadoop file system)
 lake-io org.xerial.snappy:snappy-java
 lake-io com.github.luben:zstd-jni
 lake-io at.yawk.lz4:lz4-java

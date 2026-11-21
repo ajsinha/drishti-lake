@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.delta;
+package com.ash.lake.delta.table;
 
 import java.io.IOException;
 import java.util.Set;
@@ -24,7 +24,7 @@ import java.util.function.Consumer;
  * data-load signal's refresh ({@code purgeCaches}, {@code refreshVersions}), so the first load into an empty lake is readable as soon as it
  * is announced, not at the next reindex. Only for a connector that discovers its kinds (no {@code kinds} setting).
  */
-final class NewTables {
+public final class NewTables {
 
     private NewTables() {}
 
@@ -32,7 +32,7 @@ final class NewTables {
      * Adds every table of {@code lake} not in {@code known} through {@code add}; true when one was found. A lake that cannot be read now
      * finds nothing: its health says so, and the next look tries again.
      */
-    static boolean find(LakeStore lake, Set<String> known, Consumer<String> add) {
+    public static boolean find(LakeStore lake, Set<String> known, Consumer<String> add) {
         boolean found = false;
         try {
             for (String kind : lake.tables()) {

@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.delta;
+package com.ash.lake.delta.table;
 
 import io.delta.kernel.engine.Engine;
 import java.io.IOException;
@@ -81,12 +81,12 @@ record NamedTables(LakeStore lake, Map<String, String> names) implements LakeSto
     }
 
     @Override
-    public com.ash.drishti.api.tls.TlsMaterial tls() {
+    public com.ash.lake.io.net.TlsMaterial tls() {
         return lake.tls();
     }
 
     @Override
-    public com.ash.drishti.api.proxy.ProxySettings proxy() {
+    public com.ash.lake.io.net.ProxySettings proxy() {
         return lake.proxy();
     }
 }

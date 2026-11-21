@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.delta;
+package com.ash.lake.delta.table;
 
-import com.ash.drishti.lakeio.LocalPaths;
-import com.ash.drishti.deltalake.NativeEngine;
-import com.ash.drishti.lakeio.Storage;
+import com.ash.lake.io.LocalPaths;
+import com.ash.lake.delta.NativeEngine;
+import com.ash.lake.spi.Storage;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
@@ -25,16 +25,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A lake read by the {@link NativeEngine} ({@code engine: native}): local disk through {@code java.nio} (Windows
- * included, no {@code winutils.exe}) or S3 ({@code s3://}, {@code s3a://}) through the AWS SDK. No Hadoop class is
- * loaded on this path. Thread-safe.
+ * A lake read by the {@link NativeEngine}: local disk through {@code java.nio} (Windows included, no {@code winutils.exe}), S3
+ * ({@code s3://}, {@code s3a://}) through the AWS SDK, or a scheme the runtime's storage providers serve ({@code mem://}). No Hadoop file
+ * system is used. Thread-safe.
  *
  * @param base the domain's folder as the engine's canonical URI ({@code file:/C:/lakes/banking}, {@code s3a://b/lake})
  */
 record NativeLake(String base, NativeEngine engine, Storage storage) implements LakeStore {
 
-    static NativeLake open(String root, String domain, Map<String, String> settings) {
-        NativeEngine engine = NativeEngine.create(settings);
+    static NativeLake open(com.ash.lake.LakeRuntime runtime, String root, String domain, Map<String, String> settings) {
+        NativeEngine engine = NativeEngine.create(runtime, settings);
         String r = LakeStore.isRemote(root) ? root.replaceAll("/+$", "") : root;
         Storage storage = engine.storage(r);
         String base;
@@ -79,22 +79,17 @@ record NativeLake(String base, NativeEngine engine, Storage storage) implements 
     }
 
     @Override
-    public String engineName() {
-        return EngineKind.NATIVE.label();
-    }
-
-    @Override
     public void close() {
         engine.close();
     }
 
     @Override
-    public com.ash.drishti.api.tls.TlsMaterial tls() {
+    public com.ash.lake.io.net.TlsMaterial tls() {
         return engine.tls();
     }
 
     @Override
-    public com.ash.drishti.api.proxy.ProxySettings proxy() {
+    public com.ash.lake.io.net.ProxySettings proxy() {
         return engine.proxy();
     }
 }

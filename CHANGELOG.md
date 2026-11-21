@@ -70,5 +70,10 @@ Entries are written per release; unreleased work is listed first.
   and `${lake.x}` stand in for each other; the Delta commits' engine info names the product. TCK case `undo/undo-a-replace-restores-the-date`
   (reference regenerated over Drishti's jars at `9ce7c3170`: the 30 earlier results unchanged). Host-word files 72 → 70. Parity kit
   equal to the reference (32/32).
-- Not moved yet, on purpose (each with its step): the memory lake (L8), the Delta lake opener that chooses the Hadoop engine (L7;
-  the engine itself stays in Drishti, LK-9), the files store (L8), the Python path (L10), the contracts tool (L11).
+- **L7, part 2: the Delta lake opener, native path only.** `LakeStore`, `NativeLake`, `NamedTables` and `NewTables` moved with their
+  history (7 commits, `tools/split/l7-paths.txt`, the L3 filename callback) into `com.ash.lake.delta.table`; `LakeStore.of(runtime,
+  root, domain, settings)` opens a lake through the runtime's native engine (local disk, S3, a registered provider's scheme);
+  `engine: hadoop` is refused naming LK-9 (`EngineKind` and `HadoopLake` stay in Drishti's adapter until G4). `LakeStoreTest`. The
+  Hadoop client on the class path of `lake-io` and `lake-delta` reviewed: `parquet-hadoop` and the Kernel's default engine need
+  Hadoop's `Configuration`; no Hadoop file system is used; until L12. Parity kit equal to the reference (32/32).
+- Not moved yet, on purpose (each with its step): the memory lake (L8), the files store (L8), the Python path (L10), the contracts tool (L11).
