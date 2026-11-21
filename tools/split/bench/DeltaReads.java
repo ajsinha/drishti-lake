@@ -39,7 +39,7 @@ public final class DeltaReads implements ReadBench.Reads {
     public void open(String root, String domain, String kind, LocalDate date) {
         lake = LakeStore.of(RT, root, domain, Map.of());
         table = new DeltaTable(lake.engine(), lake.table(kind), "id", "doc", "business_date");
-        layout = table.layout(null).orElseThrow();
+        layout = table.layout((java.time.Instant) null).orElseThrow();
         this.date = date;
     }
 

@@ -1,0 +1,28 @@
+{"measure": "ids", "ms": 9.281, "min_ms": 6.833, "rows": 10000, "rows_per_s": 1077487, "bytes": 5597192, "bytes_per_row": 559.7, "store": "delta", "side": "ref"}
+{"measure": "ids.lookup-10000", "ms": 1.51, "min_ms": 1.315, "rows": 8978, "rows_per_s": 5947015, "bytes": 656, "bytes_per_row": 0.1, "store": "delta", "side": "ref"}
+{"measure": "vectors.1", "ms": 161.347, "min_ms": 138.407, "rows": 10000, "rows_per_s": 61978, "bytes": 349966064, "bytes_per_row": 34996.6, "store": "delta", "side": "ref"}
+{"measure": "vectors.4", "ms": 61.91, "min_ms": 60.617, "rows": 10000, "rows_per_s": 161525, "bytes": 401467040, "bytes_per_row": 40146.7, "store": "delta", "side": "ref"}
+{"measure": "columns", "ms": 7.902, "min_ms": 7.641, "rows": 10000, "rows_per_s": 1265579, "bytes": 22752528, "bytes_per_row": 2275.3, "store": "delta", "side": "ref"}
+{"measure": "document", "p50_us": 126, "p99_us": 345, "bytes_per_doc": 280389, "store": "delta", "side": "ref"}
+{"measure": "vectorsOf.50", "ms": 14.729, "min_ms": 14.429, "rows": 50, "rows_per_s": 3395, "bytes": 38059312, "bytes_per_row": 761186.2, "store": "delta", "side": "ref"}
+{"measure": "ids", "ms": 9.068, "min_ms": 4.955, "rows": 10000, "rows_per_s": 1102745, "bytes": 5597824, "bytes_per_row": 559.8, "store": "delta", "side": "api"}
+{"measure": "ids.lookup-10000", "ms": 1.213, "min_ms": 0.923, "rows": 8978, "rows_per_s": 7403767, "bytes": 656, "bytes_per_row": 0.1, "store": "delta", "side": "api"}
+{"measure": "vectors.1", "ms": 163.205, "min_ms": 142.245, "rows": 10000, "rows_per_s": 61273, "bytes": 350063192, "bytes_per_row": 35006.3, "store": "delta", "side": "api"}
+{"measure": "vectors.4", "ms": 65.68, "min_ms": 57.272, "rows": 10000, "rows_per_s": 152254, "bytes": 401540576, "bytes_per_row": 40154.1, "store": "delta", "side": "api"}
+{"measure": "columns", "ms": 8.656, "min_ms": 8.324, "rows": 10000, "rows_per_s": 1155229, "bytes": 22829616, "bytes_per_row": 2283.0, "store": "delta", "side": "api"}
+{"measure": "document", "p50_us": 135, "p99_us": 413, "bytes_per_doc": 279507, "store": "delta", "side": "api"}
+{"measure": "vectorsOf.50", "ms": 18.391, "min_ms": 17.763, "rows": 50, "rows_per_s": 2719, "bytes": 38059128, "bytes_per_row": 761182.6, "store": "delta", "side": "api"}
+{"measure": "ids", "ms": 5.996, "min_ms": 4.59, "rows": 10000, "rows_per_s": 1667745, "bytes": 5351312, "bytes_per_row": 535.1, "store": "iceberg", "side": "ref"}
+{"measure": "ids.lookup-10000", "ms": 1.478, "min_ms": 1.274, "rows": 8978, "rows_per_s": 6074528, "bytes": 2304, "bytes_per_row": 0.3, "store": "iceberg", "side": "ref"}
+{"measure": "vectors.1", "ms": 181.479, "min_ms": 138.323, "rows": 10000, "rows_per_s": 55103, "bytes": 351290408, "bytes_per_row": 35129.0, "store": "iceberg", "side": "ref"}
+{"measure": "vectors.4", "ms": 76.576, "min_ms": 67.578, "rows": 10000, "rows_per_s": 130589, "bytes": 405882264, "bytes_per_row": 40588.2, "store": "iceberg", "side": "ref"}
+{"measure": "columns", "ms": 20.197, "min_ms": 6.341, "rows": 10000, "rows_per_s": 495133, "bytes": 11785192, "bytes_per_row": 1178.5, "store": "iceberg", "side": "ref"}
+{"measure": "document", "p50_us": 110, "p99_us": 327, "bytes_per_doc": 419298, "store": "iceberg", "side": "ref"}
+{"measure": "vectorsOf.50", "ms": 346.072, "min_ms": 305.729, "rows": 50, "rows_per_s": 144, "bytes": 691759808, "bytes_per_row": 13835196.2, "store": "iceberg", "side": "ref"}
+{"measure": "ids", "ms": 9.39, "min_ms": 6.085, "rows": 10000, "rows_per_s": 1065011, "bytes": 5517792, "bytes_per_row": 551.8, "store": "iceberg", "side": "api"}
+{"measure": "ids.lookup-10000", "ms": 2.52, "min_ms": 1.382, "rows": 8978, "rows_per_s": 3562344, "bytes": 2304, "bytes_per_row": 0.3, "store": "iceberg", "side": "api"}
+{"measure": "vectors.1", "ms": 211.256, "min_ms": 195.817, "rows": 10000, "rows_per_s": 47336, "bytes": 351290656, "bytes_per_row": 35129.1, "store": "iceberg", "side": "api"}
+{"measure": "vectors.4", "ms": 84.918, "min_ms": 73.943, "rows": 10000, "rows_per_s": 117761, "bytes": 405899272, "bytes_per_row": 40589.9, "store": "iceberg", "side": "api"}
+{"measure": "columns", "ms": 18.333, "min_ms": 6.049, "rows": 10000, "rows_per_s": 545461, "bytes": 11512904, "bytes_per_row": 1151.3, "store": "iceberg", "side": "api"}
+{"measure": "document", "p50_us": 148, "p99_us": 417, "bytes_per_doc": 424150, "store": "iceberg", "side": "api"}
+{"measure": "vectorsOf.50", "ms": 18.304, "min_ms": 18.017, "rows": 50, "rows_per_s": 2732, "bytes": 39799904, "bytes_per_row": 795998.1, "store": "iceberg", "side": "api"}

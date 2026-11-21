@@ -63,7 +63,18 @@ The host's callers (about 66 Python files outside `tools/lake` import it at the 
 | `laketables`, `maintain*`, `delete`, `undo`, `relocate`, `scan`, `deltaread`, `ownership`, `compare_lakes`, `memory_*` | few | not yet | later parts, through the `lake-cli` jar (design 3.3) |
 | `feedfiles`, `feedroute`, `stores`, `demo`, `publish`, `s3sim` | 19 + 4 + 2 + 2 | stay in Drishti | feeds, source systems and the demo (design 2) |
 
-## The host's read API (G4 rehearsal L1; written 2026-11-21, not built)
+## The host's read API (G4 rehearsal L1; built through RA-S5 on 2026-11-21)
+
+Built (decisions RA-1 to RA-12 accepted): RA-S0 (section 10 checked, today's numbers recorded), RA-S1 (`com.ash.lake.read`,
+`TableStore.open`, `Problems` in `lake-io`), RA-S2 Delta, RA-S3 Iceberg, RA-S4 files (F1, F2), RA-S5 deletes (D1 in the kit, I1 in
+`IcebergReadDeletesTest`); 11 `read/*` cases equal on every store and the memory rows. Open, in order: RA-S6 Iceberg `partition-by`
+(P1), RA-S7 pushdown and `ScanStats`, RA-S9 (remaining cases to 20, `~s3` rows, `TwoRuntimesTest`/`StartOnFewCoresTest` extensions,
+old entry points to `internal`, `docs/BENCHMARK.md`), I2 (Iceberg row-group pieces), RA-S8 last (RA-9). Bench (`tools/bench/bench.py`,
+`tck/bench/`): within one run at machine load 9 to 14, the API against Drishti's jars: Delta vectors 1 decoder 163 vs 161 ms, 4 decoders
+66 vs 62, columns 8.7 vs 7.9, ids 9.1 vs 9.3, document p50 135 vs 126 us; Iceberg vectors 211 vs 181, 85 vs 77, columns 18 vs 20,
+vectorsOf (a page of 50) 18 vs 346 ms; allocation per row equal within 0.1% (35.0 KB a vector row, the decoder's). The 3% bound is not
+yet shown: the run-to-run spread on this machine is larger; repeat on a quiet machine before G4.
+
 
 Designed in [READ_API](design/READ_API.md): the API, every host call mapped to it, the defects each store closes, the cases, the
 performance proof, the steps RA-S0 to RA-S10 and the decisions RA-1 to RA-12 (open, for the owner).

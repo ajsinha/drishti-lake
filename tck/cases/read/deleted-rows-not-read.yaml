@@ -1,0 +1,28 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# a row deleted as other writers delete it (Delta: a deletion vector on the file; files: a commit without the line): ids, documents,
+# columns, vectors and vectorsOf all leave it out (D1). Iceberg's delete files are applied by its reader in every read: proven by
+# IcebergReadDeletesTest (lake-iceberg), as the kit has no Iceberg delete-file writer on its class path.
+stores: [delta, files]
+not-on:
+  mem: the kit writes the deletion vector and the commit on the local disk
+  s3: the kit writes the deletion vector and the commit on the local disk
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 30, scenarios: 6, seed: 21}}
+config: |
+  source:
+    files: '${in}/*.jsonl'
+    id: POSITION_ID
+    promote: [DESK, QUANTITY, TT_BOOK]
+    vectors: [SCENARIO_PV]
+  target:
+    format: ${store}
+    lake: '${lake}'
+    domain: risk
+    kind: scenario-pv
+steps:
+  - load: []
+  - store: [delete-row, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', P-1000007]
+  - store: [read-ids, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t', 'QUANTITY:n', 'TT_BOOK:t']
+  - store: [read-vectors, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', SCENARIO_PV, DESK]

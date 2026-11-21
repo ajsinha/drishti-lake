@@ -22,6 +22,7 @@ names/special-characters
 read/all-rows-in-file-order
 read/by-id-and-all
 read/days-files-and-counts
+read/deleted-rows-not-read
 read/ids-and-file-of-id
 read/numbers-texts-nulls
 read/problem-recorded-and-cleared

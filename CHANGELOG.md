@@ -5,6 +5,14 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **The read API, built through RA-S5** ([READ_API](docs/design/READ_API.md)): `com.ash.lake.read` (`lake-api`) entered through
+  `TableStore.open`, own types only (in `api-surface.txt`), on Delta, Iceberg and files (and the memory rows): snapshots, days and files
+  with rows, bounds and one stamp rule, id maps and one mapped id-map format, documents, promoted columns as arrays, vectors into a
+  reused buffer (1 or more decoders, file order), a page of vectors, file scans, identity, health, problems (`LK-1006`), purges.
+  Defects closed: D1 (Delta deletion vectors applied in columns and vectors), D2 (Delta identity from the snapshot's metadata), F1 (files
+  commits carry rows and text bounds), F2 (files table id); I1 proven (`IcebergReadDeletesTest`). Kit: 11 `read/*` cases equal on every
+  store. `tools/bench` (`ReadBench` over Drishti's jars at the freeze and over the API): `tck/bench/`. Not yet: I2, P1 (Iceberg
+  `partition-by`), pushdown and `ScanStats` (RA-S7), foreign-table shapes (RA-S8), the rest of RA-S9.
 - **The read API, designed** ([docs/design/READ_API.md](docs/design/READ_API.md); nothing built): `com.ash.lake.read` entered through
   `TableStore.open`, own types only, the same on Delta, Iceberg, files and `mem://`; every call of the host's source adapters mapped;
   the stores' defects to close (deletes in column and vector reads, files statistics and identity, Iceberg `partition-by`); 20 parity

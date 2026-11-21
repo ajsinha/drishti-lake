@@ -377,6 +377,7 @@ public final class TckRunner {
                 case "dates" -> store.dates(RT, t);   // lake-only
                 case "versions" -> store.versions(RT, t).size() + " versions";   // lake-only
                 case "scan-at" -> scanAt(store, t, a[5], a.length > 6 && a[6].equals("time"));   // lake-only
+                case "delete-row" -> DeleteRow.run(a);   // lake-only: a row deleted as other writers do (READ_API.md 6)
                 default -> a[0].startsWith("read-") ? ReadVerbs.run(store, a) : null;   // lake-only: the read API (READ_API.md section 6)
             };   // lake-only
             if (done == null) throw new IllegalArgumentException("unknown store op " + a[0]);   // lake-only
@@ -635,6 +636,95 @@ final class ReadVerbs {   // lake-only
         Files.move(aside, file);   // lake-only
         s.ids(d);   // lake-only
         return failed + " listed=" + listed + " cleared=" + lake.problems().isEmpty();   // lake-only
+    }   // lake-only
+}   // lake-only
+
+/**   // lake-only
+ * Deletes one row of a date the way each format's other writers do (READ_API.md 6, read/deletes): a Delta deletion vector (a Spark-style   // lake-only
+ * DELETE: the file kept, its row index in a vector), a files commit without the line. The loader never writes either.   // lake-only
+ */   // lake-only
+final class DeleteRow {   // lake-only
+    static String run(String[] a) throws java.io.IOException {   // lake-only
+        try {   // lake-only
+            return delete(a);   // lake-only
+        } catch (java.io.IOException | RuntimeException e) {   // lake-only
+            throw e;   // lake-only
+        } catch (Exception e) {   // lake-only
+            throw new java.io.IOException(e.getMessage(), e);   // lake-only
+        }   // lake-only
+    }   // lake-only
+
+    static String delete(String[] a) throws Exception {   // lake-only
+        String format = a[1], root = a[2], domain = a[3], table = a[4], id = a[6];   // lake-only
+        LocalDate date = LocalDate.parse(a[5]);   // lake-only
+        if (format.equals("files")) {   // lake-only
+            Path day = Path.of(root, domain, date.toString(), table + ".jsonl");   // lake-only
+            List<String> keep = new ArrayList<>();   // lake-only
+            for (String l : Files.readAllLines(day, StandardCharsets.UTF_8)) {   // lake-only
+                if (!l.isBlank() && !l.contains("\"id\":\"" + id + "\"")) keep.add(l);   // lake-only
+            }   // lake-only
+            com.ash.lake.files.FilesStore.rewriteDay(root, domain, table, date, keep, "delete");   // lake-only
+            return "deleted one row";   // lake-only
+        }   // lake-only
+        if (!format.equals("delta")) throw new UnsupportedOperationException("no row delete for " + format + " in the kit");   // lake-only
+        String path = root + "/" + domain + "/" + table;   // lake-only
+        Engine engine = com.ash.lake.delta.NativeEngine.create(TckRunner.RT);   // lake-only
+        Snapshot snapshot = io.delta.kernel.Table.forPath(engine, path).getLatestSnapshot(engine);   // lake-only
+        try (var files = snapshot.getScanBuilder().build().getScanFiles(engine)) {   // lake-only
+            while (files.hasNext()) {   // lake-only
+                try (var rows = files.next().getRows()) {   // lake-only
+                    while (rows.hasNext()) {   // lake-only
+                        Row file = rows.next();   // lake-only
+                        if (!date.toString().equals(InternalScanFileUtils.getPartitionValues(file).get("business_date"))) continue;   // lake-only
+                        var fs = InternalScanFileUtils.getAddFileStatus(file);   // lake-only
+                        long at = 0, row = -1;   // lake-only
+                        try (var it = engine.getParquetHandler().readParquetFiles(Utils.singletonCloseableIterator(fs),   // lake-only
+                                new io.delta.kernel.types.StructType().add("id", io.delta.kernel.types.StringType.STRING), java.util.Optional.empty())) {   // lake-only
+                            while (it.hasNext() && row < 0) {   // lake-only
+                                var b = it.next().getData();   // lake-only
+                                for (int i = 0; i < b.getSize(); i++, at++) if (id.equals(b.getColumnVector(0).getString(i))) { row = at; break; }   // lake-only
+                            }   // lake-only
+                        }   // lake-only
+                        if (row >= 0) return write(Path.of(path), snapshot.getVersion() + 1, fs, date.toString(), (int) row);   // lake-only
+                    }   // lake-only
+                }   // lake-only
+            }   // lake-only
+        }   // lake-only
+        throw new IllegalArgumentException(id + " is not in " + path + " on " + date);   // lake-only
+    }   // lake-only
+
+    /** The row's deletion vector (a portable roaring bitmap of one array container) and the commit that sets it on the file. */   // lake-only
+    static String write(Path table, long version, io.delta.kernel.utils.FileStatus file, String date, int row) throws Exception {   // lake-only
+        java.nio.ByteBuffer bm = java.nio.ByteBuffer.allocate(18).order(java.nio.ByteOrder.LITTLE_ENDIAN);   // lake-only
+        bm.putInt(12346).putInt(1).putShort((short) (row >>> 16)).putShort((short) 0).putInt(16).putShort((short) (row & 0xFFFF));   // lake-only
+        java.nio.ByteBuffer data = java.nio.ByteBuffer.allocate(16 + bm.capacity()).order(java.nio.ByteOrder.LITTLE_ENDIAN);   // lake-only
+        data.putInt(1681511377).putLong(1).putInt(0).put(bm.array());   // lake-only
+        byte[] bytes = data.array();   // lake-only
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();   // lake-only
+        crc.update(bytes);   // lake-only
+        java.util.UUID uuid = java.util.UUID.randomUUID();   // lake-only
+        java.io.ByteArrayOutputStream dv = new java.io.ByteArrayOutputStream();   // lake-only
+        try (java.io.DataOutputStream out = new java.io.DataOutputStream(dv)) {   // lake-only
+            out.writeByte(1);   // lake-only
+            out.writeInt(bytes.length);   // lake-only
+            out.write(bytes);   // lake-only
+            out.writeInt((int) crc.getValue());   // lake-only
+        }   // lake-only
+        Files.write(table.resolve("deletion_vector_" + uuid + ".bin"), dv.toByteArray());   // lake-only
+        String rel = file.getPath().substring(file.getPath().indexOf("business_date="));   // lake-only
+        long now = System.currentTimeMillis();   // lake-only
+        String pv = "{\"business_date\":\"" + date + "\"}";   // lake-only
+        String commit = String.join("\n",   // lake-only
+                "{\"commitInfo\":{\"timestamp\":" + now + ",\"operation\":\"DELETE\"}}",   // lake-only
+                "{\"protocol\":{\"minReaderVersion\":3,\"minWriterVersion\":7,\"readerFeatures\":[\"deletionVectors\"],\"writerFeatures\":[\"deletionVectors\"]}}",   // lake-only
+                "{\"remove\":{\"path\":\"" + rel + "\",\"deletionTimestamp\":" + now + ",\"dataChange\":true,\"extendedFileMetadata\":true,\"partitionValues\":"   // lake-only
+                        + pv + ",\"size\":" + file.getSize() + "}}",   // lake-only
+                "{\"add\":{\"path\":\"" + rel + "\",\"partitionValues\":" + pv + ",\"size\":" + file.getSize() + ",\"modificationTime\":" + now   // lake-only
+                        + ",\"dataChange\":true,\"deletionVector\":{\"storageType\":\"u\",\"pathOrInlineDv\":\""   // lake-only
+                        + io.delta.kernel.internal.deletionvectors.Base85Codec.encodeUUID(uuid) + "\",\"offset\":1,\"sizeInBytes\":" + bytes.length   // lake-only
+                        + ",\"cardinality\":1}}}") + "\n";   // lake-only
+        Files.writeString(table.resolve("_delta_log").resolve("%020d.json".formatted(version)), commit, StandardCharsets.UTF_8);   // lake-only
+        return "deleted one row";   // lake-only
     }   // lake-only
 }   // lake-only
 
