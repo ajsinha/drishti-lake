@@ -190,6 +190,38 @@ public final class Operations {
         return current(t);
     }
 
+    /**
+     * Overwrites files: {@code remove} (data and delete files, by path) replaced by {@code add}, where the rows change (an undo restoring the
+     * rows before a replace, rows taken out): an {@code overwrite}, validated as {@link #rewriteFiles} is (the files {@code scope} picks must
+     * be exactly those read), with the snapshot summary {@code summary}. A rewrite keeps the rows as they were and may not grow them.
+     */
+    public static Optional<Snapshot> overwriteFiles(Table t, Set<String> remove, List<DataFile> add, Predicate<DataFile> scope, Set<String> read,
+            Map<String, String> summary) {
+        org.apache.iceberg.Table table = t.iceberg();
+        Picked inScope = pick(t, scope);
+        Set<String> now = new HashSet<>();
+        inScope.data.forEach(f -> now.add(f.location()));
+        inScope.deletes.forEach(f -> now.add(f.location()));
+        if (!now.equals(read)) {
+            throw new ValidationFailed("the files being overwritten changed since they were read; run it again");
+        }
+        Picked out = pick(t, f -> remove.contains(f.path()));
+        if (out.isEmpty() && add.isEmpty()) {
+            return Optional.empty();
+        }
+        OverwriteFiles o = table.newOverwrite().validateFromSnapshot(table.currentSnapshot().snapshotId());
+        out.data.forEach(o::deleteFile);
+        add.forEach(f -> o.addFile(Bridge.iceberg(f, table)));
+        summary.forEach(o::set);
+        try {
+            o.commit();
+        } catch (ValidationException e) {
+            throw new ValidationFailed(e.getMessage() + "; run it again");
+        }
+        dropDeletes(table, out.deletes);
+        return current(t);
+    }
+
     /** Regroups every live file into manifests by {@code clusterBy} (one per month of business dates, say). */
     public static Optional<Snapshot> rewriteManifests(Table t, Function<DataFile, String> clusterBy) {
         org.apache.iceberg.Table table = t.iceberg();

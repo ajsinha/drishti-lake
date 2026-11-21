@@ -72,31 +72,27 @@ public final class IcebergMaintenance {
     private IcebergMaintenance() {
     }
 
-    /**
-     * Undoes load {@code id} in every Iceberg table of the lake at {@code root} (a local folder: {@code <domain>/<table>}; DATA_LAKE_GUIDE.md
-     * section 6.3): a line per table and date undone ({@code table}, {@code date}, {@code removed}, {@code restored}, {@code replaced}).
-     */
-    public static List<Map<String, Object>> undoLake(com.ash.lake.LakeRuntime runtime, String root, String id, boolean dryRun, Path spillDir) throws Exception {
-        List<Map<String, Object>> out = new ArrayList<>();
-        Path base = Path.of(root);
-        if (!java.nio.file.Files.isDirectory(base)) {
-            return out;
+    /** The Iceberg tables ({@code domain/kind}) of the lake at {@code root}: a local folder or a registered storage's ({@code mem://}). */
+    public static List<String> tables(com.ash.lake.LakeRuntime runtime, String root) throws Exception {
+        List<String> out = new ArrayList<>();
+        List<String> domains = new ArrayList<>();
+        if (runtime.supports(root)) {
+            com.ash.lake.spi.Storage st = runtime.storage(root);
+            if (st.isDirectory(root)) {
+                for (String d : st.directories(root)) {
+                    String name = d.replaceAll("/+$", "");
+                    domains.add(name.substring(name.lastIndexOf('/') + 1));
+                }
+            }
+        } else if (java.nio.file.Files.isDirectory(Path.of(root))) {
+            try (var s = java.nio.file.Files.list(Path.of(root))) {
+                s.filter(java.nio.file.Files::isDirectory).forEach(d -> domains.add(d.getFileName().toString()));
+            }
         }
-        List<Path> domains;
-        try (var s = java.nio.file.Files.list(base)) {
-            domains = s.filter(java.nio.file.Files::isDirectory).filter(d -> !d.getFileName().toString().startsWith("_")).sorted().toList();
-        }
-        for (Path d : domains) {
-            Map<String, String> ns = new HashMap<>(Map.of("root", root, "domain", d.getFileName().toString()));
-            try (LayoutLake view = LayoutLake.of(runtime, ns)) {
+        for (String d : domains.stream().filter(d -> !d.startsWith("_")).sorted().toList()) {
+            try (LayoutLake view = LayoutLake.of(runtime, new HashMap<>(Map.of("root", root, "domain", d)))) {
                 for (String kind : view.kinds()) {
-                    com.ash.lake.iceberg.Table t = ((LayoutLake.Native.Kind) view.load(kind).orElseThrow()).t();
-                    for (Map<String, Object> line : undoOne(t, id, dryRun, spillDir)) {
-                        Map<String, Object> m = new java.util.LinkedHashMap<>();
-                        m.put("table", d.getFileName() + "/" + kind);
-                        m.putAll(line);
-                        out.add(m);
-                    }
+                    out.add(d + "/" + kind);
                 }
             }
         }

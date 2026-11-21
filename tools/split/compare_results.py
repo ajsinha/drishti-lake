@@ -10,8 +10,9 @@ Every case must give the same line, byte for byte, except those listed in known-
 that made it and why). Exit 0 when that holds and every case here ran (status ok); 1 otherwise. A listed case that no longer differs is
 reported, so the list stays true. A case of a store the host never had (BEYOND: its jars cannot run it, make_reference.py --stores) has no
 reference line, nor does a case added here: each must run here (status ok); check.py holds them stable over two runs. A case of the memory row (`<case>@<store>~mem`, its
-lake on mem://) must give the same line as the reference's local case, its name aside. A case of the files store must give the same line
-as its Delta case here (the stores are feature-identical), its name aside."""
+lake on mem://) must give the same line as the reference's local case, its name aside. A case of every other store (files, Iceberg, and their memory rows) must give the same
+answer as its Delta case here (the stores are feature-identical), its name and the dump's date form aside, unless tck/capabilities.yaml
+declares the gap and names the case."""
 import gzip, json, sys
 from pathlib import Path
 
@@ -25,6 +26,43 @@ def lines(p):
 
 BEYOND = {"files"}   # stores the host's jars at the freeze commit do not have
 MEM = "~mem"         # the memory row: compared with the local case of the reference
+
+
+def declared_differences():
+    """The cases tck/capabilities.yaml names for a store's declared gap (<case>@<store>): those alone may differ from their Delta case."""
+    import yaml
+    caps = yaml.safe_load((Path(__file__).resolve().parents[2] / "tck" / "capabilities.yaml").read_text(encoding="utf-8")) or {}
+    out = set()
+    for store, gaps in caps.items():
+        for gap in (gaps or {}).values():
+            if isinstance(gap, dict) and gap.get("case"):
+                out.add(f"{gap['case']}@{store}")
+    return out
+
+
+def same_rows(line, case):
+    """A result line in the form every store shares: its case name taken out, and a business date the table dump gives as days since
+    1970 (the Iceberg dump: a date column read as its number) written as the date, in the row keys and the business_date values."""
+    import datetime as dt
+    r = json.loads(line)
+    r.pop("case", None)
+
+    def day(v):
+        return str(dt.date(1970, 1, 1) + dt.timedelta(days=int(v))) if isinstance(v, (int, float)) and not isinstance(v, bool) else v
+
+    for t, rows in (r.get("tables") or {}).items():
+        out = {}
+        for k, row in rows.items():
+            first, sep, rest = k.partition("|")
+            try:
+                first = day(float(first)) if sep and first.replace(".", "", 1).lstrip("-").isdigit() else first
+            except ValueError:
+                pass
+            if isinstance(row, dict) and "business_date" in row:
+                row = dict(row, business_date=day(row["business_date"]))
+            out[first + sep + rest] = row
+        r["tables"][t] = out
+    return json.dumps(r, sort_keys=True, ensure_ascii=False)
 
 
 def main(argv):
@@ -62,10 +100,15 @@ def main(argv):
         else:
             print(f"DIFFERS: {c}\n  reference: {ref[c][:400]}\n  lake:      {new[c][:400]}")
             bad += 1
-    for c in sorted(x for x in new if x.endswith("@files")):        # the files store equals the Delta store, case by case
-        d = c[:-len("@files")] + "@delta"
-        if d in new and new[d].replace(json.dumps(d)[1:-1], json.dumps(c)[1:-1], 1) != new[c]:
-            print(f"DIFFERS from its Delta case: {c}\n  delta: {new[d][:400]}\n  files: {new[c][:400]}")
+    declared = declared_differences()
+    for c in sorted(new):                                         # every store equals the Delta store, case by case (the memory row too)
+        name, _, store = c.partition("@")
+        base = store.split(MEM)[0]
+        if base == "delta" or c in declared:
+            continue
+        d = f"{name}@delta" + (MEM if store.endswith(MEM) else "")
+        if d in new and same_rows(new[d], d) != same_rows(new[c], c):
+            print(f"DIFFERS from its Delta case (undeclared in tck/capabilities.yaml): {c}\n  delta: {new[d][:400]}\n  {base}: {new[c][:400]}")
             bad += 1
     failed = sorted(c for c in new if json.loads(new[c]).get("status") != "ok")
     if failed:

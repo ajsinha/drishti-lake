@@ -136,4 +136,11 @@ Entries are written per release; unreleased work is listed first.
   Kotlin bill of materials removed; Testcontainers (declared, never used) removed; `commons-compress` 1.28.0 and `commons-io` 2.21.0
   pinned so every run-time class path is unchanged (`dependency:list` of every module before and after: compile and run-time scopes
   equal). `S3LoadTest` fails when the simulator does not start (it skipped before: a missing tool never skips).
+- **L9, second part: every store equals Delta, case by case.** The parity kit's gate (`compare_results.py`) now holds Iceberg and the
+  memory row to their Delta case as it held the files store (the dump's date form aside); only a gap declared in `tck/capabilities.yaml`
+  with its case may differ, and none is. It found two Iceberg faults, both fixed: the command-line undo (`LakeUndo`) reached Delta and
+  files tables only (Iceberg tables now go through their store, as files do; `undoAll` is the same walk with each store's format, and
+  `IcebergMaintenance.undoLake` is gone), and the Iceberg undo of a replace committed a REPLACE, which iceberg-core refuses once rows are
+  restored (now an overwrite, `Operations.overwriteFiles`, with the undo's snapshot summary; its version is the table's commit number
+  from 0, as Delta's). Known differences from the reference: the two undo cases of Iceberg (local and memory row), each with its reason.
 - Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).

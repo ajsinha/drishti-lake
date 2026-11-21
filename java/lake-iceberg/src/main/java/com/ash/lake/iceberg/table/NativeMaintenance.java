@@ -313,15 +313,18 @@ final class NativeMaintenance {
                     }
                     if (rows.rows() == 0) {
                         Operations.deletePartitions(t, f -> date.equals(NativeLayout.dateOf(t, f)), Map.of(com.ash.lake.PersistedNames.key("undo"), id));
-                        continue;
+                    } else {
+                        List<DataFile> files = NativeLayout.writeDay(t, date, rows.merged(), fileRows);
+                        try {
+                            Operations.overwriteFiles(t, remove, files, f -> date.equals(NativeLayout.dateOf(t, f)), read,
+                                    Map.of(com.ash.lake.PersistedNames.key("undo"), id));   // the rows change: an overwrite, never a rewrite
+                        } catch (RuntimeException e) {
+                            files.forEach(f -> deleteQuietly(t, f.path()));
+                            throw e;
+                        }
                     }
-                    List<DataFile> files = NativeLayout.writeDay(t, date, rows.merged(), fileRows);
-                    try {
-                        Operations.rewriteFiles(t, remove, files, f -> date.equals(NativeLayout.dateOf(t, f)), read);
-                    } catch (RuntimeException e) {
-                        files.forEach(f -> deleteQuietly(t, f.path()));
-                        throw e;
-                    }
+                    t.refresh();
+                    line.put("version", t.metadata().lastSequenceNumber() - 1);   // the commit's number from 0, as a Delta version
                 }
             }
         }

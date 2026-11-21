@@ -239,7 +239,7 @@ public final class IcebergStore implements TableStore {
         List<DateChange> out = new ArrayList<>();
         for (Map<String, Object> l : lines) {
             out.add(new DateChange(LocalDate.parse(String.valueOf(l.get("date"))), ((Number) l.get("removed")).longValue(),
-                    ((Number) l.get("restored")).longValue(), -1));
+                    ((Number) l.get("restored")).longValue(), l.get("version") instanceof Number v ? v.longValue() : -1));
         }
         return out;
     }

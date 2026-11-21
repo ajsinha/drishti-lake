@@ -49,7 +49,7 @@ import java.util.stream.Stream;
  * Undo a load by its id (docs/guides/DATA_LAKE_GUIDE.md section 5.5): every row a load wrote carries its {@code _load_id}; undoing
  * it removes exactly those rows, one commit per table and date, in every table of the lake that has them (an archive's tables together).
  * A load that replaced a date is undone by restoring the date as it was before it (the rows of the version before the load's commit), with
- * the rows later loads appended kept. Delta tables here; Iceberg tables by the Iceberg maintenance ({@code IcebergMaintenance --undo}).
+ * the rows later loads appended kept. Every store alike: Delta here, Iceberg and the files store through their stores.
  *
  * <pre>LakeUndo --lake ROOT --load-id ID [--table domain/table ...] [--dry-run] [--json]</pre>
  * Exit codes: 0 undone (or nothing to undo, said so), 1 failed.
@@ -115,51 +115,70 @@ public final class LakeUndo {
     }
 
     /**
-     * Undoes load {@code id} in every table of the lake at {@code root}, Delta here and Iceberg by the Iceberg maintenance: a line per table and date ({@code table}, {@code format}, {@code date}, {@code removed}, {@code restored},
-     * {@code replaced}). {@code only}: these {@code domain/table}s (Delta); empty: every one.
+     * Undoes load {@code id} in every table of the lake at {@code root} (Delta, Iceberg and the files store alike): a line per table and date
+     * ({@code table}, {@code format}, {@code date}, {@code removed}, {@code restored}, {@code replaced}). {@code only}: these
+     * {@code domain/table}s; empty: every one.
      */
     public static List<Map<String, Object>> undoAll(com.ash.lake.LakeRuntime runtime, String root, String id, List<String> only, boolean dryRun) throws Exception {
         List<Map<String, Object>> out = new ArrayList<>();
-        for (Done d : undo(runtime, root, id, only, dryRun)) {
+        for (Tagged t : undoTagged(runtime, root, id, only, dryRun)) {
+            Done d = t.done();
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("table", d.table());
-            m.put("format", "delta");
+            m.put("format", t.format());
             m.put("date", d.date());
             m.put("removed", d.removed());
             m.put("restored", d.restored());
             m.put("replaced", d.replaced());
             out.add(m);
         }
-        List<Map<String, Object>> lines = com.ash.lake.iceberg.table.IcebergMaintenance.undoLake(runtime, root, id, dryRun,
-                com.ash.lake.common.TempFiles.of(runtime).subDir("iceberg-undo"));
-        for (Map<String, Object> u : lines) {
-            Map<String, Object> m = new LinkedHashMap<>(u);
-            m.put("format", "iceberg");
-            out.add(m);
-        }
         return out;
     }
 
-    /** Undoes load {@code id} in the Delta tables under {@code root} ({@code only}: these {@code domain/table}s; empty: every one). */
+    /** Undoes load {@code id} in the tables under {@code root}, every store ({@code only}: these {@code domain/table}s; empty: every one). */
     public static List<Done> undo(com.ash.lake.LakeRuntime runtime, String root, String id, List<String> only, boolean dryRun) throws IOException {
-        List<Done> out = new ArrayList<>();
+        return undoTagged(runtime, root, id, only, dryRun).stream().map(Tagged::done).toList();
+    }
+
+    /** One table and date undone, with its store's format. */
+    private record Tagged(String format, Done done) {}
+
+    private static List<Tagged> undoTagged(com.ash.lake.LakeRuntime runtime, String root, String id, List<String> only, boolean dryRun) throws IOException {
+        List<Tagged> out = new ArrayList<>();
         for (String name : deltaTables(runtime, root)) {
             if (!only.isEmpty() && !only.contains(name)) {
                 continue;
             }
-            out.addAll(undoTable(runtime, LakeRetention.tablePath(root, name), name, id, dryRun));
+            undoTable(runtime, LakeRetention.tablePath(root, name), name, id, dryRun).forEach(d -> out.add(new Tagged("delta", d)));
+        }
+        List<String> iceberg;
+        try {
+            iceberg = com.ash.lake.iceberg.table.IcebergMaintenance.tables(runtime, root);
+        } catch (IOException | RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException(root + ": " + e.getMessage(), e);
+        }
+        for (String name : iceberg) {                                   // the Iceberg tables, through the store
+            undoByStore(runtime, root, name, "iceberg", id, only, dryRun, out);
         }
         for (String name : filesTables(runtime, root)) {                // the files store's tables, through the store
-            if (!only.isEmpty() && !only.contains(name)) {
-                continue;
-            }
-            int slash = name.indexOf('/');
-            var table = new com.ash.lake.spi.TableRef(Path.of(root).toAbsolutePath().toString(), name.substring(0, slash), name.substring(slash + 1));
-            for (com.ash.lake.spi.DateChange c : Stores.of(runtime, com.ash.lake.files.FilesStore.FORMAT).undo(runtime, table, id, dryRun)) {
-                out.add(new Done(name, c.date().toString(), c.removed(), c.restored(), c.restored() > 0, c.version()));
-            }
+            undoByStore(runtime, root, name, com.ash.lake.files.FilesStore.FORMAT, id, only, dryRun, out);
         }
         return out;
+    }
+
+    private static void undoByStore(com.ash.lake.LakeRuntime runtime, String root, String name, String format, String id, List<String> only,
+            boolean dryRun, List<Tagged> out) throws IOException {
+        if (!only.isEmpty() && !only.contains(name)) {
+            return;
+        }
+        int slash = name.indexOf('/');
+        String at = runtime.supports(root) ? root : Path.of(root).toAbsolutePath().toString();
+        var table = new com.ash.lake.spi.TableRef(at, name.substring(0, slash), name.substring(slash + 1));
+        for (com.ash.lake.spi.DateChange c : Stores.of(runtime, format).undo(runtime, table, id, dryRun)) {
+            out.add(new Tagged(format, new Done(name, c.date().toString(), c.removed(), c.restored(), c.restored() > 0, c.version())));
+        }
     }
 
     /** The files store's tables under a local lake root: {@code <domain>/_log/<table>/columns.json}. */

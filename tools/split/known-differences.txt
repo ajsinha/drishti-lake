@@ -1,3 +1,4 @@
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
 # Cases whose result here may differ from the reference (the host's jars at the freeze commit): "<case@store> <step>: <why>".
-# Empty: every case gives the reference's line, byte for byte.
+undo/undo-a-replace-restores-the-date@iceberg L9: the command-line undo reaches Iceberg tables (the host's undid Delta only from the command line, and its Iceberg undo of a replace committed a REPLACE that iceberg-core refuses once rows are restored: now an overwrite); equal to the Delta case
+undo/undo-a-replace-restores-the-date@iceberg~mem L9: as the local case (the memory row)
