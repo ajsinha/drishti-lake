@@ -1,7 +1,7 @@
 <!-- Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE. -->
 # Split exemptions
 
-The lake code moved here from its host with history (step L3, [MOVE_ALLOWLIST](../docs/MOVE_ALLOWLIST.md)) **before** it was
+The lake code came from its first host with its history **before** it was
 untangled, so for a while it still names host types, reads host setting names and uses a few things the design's rules forbid. Each
 is listed below with the step that removes it. The guards in `lake-guards` read this file (`ExemptionsOnlyShrinkTest`,
 `NamesNoHostTest`): a host type not listed here fails the build, a listed one no longer needed fails it too, and every count may only
@@ -50,5 +50,3 @@ A test, or an assertion inside one, that reads the host's own data (its shipped 
 |---|---|---|
 | `CodecsTest.aPackGivesTheDomainTableLayoutKeyAndFlattenedFieldsAsLakeBuildReadsThem` | the host's shipped packs `market-risk` and `trading` | L9: a pack of the kit's own (the parity kit's pack cases) |
 
-Tests that stayed in the host whole (they test its adapters, or read through its `SourcePlugin`s) are listed in
-[MOVE_ALLOWLIST](../docs/MOVE_ALLOWLIST.md) section 4.

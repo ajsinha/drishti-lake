@@ -1,9 +1,9 @@
 <!-- Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE. -->
 # The read API: design
 
-What a host's source adapters read a lake through. Written 2026-11-21 against `main` `0ed2fc3`; **design only, nothing built**. It
-answers [SPLIT_STATUS](../SPLIT_STATUS.md) "The host's read API" (the 14 areas) and the G4 rehearsal's L1 (Drishti branch
-`wip/g4-rehearsal`, `docs/plans/G4_REHEARSAL.md` section 4), under [the design's](DRISHTI_LAKE_DESIGN.md) LK-4, LK-6 and LK-13.
+What a host's source adapters read a lake through: the design record of `com.ash.lake.read`, under [the design's](DRISHTI_LAKE_DESIGN.md) LK-4, LK-6 and LK-13.
+**Built**: the usage guide is [READ.md](../guides/READ.md), the measurements [BENCHMARK.md](../BENCHMARK.md), the public surface `java/api-surface.txt`; where this
+record differs in detail, those are right.
 
 ## Contents
 
@@ -14,9 +14,7 @@ answers [SPLIT_STATUS](../SPLIT_STATUS.md) "The host's read API" (the 14 areas) 
 5. [Iceberg and `source.partition-by`](#5-iceberg-and-sourcepartition-by)
 6. [TCK cases to add](#6-tck-cases-to-add)
 7. [Performance proof](#7-performance-proof)
-8. [Build steps](#8-build-steps)
 9. [Decisions RA-1 to RA-12](#9-decisions-ra-1-to-ra-12)
-10. [Not verified while writing](#10-not-verified-while-writing)
 
 ## 1. The answer in one page
 
@@ -392,29 +390,6 @@ allocation. "Today" is Drishti's jars at the freeze commit `9ce7c3170`, driven a
   decided now so nobody improvises: a batch form `VectorSink.rows(String[] ids, double[] flat, int[] offsets, int count,
   String[][] texts)` that the reader fills per decoded batch. It is **not** in the API unless the bench demands it (RA-11).
 
-## 8. Build steps
-
-Grades as the design's section 7: F Fable, O Opus, S Sonnet, H Haiku. At most three lanes at once (A, B, C); every step ends
-green on `tools/ci/check.py` and rewrites `java/api-surface.txt` in the same commit.
-
-| # | Step | Lane | Needs | Grade | bd |
-|---|---|---|---|---|---|
-| RA-S0 | Owner decisions RA-1 to RA-12 | | | F | 0.5 |
-| RA-S1 | `com.ash.lake.read` types and `TableStore.open` in `lake-api`; the shared base (`lake-io`, internal); `ReadBench` and the reference shim, with "today's" numbers recorded **before** any reader is touched | A | S0 | O | 2 |
-| RA-S2 | Delta reader over `DeltaTable`: 2.1 to 2.6, 2.8; D2 (identity from metadata); the `read/*` verbs in `TckRunner` and the first 12 cases on Delta | A | S1 | O | 3 |
-| RA-S3 | Iceberg reader over `KindTable`/`IcebergVectors`; I2 (row-group pieces); one stamp rule; S3 Tables and relocation through `LakeAddress` | B | S1 | O | 3 |
-| RA-S4 | Files reader; F1 (statistics in the commit), F2 (identity); the byte-level vector scanner | C | S1 | O (scanner), S | 2.5 |
-| RA-S5 | Deletes applied in columns, vectors, file scans: D1 (Delta), I1 (Iceberg); case `read/deletes` | A then B | S2, S3 | O | 2 |
-| RA-S6 | Iceberg `partition-by` (P1): writer, reader, maintenance, the case, the coverage line | B | S3 | O | 2 |
-| RA-S7 | Pushdown in `scan` on the three stores, `ScanStats`, its case | C | S2 to S4 | S, O reviews | 1.5 |
-| RA-S8 | Shaped reads of foreign tables (for `IcebergExternalPlugin`), if RA-9 says now | B | S3 | O | 2 |
-| RA-S9 | Remaining cases to 20, memory and `~s3` rows, the extended `TwoRuntimesTest` and `StartOnFewCoresTest`; `bench.py`, `docs/BENCHMARK.md`; the old package-private entry points the adapters used made unreachable (moved to `internal`) | A | S2 to S7 | S, H for case files | 2 |
-| RA-S10 | Docs: the read API in the API guide, SPLIT_STATUS, CHANGELOG; the rehearsal's L1 answered in writing for Drishti (the table of section 3 with final names) | C | S9 | S | 0.5 |
-| | **Total** (S8 included) | | | | **21** (19 without S8) |
-
-Order: S0, S1; then S2, S3, S4 side by side; S5, S6, S7 side by side; S8; S9; S10. About 8 working days elapsed with three lanes.
-Drishti is not touched; its adapter rewrite (rehearsal L1, 5 bd, Opus) starts at G4 on the tagged pin.
-
 ## RA-S8 half page: shaped reads of foreign tables (2026-11-21, before its build)
 
 **What it serves.** Drishti's `IcebergExternalPlugin` reads tables other engines wrote (Spark, Flink, Trino, Snowflake, Glue, dbt,
@@ -486,44 +461,6 @@ are ISO dates or instants with a zone read as dates and timestamps (rendered bac
 | RA-11 | A batch form of `VectorSink` | **Not now.** Only if the bench shows the per-row call costs more than 3%; then it replaces the row form, it is not added beside it |
 | RA-12 | Iceberg `partition-by` | **Close it as section 5, identity fields after the date, no spec evolution**, in the same train as the read API because the reader must fill partition columns anyway |
 
-## 10. Not verified while writing
-
-- Nothing was built or run: no signature was compiled, no benchmark exists yet, `check.py` was not run for this document.
-- The call counts of section 3 come from a text search of the three adapter files, not from the compiler; calls made through
-  local variables with other names may be missed. RA-S2 and RA-S3 start by compiling the adapters' call list against the new types.
-- `IcebergExternalPlugin`/`ExternalTable` were read by their imports only; the shape of RA-S8 needs its own half page before it is built.
-- Whether the files store accepts or ignores `source.partition-by` today (no reference to it in `lake-files`).
-- How the Kernel and iceberg-core expose delete selection to a raw file read at the versions pinned in `lake-bom` (D1, I1 are
-  sized on the assumption that both do; if the Kernel does not for raw Parquet reads, D1 grows by about a day).
-- "Zero-copy" is used as the task used it: no copy **added** by the API. Today's reads already copy each vector once from the
-  decoded column into the reused buffer; this design keeps that and adds none.
-
 ## Decisions taken (lead, under the owner's delegation, 2026-11-21)
 
 RA-1 to RA-12 are **accepted as recommended** (including RA-3 the product applies deletes, RA-6 one stamp rule with Iceberg id-map files rebuilt once, RA-7 `VectorBatches` back to the adapter, RA-9 foreign-table shapes last, RA-10 the files store measured but not held to Parquet speed, no sidecar). Feature parity stays absolute (owner rule); speed parity is not required for the files store. The unverified points of section 10 are checked first in RA-S0.
-
-## Checked in RA-S0 (2026-11-21)
-
-- **Files store and `source.partition-by`**: accepted. `FilesWriter` writes each field as a typed column (`'p'`, text) of every line;
-  `DataFile.partition()` is empty for a files table (the values are in the lines). No change needed for P1 beyond the case.
-- **Delta deletes (D1)**: the Kernel 4.4.0 applies a file's deletion vector in `Scan.transformPhysicalData` (already used by `ids` and
-  `doc`, with a scan state for the narrow read schema); the product's Parquet reader (`ParquetBatches`) serves the `ROW_INDEX` metadata
-  column. D1 is sized as written: a file with a deletion vector goes through a narrow scan state, a file without one stays raw.
-- **Iceberg deletes (I1)**: the product's own reader applies position and equality deletes in every file read (`read/Deletes` in
-  `TaskReader`), and `KindTable.ids/columns/scan` and `IcebergVectors` all read through it: the table layer is already right; the
-  documents fallback was the adapter's. I1 is the case plus removing the fallback at G4.
-- **Call counts**: the adapters are host code (not compiled here); RA-S2/S3 compile the read API against the call list of section 3.
-- **Today's numbers** (`tools/bench/bench.py`, `ReadBench` over Drishti's plugins at `9ce7c3170` built in a scratch folder with their
-  own local repository, and the same shims over this build's table classes): `tck/bench/readbench-before-9ce7c3170.jsonl`. The table
-  is 10,000 positions x 509 scenarios in 13 files (the loader's runs), one date. At a machine load of about 15 the same code differs
-  between two JVMs by up to 40% on the reads under 20 ms (columns, ids): those rows are compared over repeated runs, not one.
-
-## Built in RA-S6 and RA-S7, and fixed before them (2026-11-21)
-
-- **Delta's newest load** is ordered by every stated `_load_id` maximum (no 32-character cut: the cut is for pruning, and a cut value
-  keeps the run's time); it was the cause of the one-off `ids-and-file-of-id` difference (a 32-character load id sorted first).
-- **The files store's read by id** uses an id index built once per snapshot and date, in memory (`JsonlDay`: sorted ids with each live
-  line's offset and length), not a file beside the table: the content file is immutable at a version, so nothing is stored twice.
-- **P1** as section 5; `relayout` and the other rewrites fan out by the partition tuple through `NativeLayout.writeDay`.
-- **Pushdown** (2.7) is at file level on all three stores (dates, partition values, text bounds; `Pruning`); row groups through the
-  Kernel predicate and iceberg-core's scan filter are not used yet (the per-row test is the last word either way).

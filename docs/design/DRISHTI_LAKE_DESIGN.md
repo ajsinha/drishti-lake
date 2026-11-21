@@ -15,23 +15,19 @@
 -->
 # Drishti Lake: the storage and loading layer as a product
 
-**Status: design for the owner, written 2026-11-21. Nothing built, nothing run, no decision taken.** Read from git only: Drishti
-`main` at `9ce7c3170`; `drishti-rachana` `docs/design/SPLIT_PLAN.md`; [I7B_PRODUCTS_PLAN](I7B_PRODUCTS_PLAN.md). Line counts are
-`wc -l` over `src/main` and `src/test` on that commit. The Apache XTable facts are from its own site on this date (two pages,
-section 8); nothing of XTable was run.
+**Status: the design record of the product.** The built behaviour is documented in the guides ([storage](../guides/STORAGE.md), [loader](../guides/LOADER.md),
+[read API](../guides/READ.md), [contracts](../guides/CONTRACTS.md), [Python](../guides/PYTHON.md), [TCK](../guides/TCK.md)); the public surface is `java/api-surface.txt`.
+Where a sketch below differs in detail from the built API, the guides and the API surface are right. Decisions LK-1 to LK-16 and the decisions of section 14 stand.
 
-**The request.** Take Drishti's lake layer out into its own private repository `drishti-lake` (proprietary), usable by other
-projects, Drishti its first customer; inside i7b on the Rachana pattern (built in its own repository while Drishti is read-only,
-Drishti migrates in G4, one drill, the VaR and ES goldens prove the numbers). If it is not ready at the G3 gate it moves to i8.
+**The request.** Make the lake layer (Delta, Iceberg and plain files, the loader and its inbox, retention, undo, relocation) a product of its own: one library with a
+parity kit that holds every store to the same behaviour, usable by any project.
 
 ## Contents
 
 0. [The answer in one page](#0-the-answer-in-one-page) · 1. [Positioning](#1-positioning) · 2. [Scope](#2-scope-what-moves-what-stays) ·
 3. [Public API and SPI](#3-public-api-and-plug-in-spi) · 4. [The parity TCK](#4-the-parity-tck-the-conformance-gate) ·
 5. [Data contracts](#5-data-contracts-home) · 6. [Repository and coordinates](#6-repository-layout-and-coordinates) ·
-7. [The move, step by step](#7-the-move-step-by-step) · 8. [Apache XTable](#8-apache-xtable-assessment) ·
-9. [Drishti's migration (G4)](#9-drishtis-migration-g4) · 10. [Docs](#10-docs-plan) · 11. [Risks](#11-risks) ·
-12. [Estimate](#12-estimate) · 13. [Decisions](#13-decisions-lk-1-to-lk-16)
+8. [Apache XTable](#8-apache-xtable-assessment) · 13. [Decisions](#13-decisions-lk-1-to-lk-16)
 
 ## 0. The answer in one page
 
@@ -221,7 +217,7 @@ drishti-lake/                       private, proprietary; main + integration bra
          lake-load  lake-contracts  lake-cli  lake-tck        (lake-convert: after 1.0)
   python/drishti_lake/              the wheel; tests beside it
   tck/cases/  tck/capabilities.yaml  tck/results/             cases as data, reference results per release
-  tools/split/                      path allow-lists, compare_results.py, known-differences.txt
+  tools/split/                      the reference comparison: make_reference.py, compare_results.py, known-differences.txt
   tools/release/                    tag, build, install to ~/.m2, wheel, checksums
   docs/  README.md  CHANGELOG.md  LICENSE  java/SPLIT_EXEMPTIONS.md
 ```
@@ -236,51 +232,6 @@ drishti-lake/                       private, proprietary; main + integration bra
 | Version | `0.9.0` at the move, `0.10.x` while untangling, **`1.0.0`** when the G3 conditions hold | semantic versioning on the public packages |
 | Third-party versions | pinned in the product's parent POM (delta-kernel 4.4.0, iceberg 1.10.1, Parquet 1.18.0 at the move) | Drishti stops managing them and inherits through the BOM `lake-bom` |
 | Dependency allow-list | `lake-api`: the JDK only. `lake-io`: Parquet, AWS SDK, codecs. `lake-delta`: delta-kernel. `lake-iceberg`: iceberg-core. No Spring, no host | a guard |
-
-## 7. The move, step by step
-
-Method as Rachana's re-order of 11-19: **move first, untangle in the new repository; Drishti is not modified.** Every step ends
-green on its check and can be paused after it. Grades: O Opus, S Sonnet, H Haiku, F Fable.
-
-| # | Step | Check | Grade | bd |
-|---|---|---|---|---|
-| L0 | Owner decisions LK-1 to LK-16; the path allow-list (`tools/split/lake-paths.txt`) reviewed file by file; the freeze commit named | the list reviewed; a size and private-data scan of the listed paths (no real Endur value, no file over 1 MB) | F | 1 |
-| L1 | Repository bootstrap: reactor, headers, licence, the guards of 7.1 in report mode, CI entry point, release script skeleton | the guards run; an empty build | S | 2 |
-| L2 | **Bridge and first cases**: a results-file runner over Drishti's own jars at the freeze commit; harvest the parity and interop tests into `tck/cases` (first 60%) | the bridge's results are stable over two runs | O (case format), S (harvest) | 5 |
-| L3 | **Move with history**: `git filter-repo` on a fresh clone at the freeze commit, the allow-list only; merged with `--allow-unrelated-histories` (no force push); package rename in one commit; host types the code still names parked in `com.ash.lake.hostcompat`, each listed in `SPLIT_EXEMPTIONS.md` with the step that removes it; tag `v0.9.0` | unit tests moved and green; TCK results equal the bridge's; "names no host" in report mode shows only the exemptions | S, O reviews | 2 |
-| L4 | **Own settings and errors**: TLS and proxy records, `LakeException` and `LK-` codes, `LakeOptions` replacing the 20 system properties and 8 variables; `FileDates`, `RowRetention`, `TempFiles` taken in | results equal; `StartOnFewCoresTest` moved and green | S | 3 |
-| L5 | **Configuration divided**: lake-file model in `lake-config`; `LakeCatalog` SPI; the pack and module half written down for Drishti's adapter (not built here) | results equal with a test catalog; every lake file under `config/lakes*` reads to the same model as the reference | **O** | 4 |
-| L6 | **Per-instance runtime**: `LakeRuntime`; `StorageProviders` and the memory stores off statics; two runtimes in one JVM proven apart | results equal; `TwoRuntimesTest`; the few-core start-up test | **O** | 3 |
-| L7 | **Table layer out of the plugins** into `lake-delta` and `lake-iceberg`; `TableStore` SPI over `TableTarget` and the readers; no library type in a public signature | results equal; the moved plugin tests; API surface dump reviewed | **O** | 6 |
-| L8 | **Files store** as a `TableStore` in `lake-files`; the memory lake behind `RowSource` | the capability list written; files and memory rows of the matrix green | O | 3 |
-| L9 | **TCK complete**: remaining areas, the matrix, capabilities, coverage and additive gates, concurrent-writer cases, the third-party runner | the kit green on all four stores and three storages | O (design), S (cases) | 5 |
-| L10 | **Python package**: `drishti_lake` cut from `resolved`, `javacmd`, `packlake`, `samplegen`; `lake-cli` jar; the wheel; the Python rows of the matrix | TCK Python rows equal the Java rows; the 75-case fixture byte-identical | S, O for the cut | 5 |
-| L11 | **Contracts**: reader, checker, generator, the profile seam; `ContractChecker` wired into the loader | every one of Drishti's 143 contracts reads identically and its generated page is byte-identical (run from a Drishti checkout, read-only) | S | 3 |
-| L12 | Public API review against three consumers (Drishti, the CLI, a 50-line sample project in `examples/`); `module-info`; API dump frozen | the sample project builds from `~/.m2` only | F reviews, S | 2 |
-| L13 | Docs (section 10) | link and stale checks | S, H | 3 |
-| L14 | Release tooling; `v1.0.0` candidate installed to `~/.m2` (decision R-1, as Rachana's pin) and the wheel built; **G3 evidence**: a Drishti side branch `wip/i7b-lake` on the pin with the goldens run | section 9's checks on the side branch | S | 2.5 |
-| | **In the product's repository** | | | **49.5** |
-
-### 7.1 Guards
-
-| In `drishti-lake` | Fails when |
-|---|---|
-| Names no host | a file contains `com.ash.drishti`, `DRS-`, a `drishti.` setting, or a listed product word (pack, mnemonic, module, source-system names); "Drishti Lake" allowed by exact phrase |
-| Dependency allow-list | a module has a dependency outside section 6's list |
-| Official libraries only | a class parses or writes a Delta log entry, an Iceberg metadata or manifest file, or a Parquet footer by hand (pattern scan; the cached-footer wrapper is the one listed exception) |
-| Public surface | a public type outside the exported packages; a Kernel or Iceberg type in a public signature; the API dump changed without a recorded approval |
-| Explicit paths | a relative path reaches `Storage` |
-| Writes no configuration | any write under a configuration root |
-| Exemptions only shrink | `SPLIT_EXEMPTIONS.md` grew; at `v1.0.0` it is empty |
-| TCK gates | coverage, additive-only, undeclared difference, a skipped case |
-| File cap, licence header | a file over the shared 2,500-line constant; a missing header |
-
-| In Drishti (from G4) | Fails when |
-|---|---|
-| Public API only | a source imports `com.ash.lake.internal..` or reflects into it |
-| No second copy | a class named like a moved one; `io.delta..`, `org.apache.iceberg..`, `org.apache.parquet..` imported anywhere but the three adapters (extends today's `ArchitectureRulesTest` rules) |
-| Pin is one fact | the Maven property `drishti.lake.version`, the wheel's version and the recorded checksums disagree |
-| Adapter only adapts | the TCK fails when run inside Drishti with Drishti's `LakeCatalog` and storage wiring |
 
 ## 8. Apache XTable: assessment
 
@@ -301,70 +252,6 @@ Kernel path, no Spark, on Linux and Windows; (b) TCK "exposure" cases (the other
 source's rows after load, delete-dates, undo and maintenance); (c) tables with deletion vectors are refused by name; (d) one
 exposure writer per table, serialised by the product. 1.0 reserves only the `Exposure` SPI and the case area. The existing copy
 conversion (Delta → Iceberg through the Iceberg loader) remains the way to **move** a table; exposure is the way to **show** one.
-
-## 9. Drishti's migration (G4)
-
-One sitting, other builders off the lake modules, on the i7b integration branch; Drishti `main` moves only after the drill.
-
-| # | Step | Check | Grade | bd |
-|---|---|---|---|---|
-| D1 | **Pin**: `drishti.lake.version` in the parent POM; `lake-bom` imported; the jars from `~/.m2` (R-1); the wheel in the console's environment; Drishti's own delta-kernel, Iceberg and Parquet version properties deleted | `mvn clean` build resolves offline | S | 0.5 |
-| D2 | **Delete** `lake/*` (four modules), the moved classes of the three plugins and of `plugin.file`, the moved `tools/lake` files, the moved half of `tools/contracts.py`, the moved testkit classes | the build fails only where an import must change | S | 1 |
-| D3 | **Imports**: a scripted, re-runnable rewrite `com.ash.drishti.{lakeio,lakeconfig,lakeload,dataload,memlake,deltalake,iceberg}` → `com.ash.lake..` over the 15 main and about 13 test files, the three adapters, the POMs | compiles | S | 1.5 |
-| D4 | **Adapters**: `drishti-lake-host` (`LakeCatalog` over packs, modules and site overrides; `RowSource` over `SourceRegistry`; the `LK-` → `DRS-` map; TLS and proxy settings handed in; the contract profile); the three `SourcePlugin`s on the public API; the server's wiring builds one `LakeRuntime` | module tests; `DatedSourceContract` over all connectors; `StartOnFewCoresTest` | **O** | 4 |
-| D5 | **Python**: `tools/drishti.py lake …` and the about 90 callers on `drishti_lake`; `demo.py`, `stores.py`, feeds and `mrloader` on the package | the affected Python tests; `mr_run` sample day | S | 2 |
-| D6 | **Guards** of 7.1 on, failing; `ArchitectureRulesTest` rules restated on the new names | the guards | S | 1 |
-| D7 | **Docs** (section 10): `DATA_LAKE_GUIDE`, `DATA_ARCHITECTURE` section 3, `CONFIGURATION.md` regenerated, CLI reference, README counts, CHANGELOG | docs checks | S, H | 1.5 |
-| D8 | **Proof**: demo lakes rebuilt from test data with the pinned loader; row counts and `compare_lakes` equal to the pre-migration build; **VaR and ES goldens** (`VarGoldenMatrixTest`, `SystemBasketGoldenTest`, `HierarchyGolden`, `PackagedVarGoldenTest`) exact; the TCK inside Drishti; delta-rs reads the result | all exact; any difference stops the migration | O | 2 |
-| D9 | The **one drill** of G4 (shared with the Rachana and Elements migration), then the tag | green drill | lead | 1 |
-| | **In Drishti** | | | **14.5** |
-
-Drishti's net effect: about 40,000 main and 18,500 test lines of Java and about 12,000 of Python leave; about 1,200 lines of
-adapter are new.
-
-## 10. Docs plan
-
-| Document | Where | Content |
-|---|---|---|
-| `README.md` | product | what it is, the positioning table, a ten-line start in Java and in Python, the stores and storages, the TCK badge line |
-| `docs/GUIDE.md` | product | one guide: the lake file every key, loading (inbox, `lake build`, the Java loader), `.ready` every key, name and date rules, retention, undo, delete, relocate, maintenance, memory store. Moved from `DATA_LAKE_GUIDE.md` sections 1 to 5 and 13 with the host words removed |
-| `docs/SPI.md` | product | each SPI with a worked back-end; how to run the TCK on it |
-| `docs/TCK.md` | product | the matrix, the case format, capabilities, the gates |
-| `docs/CONTRACTS.md` | product | the contract schema and the checker |
-| `docs/COMPLIANCE.md` | product | what comes from which official library; the interop evidence per release |
-| `CHANGELOG.md` | product | per release; the only place for history |
-| `DATA_LAKE_GUIDE.md`, `DATA_ARCHITECTURE.md` | Drishti | keep what is Drishti's (its lakes, packs, Admin pages, connectors); link to the product for the rest; no repeated text (`docs-lean`) |
-| `CONFIGURATION.md`, CLI reference, README | Drishti | regenerated |
-
-## 11. Risks
-
-| Risk | Effect | Mitigation |
-|---|---|---|
-| A loaded table differs after the move | wrong or missing rows; a VaR number moves | results equal the bridge at every step; D8 before the drill; no behaviour change rides along |
-| The lane takes slots from Rachana and Elements in a release already at about 1,260 bd | G2 or G3 slips | two builders at most, started after G2's first wave; the G3 escape to i8 costs nothing because Drishti is untouched |
-| The public API is cut around today's plugins and leaks library types | every Kernel or Iceberg upgrade breaks the customer | L7 and L12; the surface guard; three consumers before `1.0.0` |
-| Per-instance runtime disturbs start-up (two fixes for few-core machines landed this week) | a hang returns | `StartOnFewCoresTest` moves with the code and runs at L4, L6, D4 |
-| The Python cut breaks operator commands | loads fail on a QA machine | D5 runs every caller; the command surface of `drishti.py lake` is frozen and compared |
-| Files store parity is thinner than believed once it sits in the matrix | L8 and L9 grow | the capability list makes each gap visible and declared; gaps are defects scheduled, not hidden |
-| Two repositories slow a one-line loader fix | a release and a pin move per fix | scripted release in minutes; the pin is one property and one wheel |
-| Private data in history | a leak into a repository that other projects will read | allow-list reviewed (L0); scan of the filtered clone for product words, real sample values and large files before the first push |
-| XTable pulled in early | Hadoop weight, two metadata trees, false parity | LK-12: optional, later, own process |
-| The Polars engine (designed; not in `tools/lake` at the freeze commit) is built in Drishti meanwhile | merge pain in `tools/lake` | freeze `tools/lake` and `lake/*` on Drishti from the freeze commit, or re-run the filter and replay (the allow-list is scripted) |
-
-## 12. Estimate
-
-| Lane | Steps | bd | Model |
-|---|---|---|---|
-| Design and gates | L0, L12 review, the G3 inspection | 3 | Fable |
-| Deep: configuration, runtime, table layer, stores, TCK design, adapters, proof | L2 (format), L5 to L9, L10 (the cut), D4, D8 | 31 | Opus |
-| Mechanical: bootstrap, move, settings, harvest, Python package, contracts, release, imports, guards | L1, L3, L4, L2 and L9 (cases), L10, L11, L14, D1 to D3, D5, D6 | 25 | Sonnet |
-| Repetitive: headers, link fixes, doc moves | parts of L13, D7 | 5 | Haiku |
-| **Total** (the split by model is approximate) | | **64** | |
-| With 15% contingency | | **about 74** | |
-| `lake-convert` (XTable), not in i7b | spike 2 + build 4 | 6 | Opus |
-
-Calendar: a serial chain moves 4 to 5 bd a day (I7B_PRODUCTS_PLAN 4.2); L3 → L4 → L5 → L6 → L7 is serial, the TCK, Python and
-contracts lanes run beside it. About **10 to 12 working days** for the product with two builders, then 3 inside G4.
 
 ## 13. Decisions (LK-1 to LK-16)
 

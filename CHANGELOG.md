@@ -87,7 +87,7 @@ Entries are written per release; unreleased work is listed first.
 
 - **IDE launchers**: `java/run-configs/` (build all, test, install release for a tag only, the loader and check programs), `tools/run-configs/` (the TCK, the repository check) and `drishti-lake.code-workspace` for VS Code; README, Build and run in the IDE.
 
-- **L0, the allow-list.** [docs/MOVE_ALLOWLIST.md](docs/MOVE_ALLOWLIST.md): every file of the lake modules, the three table plug-ins,
+- **L0, the allow-list.** docs/MOVE_ALLOWLIST.md (since removed): every file of the lake modules, the three table plug-ins,
   the files store, `tools/lake` and `tools/contracts.py` at the freeze commit (Drishti `main` `9ce7c3170`), with its verdict (moves at
   L3, moves later, divides, stays) and destination; `tools/split/l3-paths.txt` is the same list for `git filter-repo`. Scan of the
   listed paths over all their history: no file over 1 MB, no key or token, no real trading-system value.
