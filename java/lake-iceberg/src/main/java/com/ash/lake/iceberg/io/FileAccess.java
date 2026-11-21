@@ -20,7 +20,7 @@ import com.ash.lake.io.LocalStorage;
 import com.ash.lake.io.NativeCodecs;
 import com.ash.lake.io.S3Settings;
 import com.ash.lake.io.S3Storage;
-import com.ash.lake.io.Storage;
+import com.ash.lake.spi.Storage;
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Map;
@@ -40,6 +40,7 @@ public final class FileAccess implements AutoCloseable {
 
     private static final Set<String> S3_SCHEMES = Set.of("s3", "s3a", "s3n");
 
+    private final com.ash.lake.LakeRuntime runtime;
     private final LocalStorage local;
     private final S3Settings s3Settings;
     private final Relocation relocate;
@@ -48,24 +49,26 @@ public final class FileAccess implements AutoCloseable {
     private volatile S3Storage s3;
 
     /**
+     * @param runtime the runtime whose storages ({@code mem://}), options and caches this reads with
      * @param s3Settings how to reach S3 when a path asks for it
      * @param relocate path prefixes to replace ({@code s3://prod/warehouse} to {@code file:/C:/copy}), in order
      * @param lz4Decoder {@code safe} or {@code fast} (null: safe)
      */
-    public FileAccess(S3Settings s3Settings, Map<String, String> relocate, String lz4Decoder) {
-        this(new LocalStorage(), s3Settings, Relocation.of(relocate), lz4Decoder);
+    public FileAccess(com.ash.lake.LakeRuntime runtime, S3Settings s3Settings, Map<String, String> relocate, String lz4Decoder) {
+        this(runtime, new LocalStorage(), s3Settings, Relocation.of(relocate), lz4Decoder);
     }
 
     /** As above, with the {@code relocate} setting already read ({@link Relocation#parse}). */
-    public FileAccess(S3Settings s3Settings, Relocation relocate, String lz4Decoder) {
-        this(new LocalStorage(), s3Settings, relocate, lz4Decoder);
+    public FileAccess(com.ash.lake.LakeRuntime runtime, S3Settings s3Settings, Relocation relocate, String lz4Decoder) {
+        this(runtime, new LocalStorage(), s3Settings, relocate, lz4Decoder);
     }
 
-    FileAccess(LocalStorage local, S3Settings s3Settings, Map<String, String> relocate, String lz4Decoder) {
-        this(local, s3Settings, Relocation.of(relocate), lz4Decoder);
+    FileAccess(com.ash.lake.LakeRuntime runtime, LocalStorage local, S3Settings s3Settings, Map<String, String> relocate, String lz4Decoder) {
+        this(runtime, local, s3Settings, Relocation.of(relocate), lz4Decoder);
     }
 
-    FileAccess(LocalStorage local, S3Settings s3Settings, Relocation relocate, String lz4Decoder) {
+    FileAccess(com.ash.lake.LakeRuntime runtime, LocalStorage local, S3Settings s3Settings, Relocation relocate, String lz4Decoder) {
+        this.runtime = java.util.Objects.requireNonNull(runtime, "runtime");
         this.local = local;
         this.s3Settings = s3Settings;
         this.relocate = relocate == null ? Relocation.none() : relocate;
@@ -73,13 +76,18 @@ public final class FileAccess implements AutoCloseable {
     }
 
     /** Local disk only, with no relocation (tests, tools). */
-    public static FileAccess local() {
-        return new FileAccess(S3Settings.from(Map.of()), Relocation.none(), null);
+    public static FileAccess local(com.ash.lake.LakeRuntime runtime) {
+        return new FileAccess(runtime, S3Settings.from(Map.of()), Relocation.none(), null);
+    }
+
+    /** The runtime this reads with. */
+    public com.ash.lake.LakeRuntime runtime() {
+        return runtime;
     }
 
     /** The same local disk and relocation, with other S3 credentials (a REST catalog's vended credentials). */
     public FileAccess withS3(S3Settings settings) {
-        return new FileAccess(local, settings, relocate, null);
+        return new FileAccess(runtime, local, settings, relocate, null);
     }
 
     public S3Settings s3Settings() {
@@ -91,11 +99,15 @@ public final class FileAccess implements AutoCloseable {
         return codecs;
     }
 
-    /** Whether this engine reads {@code path}: local paths and {@code file:}, {@code s3:}, {@code s3a:}, {@code s3n:}, {@code mem:} URIs. */
+    /** Whether {@code path} is read with no provider registered: local paths and {@code file:}, {@code s3:}, {@code s3a:}, {@code s3n:} URIs. */
     public static boolean supports(String path) {
         String scheme = LocalPaths.scheme(path);
-        return scheme.equals("file") || S3_SCHEMES.contains(scheme.toLowerCase(Locale.ROOT))
-                || com.ash.lake.io.StorageProviders.supports(path);
+        return scheme.equals("file") || S3_SCHEMES.contains(scheme.toLowerCase(Locale.ROOT));
+    }
+
+    /** Whether this reads {@code path}: the built-in schemes and those of the runtime's providers ({@code mem}). */
+    public boolean reads(String path) {
+        return supports(path) || runtime.supports(path);
     }
 
     /**
@@ -133,8 +145,8 @@ public final class FileAccess implements AutoCloseable {
         if (S3_SCHEMES.contains(scheme)) {
             return s3();
         }
-        if (com.ash.lake.io.StorageProviders.supports(path)) {
-            return com.ash.lake.io.StorageProviders.storage(path);    // mem://, a warehouse in memory (docs/architecture/DATA_ARCHITECTURE.md section 7)
+        if (runtime.supports(path)) {
+            return runtime.storage(path);                            // mem://, a warehouse in memory
         }
         throw new UnsupportedOperationException("drishti-iceberg reads local disk, S3 (s3://, s3a://) and memory (mem://), not " + scheme
                 + "://");

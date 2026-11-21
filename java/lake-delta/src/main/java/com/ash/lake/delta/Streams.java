@@ -16,8 +16,8 @@
 package com.ash.lake.delta;
 
 import com.ash.lake.io.RangeCursor;
-import com.ash.lake.io.RangeReader;
-import com.ash.lake.io.Storage;
+import com.ash.lake.spi.RangeReader;
+import com.ash.lake.spi.Storage;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 

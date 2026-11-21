@@ -56,10 +56,10 @@ public final class FileRows {
     private FileRows() {}
 
     /** Counts the documents of {@code file}; {@code progress} is told the running total now and then. */
-    public static Counted count(Path file, LongConsumer progress) throws IOException {
+    public static Counted count(com.ash.lake.LakeRuntime runtime, Path file, LongConsumer progress) throws IOException {
         Map<String, Long> per = new TreeMap<>();
         long[] total = {0};
-        each(file, null, (dataset, in) -> {
+        each(runtime, file, null, (dataset, in) -> {
             long n = countLines(in, total, progress);
             per.merge(dataset, n, Long::sum);
         });
@@ -70,7 +70,7 @@ public final class FileRows {
     }
 
     /** The first {@code limit} non-blank lines of each dataset of {@code file}. */
-    public static Map<String, List<String>> sample(Path file, int limit) throws IOException {
+    public static Map<String, List<String>> sample(com.ash.lake.LakeRuntime runtime, Path file, int limit) throws IOException {
         Map<String, List<String>> out = new LinkedHashMap<>();
         if (!Archives.isArchive(file.getFileName().toString())) {
             List<String> lines = new ArrayList<>();
@@ -80,8 +80,8 @@ public final class FileRows {
             out.put(SINGLE, lines);
             return out;
         }
-        try (FileAccess io = access()) {
-            Archives.Limits limits = Archives.Limits.defaults(com.ash.lake.LakeOptions.current().lookup());
+        try (FileAccess io = access(runtime)) {
+            Archives.Limits limits = Archives.Limits.defaults(runtime.options().lookup());
             Archives.Plan plan = Archives.plan(io, file.toString(), Files.size(file), null, limits);
             for (Map.Entry<String, List<Archives.Member>> e : plan.datasets().entrySet()) {
                 List<String> lines = new ArrayList<>();
@@ -108,15 +108,15 @@ public final class FileRows {
         void accept(String dataset, InputStream jsonl) throws IOException;
     }
 
-    private static void each(Path file, Object unused, Sink sink) throws IOException {
+    private static void each(com.ash.lake.LakeRuntime runtime, Path file, Object unused, Sink sink) throws IOException {
         if (!Archives.isArchive(file.getFileName().toString())) {
             try (InputStream in = plain(file)) {
                 sink.accept(SINGLE, in);
             }
             return;
         }
-        try (FileAccess io = access()) {
-            Archives.Limits limits = Archives.Limits.defaults(com.ash.lake.LakeOptions.current().lookup());
+        try (FileAccess io = access(runtime)) {
+            Archives.Limits limits = Archives.Limits.defaults(runtime.options().lookup());
             Archives.Plan plan = Archives.plan(io, file.toString(), Files.size(file), null, limits);
             Archives.read(io, plan, plan.members(), limits, new Meter("count", 1), BLOCK, (m, in) -> sink.accept(m.dataset(), in));
         } catch (InterruptedException x) {
@@ -125,8 +125,8 @@ public final class FileRows {
         }
     }
 
-    private static FileAccess access() throws IOException {
-        return new FileAccess(com.ash.lake.io.S3Settings.from(Map.of()), com.ash.lake.iceberg.io.Relocation.none(), null);
+    private static FileAccess access(com.ash.lake.LakeRuntime runtime) throws IOException {
+        return new FileAccess(runtime, com.ash.lake.io.S3Settings.from(Map.of()), com.ash.lake.iceberg.io.Relocation.none(), null);
     }
 
     /** A file that is not an archive, decompressed by what its first bytes say. */

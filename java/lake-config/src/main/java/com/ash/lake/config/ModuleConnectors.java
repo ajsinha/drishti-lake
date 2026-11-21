@@ -32,7 +32,7 @@ public final class ModuleConnectors {
     private ModuleConnectors() {}
 
     /** The templates of the modules that are on for the kinds {@code kinds} (a pack's), by connector name, each marked with its module. */
-    public static Map<String, Map<String, Object>> forKinds(Collection<String> kinds) {
-        return com.ash.lake.spi.LakeCatalog.current().connectorTemplates(kinds);
+    public static Map<String, Map<String, Object>> forKinds(com.ash.lake.LakeRuntime runtime, Collection<String> kinds) {
+        return runtime.catalog().connectorTemplates(kinds);
     }
 }

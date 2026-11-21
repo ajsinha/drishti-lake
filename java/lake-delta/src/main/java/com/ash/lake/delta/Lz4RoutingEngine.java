@@ -107,7 +107,7 @@ public final class Lz4RoutingEngine implements Engine, AutoCloseable {
                             return false;
                         }
                         FileStatus f = files.next();
-                        Engine reader = NativeEngine.supports(f.getPath()) && nativeEngine.usesLz4(f) ? nativeEngine : hadoop;
+                        Engine reader = nativeEngine.reads(f.getPath()) && nativeEngine.usesLz4(f) ? nativeEngine : hadoop;
                         try {
                             current = reader.getParquetHandler().readParquetFiles(Utils.singletonCloseableIterator(f), physicalSchema,
                                     predicate);

@@ -38,11 +38,12 @@ import java.time.Duration;
  */
 public record DataLoadSettings(Boolean owner, String dir, Duration interval, Integer stableSeconds, Integer maxFiles, Double maxGb, String loaderHeap,
         Duration loadTimeout, Double rejectMaxPercent, Boolean reloadDuplicates, Integer keepOutboxDays, String lake, String rulesFile, Boolean nice,
-        String defaultMode, Boolean newTables) {
+        String defaultMode, Boolean newTables, com.ash.lake.LakeRuntime runtime) {
 
     public DataLoadSettings {
+        java.util.Objects.requireNonNull(runtime, "runtime");
         owner = owner == null || owner;
-        dir = blank(dir) ? com.ash.lake.LakeRoots.data("dataload") : dir.trim();
+        dir = blank(dir) ? runtime.roots().data("dataload") : dir.trim();
         interval = interval == null || interval.isNegative() || interval.isZero() ? Duration.ofMinutes(10) : interval;
         stableSeconds = stableSeconds == null || stableSeconds < 0 ? 30 : stableSeconds;
         maxFiles = maxFiles == null || maxFiles < 0 ? 0 : maxFiles;
@@ -56,7 +57,7 @@ public record DataLoadSettings(Boolean owner, String dir, Duration interval, Int
         reloadDuplicates = reloadDuplicates != null && reloadDuplicates;
         keepOutboxDays = keepOutboxDays == null || keepOutboxDays < 0 ? 30 : keepOutboxDays;
         lake = blank(lake) ? "demo" : lake.trim();         // a lake of config/lakes/ (a folder is the old form, read with one warning)
-        rulesFile = blank(rulesFile) ? com.ash.lake.LakeRoots.config("dataload.yaml") : rulesFile.trim();
+        rulesFile = blank(rulesFile) ? runtime.roots().config("dataload.yaml") : rulesFile.trim();
         nice = nice == null || nice;
         defaultMode = blank(defaultMode) ? "append" : defaultMode.trim().toLowerCase(java.util.Locale.ROOT);
         if (!defaultMode.equals("append") && !defaultMode.equals("replace")) {
@@ -66,15 +67,15 @@ public record DataLoadSettings(Boolean owner, String dir, Duration interval, Int
         newTables = newTables != null && newTables;
     }
 
-    /** Every default (tests, and a server that sets nothing). */
-    public static DataLoadSettings defaults() {
-        return new DataLoadSettings(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+    /** Every default in {@code runtime} (tests, and a server that sets nothing). */
+    public static DataLoadSettings defaults(com.ash.lake.LakeRuntime runtime) {
+        return new DataLoadSettings(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, runtime);
     }
 
     /** The same settings with another folder, lake and rules file (tests). */
     public DataLoadSettings at(String dir, String lake, String rulesFile) {
         return new DataLoadSettings(owner, dir, interval, stableSeconds, maxFiles, maxGb, loaderHeap, loadTimeout, rejectMaxPercent, reloadDuplicates,
-                keepOutboxDays, lake, rulesFile, nice, defaultMode, newTables);
+                keepOutboxDays, lake, rulesFile, nice, defaultMode, newTables, runtime);
     }
 
     /** {@link #maxGb} in bytes ({@link Long#MAX_VALUE}: no limit). */

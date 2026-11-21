@@ -54,7 +54,7 @@ class NativeRefusalTest {
         enc.newAppend().appendFile(DataFiles.builder(enc.spec()).withPath(root + "/desk/secret/data/part-0.parquet").withFormat(FileFormat.PARQUET)
                 .withPartition(OracleLayout.partition(enc.spec(), java.time.LocalDate.of(2026, 9, 30))).withRecordCount(1).withFileSizeInBytes(10)
                 .withEncryptionKeyMetadata(ByteBuffer.wrap(new byte[] {1, 2, 3})).build()).commit();
-        try (Catalog c = Catalogs.open(Map.of("root", root.toString(), "domain", "desk")); ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Map.of("root", root.toString(), "domain", "desk")); ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
             var t = c.load("orcs").orElseThrow();
             assertThatThrownBy(() -> t.plan(t.currentSnapshot().orElseThrow(), Expr.TRUE, pool)).isInstanceOf(UnsupportedFeature.class)
                     .hasMessageContaining("ORC data files").hasMessageContaining("part-0.orc").hasMessageContaining("write it again as a format-version 2").hasMessageNotContaining("engine: library");

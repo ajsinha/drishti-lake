@@ -48,7 +48,7 @@ class CatalogNamedMetadataTest {
                 }
             }
             assertThat(meta.resolve("version-hint.text")).doesNotExist();
-            try (Catalog c = Catalogs.open(Map.of("root", root.toString(), "domain", "qa"))) {
+            try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Map.of("root", root.toString(), "domain", "qa"))) {
                 Table t = c.load("positions").orElseThrow(() -> new AssertionError("no table qa.positions"));
                 assertThat(Path.of(t.metadataLocation()).getFileName().toString()).startsWith("00002-");
                 assertThat(c.tables()).isEqualTo(List.of("positions"));

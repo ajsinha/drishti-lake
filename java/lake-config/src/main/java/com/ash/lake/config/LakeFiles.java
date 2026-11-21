@@ -253,10 +253,10 @@ public final class LakeFiles {
      * tables by {@code lake-tables:}, else by the connector's domain and kinds), each with its pack's recommended entry ({@link PackEntry})
      * as a lake file writes it: what that lake's file must hold for every connector those packs generate to find its table.
      */
-    public static Map<String, JsonNode> packTables(List<Path> packFiles, String lake) throws IOException {
+    public static Map<String, JsonNode> packTables(com.ash.lake.LakeRuntime runtime, List<Path> packFiles, String lake) throws IOException {
         Map<String, JsonNode> out = new LinkedHashMap<>();
         for (Path file : packFiles) {
-            JsonNode m = PackEntry.manifest(file);
+            JsonNode m = PackEntry.manifest(runtime, file);
             if (m == null || !m.isObject()) {
                 continue;
             }
@@ -288,7 +288,7 @@ public final class LakeFiles {
                         continue;
                     }
                     String kind = m.path("lake").path("tables").path(name).path("kind").asText(name.substring(dot + 1));
-                    out.put(name, entry(PackEntry.read(file, kind, c.getKey()).toTable(kind)));
+                    out.put(name, entry(PackEntry.read(runtime, file, kind, c.getKey()).toTable(kind)));
                 }
             }
         }
@@ -296,13 +296,13 @@ public final class LakeFiles {
     }
 
     /** The {@code pack.yaml} files of the packs under the given folders (each folder's packs, sorted by name), for {@link #packTables}. */
-    public static List<Path> packFiles(List<Path> packRoots) throws IOException {
+    public static List<Path> packFiles(com.ash.lake.LakeRuntime runtime, List<Path> packRoots) throws IOException {
         List<Path> out = new ArrayList<>();
         for (Path root : packRoots) {
             if (!Files.isDirectory(root)) {
                 continue;
             }
-            out.addAll(com.ash.lake.spi.LakeCatalog.current().packFiles(root.toAbsolutePath().normalize()));   // its packs, its domain folders'
+            out.addAll(runtime.catalog().packFiles(root.toAbsolutePath().normalize()));   // its packs, its domain folders'
         }
         return out;
     }
@@ -403,8 +403,8 @@ public final class LakeFiles {
      * {@code lake-tables:} when a table is not named after its kind). A lake file that exists already is never overwritten: the new one
      * gets another name. With {@code write} false nothing is written.
      */
-    public static Migration migrate(Path connectorsDir, Path lakesDir, boolean write) throws IOException {
-        Migration demo = adoptDemo(connectorsDir, lakesDir, write);          // the demo lake's old default root: lake: demo
+    public static Migration migrate(com.ash.lake.LakeRuntime runtime, Path connectorsDir, Path lakesDir, boolean write) throws IOException {
+        Migration demo = adoptDemo(runtime, connectorsDir, lakesDir, write);          // the demo lake's old default root: lake: demo
         Map<Path, String> lakes = new LinkedHashMap<>(demo.lakeFiles());
         Map<Path, String> connectors = new LinkedHashMap<>();
         List<String> notes = new ArrayList<>(demo.notes());
@@ -550,15 +550,15 @@ public final class LakeFiles {
      * name {@code demo}. A connector that names its root otherwise (a path or URI of its own) is left as it is: that form is permanent.
      * With {@code write}, each file is kept beside it first ({@code <name>.yaml.before-lake-<time>.bak}).
      */
-    public static Migration adoptDemo(Path connectorsDir, Path lakesDir, boolean write) throws IOException {
-        return adoptDemo(connectorsDir, lakesDir, write, (before, after) -> after);
+    public static Migration adoptDemo(com.ash.lake.LakeRuntime runtime, Path connectorsDir, Path lakesDir, boolean write) throws IOException {
+        return adoptDemo(runtime, connectorsDir, lakesDir, write, (before, after) -> after);
     }
 
     /**
-     * {@link #adoptDemo(Path, Path, boolean)}, each rewritten file's text passed through {@code restamp(before, after)} first (a tool's
+     * {@link #adoptDemo(com.ash.lake.LakeRuntime, Path, Path, boolean)}, each rewritten file's text passed through {@code restamp(before, after)} first (a tool's
      * hook; the server writes no connector file).
      */
-    public static Migration adoptDemo(Path connectorsDir, Path lakesDir, boolean write, java.util.function.BinaryOperator<String> restamp) throws IOException {
+    public static Migration adoptDemo(com.ash.lake.LakeRuntime runtime, Path connectorsDir, Path lakesDir, boolean write, java.util.function.BinaryOperator<String> restamp) throws IOException {
         Map<Path, String> lakeFiles = new LinkedHashMap<>();
         Map<Path, String> connectors = new LinkedHashMap<>();
         List<String> notes = new ArrayList<>();
@@ -592,7 +592,7 @@ public final class LakeFiles {
             String plugin = c.path("plugin").asText();
             Map<String, String> flat = flat(settings);
             ObjectNode rewritten = ((ObjectNode) c).deepCopy();
-            if (com.ash.lake.spi.LakeCatalog.current().namedLakeWriters().contains(plugin) && demoRoot(flat.get(ConnectorLake.LAKE))) {
+            if (runtime.catalog().namedLakeWriters().contains(plugin) && demoRoot(flat.get(ConnectorLake.LAKE))) {
                 ((ObjectNode) rewritten.get("settings")).put(ConnectorLake.LAKE, "demo");
                 connectors.put(f, restamp.apply(Files.readString(f), comments(f) + YAML.writeValueAsString(rewritten)));
                 notes.add(f.getFileName() + ": writes into the demo lake by name now (lake: demo)");
@@ -604,7 +604,7 @@ public final class LakeFiles {
             String domain = flat.getOrDefault("domain", "");
             List<String> kinds = new ArrayList<>();
             c.path("kinds").forEach(k -> kinds.add(k.asText()));
-            String owner = otherLake(lakesDir, kinds.stream().map(k -> (domain.isEmpty() ? plugin : domain) + "." + flat.getOrDefault("table." + k, k)).toList());
+            String owner = otherLake(runtime, lakesDir, kinds.stream().map(k -> (domain.isEmpty() ? plugin : domain) + "." + flat.getOrDefault("table." + k, k)).toList());
             if (owner != null) {                                   // the official results' reader (risk-results): another lake's tables, never the demo lake's
                 notes.add(f.getFileName() + ": reads the tables of lake " + owner + " (its root is the same folder); left as it is");
                 continue;
@@ -681,7 +681,7 @@ public final class LakeFiles {
      * The lake other than the demo lake whose file (in {@code lakesDir}, else shipped in the jar) holds every one of {@code names}, or null:
      * a connector reading such tables by the old root (the official results' readers, {@code risk-results.*}) belongs to that lake.
      */
-    static String otherLake(Path lakesDir, List<String> names) throws IOException {
+    static String otherLake(com.ash.lake.LakeRuntime runtime, Path lakesDir, List<String> names) throws IOException {
         if (names.isEmpty()) {
             return null;
         }
@@ -690,7 +690,7 @@ public final class LakeFiles {
         for (Path f : Lakes.files(lakesDir)) {
             lakes.add(f.getFileName().toString().replaceFirst("\\.yaml$", ""));
         }
-        lakes.addAll(Lakes.shipped());
+        lakes.addAll(Lakes.shipped(runtime));
         for (String lake : lakes) {
             if (lake.equals("demo")) {
                 continue;
@@ -704,7 +704,7 @@ public final class LakeFiles {
                     continue;                                       // not a lake file this can read: it owns nothing
                 }
             } else {
-                try (java.io.InputStream in = Lakes.shippedFile(lake)) {
+                try (java.io.InputStream in = runtime.catalog().shippedLake(lake)) {
                     root = in == null ? null : YAML.readTree(in);
                 }
             }

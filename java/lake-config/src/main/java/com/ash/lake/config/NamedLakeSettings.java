@@ -28,8 +28,8 @@ import java.util.function.Supplier;
 /**
  * The named lake settings, {@code lake.<name>.<key>} (a {@code [lake.<name>]} section of a settings file, a {@code -D}, the environment
  * form {@code LAKE_<NAME>_ROOT}): a site moves one lake by name, its {@code root} and its {@code storage.<key>}, and no other. Read
- * from the process (system properties, which hold the settings files' entries, then the environment), or through the view a host
- * installs ({@link #useView}). The product's own options ({@link com.ash.lake.LakeOptions}, {@code lake.home} and the like) are not a
+ * through one runtime's settings ({@link com.ash.lake.LakeRuntime#settings()}, {@link com.ash.lake.LakeRuntime#settingNames()}), or
+ * through a lookup alone (then only the keys every lake has: {@code root}, {@code format}, {@code lake}). The product's own options ({@link com.ash.lake.LakeOptions}, {@code lake.home} and the like) are not a
  * lake's.
  */
 public final class NamedLakeSettings {
@@ -37,22 +37,26 @@ public final class NamedLakeSettings {
     /** The keys read in their environment form too, whether or not a source lists them. */
     static final List<String> KNOWN = List.of("root", "format", "lake");
 
-    private static volatile Function<String, String> lookup;
-    private static volatile Supplier<Collection<String>> names = NamedLakeSettings::processNames;
+    private final Function<String, String> lookup;
+    private final Supplier<Collection<String>> names;
 
-    private NamedLakeSettings() {
+    private NamedLakeSettings(Function<String, String> lookup, Supplier<Collection<String>> names) {
+        this.lookup = lookup;
+        this.names = names;
     }
 
-    /**
-     * Installs a host's view: {@code lookup} reads one key, {@code keys} lists every key its sources name. Null for either: the process's.
-     */
-    public static void useView(Function<String, String> lookup, Supplier<Collection<String>> keys) {
-        NamedLakeSettings.lookup = lookup;
-        NamedLakeSettings.names = keys == null ? NamedLakeSettings::processNames : keys;
+    /** The named lake settings of {@code runtime}'s settings. */
+    public static NamedLakeSettings of(com.ash.lake.LakeRuntime runtime) {
+        return new NamedLakeSettings(runtime.settings(), runtime::settingNames);
+    }
+
+    /** The named lake settings {@code lookup} gives (no list of names: the keys every lake has). */
+    public static NamedLakeSettings over(Function<String, String> lookup) {
+        return new NamedLakeSettings(lookup == null ? k -> null : lookup, List::of);
     }
 
     /** Every named lake setting, by its full key ({@code lake.risk.root}). */
-    public static Map<String, String> all() {
+    public Map<String, String> all() {
         Map<String, String> out = new TreeMap<>();
         for (String k : List.copyOf(names.get())) {
             if (k.startsWith("lake.") && !com.ash.lake.LakeOptions.isOption(k)) {
@@ -66,7 +70,7 @@ public final class NamedLakeSettings {
     }
 
     /** One lake's settings, by key within its section ({@code root}, {@code storage.s3.region}). */
-    public static Map<String, String> section(String name) {
+    public Map<String, String> section(String name) {
         String prefix = "lake." + name + ".";
         Set<String> keys = new LinkedHashSet<>();
         for (String k : List.copyOf(names.get())) {
@@ -86,14 +90,8 @@ public final class NamedLakeSettings {
     }
 
     /** One key through the view, resolved; null when nothing names it. */
-    static String get(String key) {
+    String get(String key) {
         String v = Placeholders.lookup(key, lookup);
         return v == null ? null : Placeholders.resolve(v, lookup);
-    }
-
-    private static Collection<String> processNames() {
-        Set<String> out = new LinkedHashSet<>(System.getProperties().stringPropertyNames());
-        out.addAll(System.getenv().keySet());
-        return out;
     }
 }

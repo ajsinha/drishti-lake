@@ -250,7 +250,7 @@ public final class ReadyChecks {
         List<JsonNode> rows = new ArrayList<>();
         try {
             int bad = 0;
-            for (String line : FileRows.sample(it.file, size).getOrDefault(dataset, List.of())) {
+            for (String line : FileRows.sample(desk.runtime(), it.file, size).getOrDefault(dataset, List.of())) {
                 try {
                     JsonNode n = JSON.readTree(line);
                     if (n != null && n.isObject()) {
@@ -320,7 +320,7 @@ public final class ReadyChecks {
 
     private Located locate(Routes.Route r) {
         try {
-            PackEntry pe = PackEntry.read(r.packDir(), r.kind(), r.connector());
+            PackEntry pe = PackEntry.read(desk.runtime(), r.packDir(), r.kind(), r.connector());
             String folder = pe.table() != null ? pe.table() : r.table() != null ? r.table() : r.kind();
             Optional<Lake> l = lake(r.lake());
             Optional<LakeTable> t = l.flatMap(x -> {
@@ -340,9 +340,9 @@ public final class ReadyChecks {
         }
     }
 
-    private static Optional<Lake> lake(String name) {
+    private Optional<Lake> lake(String name) {
         try {
-            return Lakes.current().find(name);
+            return Lakes.current(desk.runtime()).find(name);
         } catch (RuntimeException e) {
             return Optional.empty();
         }
@@ -461,7 +461,7 @@ public final class ReadyChecks {
         }
         TableDateRows.Counts counts;
         try {
-            counts = TableDateRows.count(loc.location(), date.toString(), ReadyRule.SENDER_COLUMNS);
+            counts = TableDateRows.count(desk.runtime(), loc.location(), date.toString(), ReadyRule.SENDER_COLUMNS);
         } catch (IOException | RuntimeException e) {
             out.add(ReadyCheck.warning(at + "The rows already in the table for " + date + " could not be counted: " + e.getMessage(), null));
             return;
@@ -502,7 +502,7 @@ public final class ReadyChecks {
         if ("iceberg".equalsIgnoreCase(l.format())) {
             throw new IOException("the table of " + kind + " is an Iceberg table, not counted here");
         }
-        TableDateRows.Counts c = TableDateRows.count(l.location(), date.toString(), ReadyRule.SENDER_COLUMNS);
+        TableDateRows.Counts c = TableDateRows.count(desk.runtime(), l.location(), date.toString(), ReadyRule.SENDER_COLUMNS);
         Map<List<String>, Long> out = new LinkedHashMap<>();
         c.groups().forEach((k, v) -> {
             List<String> key = new ArrayList<>();

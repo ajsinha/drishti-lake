@@ -18,7 +18,7 @@ package com.ash.lake.delta;
 import com.ash.lake.io.NativeCodecs;
 import com.ash.lake.io.ParquetFooters;
 import com.ash.lake.io.S3Settings;
-import com.ash.lake.io.Storage;
+import com.ash.lake.spi.Storage;
 import io.delta.kernel.defaults.engine.DefaultExpressionHandler;
 import io.delta.kernel.engine.Engine;
 import io.delta.kernel.engine.ExpressionHandler;
@@ -49,9 +49,9 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
  */
 public final class NativeEngine implements Engine, AutoCloseable {
 
-    /** Forgets the parsed Parquet footers kept across reads (a purge of a connector's caches). */
-    public static void purgeFooterCache() {
-        ParquetFooters.purge();
+    /** Forgets the parsed Parquet footers {@code runtime} keeps across reads (a purge of a connector's caches). */
+    public static void purgeFooterCache(com.ash.lake.LakeRuntime runtime) {
+        ParquetFooters.of(runtime).purge();
     }
 
 
@@ -73,7 +73,7 @@ public final class NativeEngine implements Engine, AutoCloseable {
     }
 
     /** An engine for the connector settings {@code settings} (see the class comment). */
-    public static NativeEngine create(Map<String, String> settings) {
+    public static NativeEngine create(com.ash.lake.LakeRuntime runtime, Map<String, String> settings) {
         Map<String, String> conf = new HashMap<>();
         settings.forEach((k, v) -> {
             if (k.startsWith("hadoop.")) {
@@ -89,7 +89,7 @@ public final class NativeEngine implements Engine, AutoCloseable {
         if (lz4 != null) {
             conf.put(NativeCodecs.LZ4_DECODER, lz4);
         }
-        return new NativeEngine(new NativeFileIO(S3Settings.from(settings), conf));
+        return new NativeEngine(new NativeFileIO(runtime, S3Settings.from(settings), conf));
     }
 
     /** The TLS material of the S3 endpoint ({@code tls.*}), or null. */
@@ -103,13 +103,18 @@ public final class NativeEngine implements Engine, AutoCloseable {
     }
 
     /** An engine with default settings: local disk, and S3 with the AWS credential and region chains. */
-    public static NativeEngine create() {
-        return create(Map.of());
+    public static NativeEngine create(com.ash.lake.LakeRuntime runtime) {
+        return create(runtime, Map.of());
     }
 
-    /** Whether this engine reads {@code path}: local paths and {@code file:}, {@code s3:}, {@code s3a:}, {@code s3n:} URIs. */
+    /** Whether an engine reads {@code path} with no provider registered: local paths and {@code file:}, {@code s3:}, {@code s3a:}, {@code s3n:} URIs. */
     public static boolean supports(String path) {
         return NativeFileIO.supports(path);
+    }
+
+    /** Whether this engine reads {@code path}: the built-in schemes and its runtime's providers'. */
+    public boolean reads(String path) {
+        return io.reads(path);
     }
 
     /**

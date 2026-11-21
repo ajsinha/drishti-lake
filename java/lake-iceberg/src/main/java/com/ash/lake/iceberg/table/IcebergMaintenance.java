@@ -76,7 +76,7 @@ public final class IcebergMaintenance {
      * Undoes load {@code id} in every Iceberg table of the lake at {@code root} (a local folder: {@code <domain>/<table>}; DATA_LAKE_GUIDE.md
      * section 6.3): a line per table and date undone ({@code table}, {@code date}, {@code removed}, {@code restored}, {@code replaced}).
      */
-    public static List<Map<String, Object>> undoLake(String root, String id, boolean dryRun, Path spillDir) throws Exception {
+    public static List<Map<String, Object>> undoLake(com.ash.lake.LakeRuntime runtime, String root, String id, boolean dryRun, Path spillDir) throws Exception {
         List<Map<String, Object>> out = new ArrayList<>();
         Path base = Path.of(root);
         if (!java.nio.file.Files.isDirectory(base)) {
@@ -88,7 +88,7 @@ public final class IcebergMaintenance {
         }
         for (Path d : domains) {
             Map<String, String> ns = new HashMap<>(Map.of("root", root, "domain", d.getFileName().toString()));
-            try (LayoutLake view = LayoutLake.of(ns)) {
+            try (LayoutLake view = LayoutLake.of(runtime, ns)) {
                 for (String kind : view.kinds()) {
                     com.ash.lake.iceberg.Table t = ((LayoutLake.Native.Kind) view.load(kind).orElseThrow()).t();
                     for (Map<String, Object> line : NativeMaintenance.undo(t, id, spillDir, 256L << 20, dryRun)) {
@@ -107,9 +107,9 @@ public final class IcebergMaintenance {
      * Row retention ({@code retention: {ttl, on, max-rows}}) for the Iceberg table {@code domain/table} of the lake at {@code root}: a line
      * per business date rewritten ({@code date}, {@code rows}, {@code dropped}). Called by name from {@code LakeRetention} (the Delta side).
      */
-    public static List<Map<String, Object>> retentionTable(String root, String domain, String kind, String ttl, String on, Integer maxRows,
+    public static List<Map<String, Object>> retentionTable(com.ash.lake.LakeRuntime runtime, String root, String domain, String kind, String ttl, String on, Integer maxRows,
             boolean dryRun, Path spillDir) throws Exception {
-        try (LayoutLake view = LayoutLake.of(new HashMap<>(Map.of("root", root, "domain", domain, "engine", "native")))) {
+        try (LayoutLake view = LayoutLake.of(runtime, new HashMap<>(Map.of("root", root, "domain", domain, "engine", "native")))) {
             var table = view.load(kind);
             if (table.isEmpty()) {
                 return List.of();
@@ -125,9 +125,9 @@ public final class IcebergMaintenance {
      * accepts: {@code date}, {@code rows}, {@code dropped}). One metadata-only commit for all of them (no file rewritten); nothing on a dry run.
      * Called by name from {@code LakeRetention} (the Delta side).
      */
-    public static Map<String, Object> dropDates(String root, String domain, String kind, java.util.function.Predicate<String> wanted, boolean dryRun)
+    public static Map<String, Object> dropDates(com.ash.lake.LakeRuntime runtime, String root, String domain, String kind, java.util.function.Predicate<String> wanted, boolean dryRun)
             throws Exception {
-        try (LayoutLake view = LayoutLake.of(new HashMap<>(Map.of("root", root, "domain", domain, "engine", "native")))) {
+        try (LayoutLake view = LayoutLake.of(runtime, new HashMap<>(Map.of("root", root, "domain", domain, "engine", "native")))) {
             var table = view.load(kind);
             if (table.isEmpty()) {
                 Map<String, Object> none = new java.util.LinkedHashMap<>();
@@ -140,8 +140,9 @@ public final class IcebergMaintenance {
     }
 
     public static void main(String[] args) throws Exception {
+        com.ash.lake.LakeRuntime runtime = com.ash.lake.LakeRuntime.fromProcess();             // a command line: the process's settings
         Map<String, String> settings = new HashMap<>();
-        settings.put("root", args.length > 0 && !args[0].startsWith("--") ? args[0] : com.ash.lake.LakeRoots.under("iceberg"));
+        settings.put("root", args.length > 0 && !args[0].startsWith("--") ? args[0] : runtime.roots().under("iceberg"));
         List<String> domains = new ArrayList<>(List.of(""));
         List<String> kinds = List.of();
         Map<String, List<String>> addColumns = new HashMap<>();
@@ -226,7 +227,7 @@ public final class IcebergMaintenance {
             s.put("domain", domain.trim());
             Map<String, String> ns = new HashMap<>(s);
             ns.put("engine", "native");                        // orphans and the report read the table with drishti-iceberg, whichever engine wrote it
-            try (LayoutLake lake = LayoutLake.of(s); LayoutLake view = LayoutLake.of(ns)) {
+            try (LayoutLake lake = LayoutLake.of(runtime, s); LayoutLake view = LayoutLake.of(runtime, ns)) {
                 for (String kind : kinds.isEmpty() ? lake.kinds() : kinds) {
                     LayoutLake.LayoutTable t = lake.load(kind).orElse(null);
                     if (t == null) {

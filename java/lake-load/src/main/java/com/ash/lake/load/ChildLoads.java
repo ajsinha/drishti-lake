@@ -18,7 +18,7 @@ package com.ash.lake.load;
 import com.ash.lake.common.FileDates;
 import com.ash.lake.iceberg.io.FileAccess;
 import com.ash.lake.iceberg.io.Relocation;
-import com.ash.lake.io.RangeReader;
+import com.ash.lake.spi.RangeReader;
 import com.ash.lake.io.S3Settings;
 import com.ash.lake.load.Inputs.InputFile;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -73,7 +73,7 @@ final class ChildLoads {
         }
         Path scratch = null;
         try {
-            scratch = com.ash.lake.common.TempFiles.createDir("drishti-children-");
+            scratch = com.ash.lake.common.TempFiles.of(cfg.runtime()).createDir("lake-children-");
             Map<String, Long> rows = split(cfg, given, kids, scratch);
             int worst = LakeLoad.OK;
             for (ChildKinds c : kids) {
@@ -87,7 +87,7 @@ final class ChildLoads {
                 if (!quiet) {
                     out.println("child kind " + c.kind() + ": " + rows.get(c.kind()) + " rows from " + c.field() + " of " + kind);
                 }
-                LoadConfig child = LoadConfig.of(childTree(tree, c, files), com.ash.lake.Placeholders::process);
+                LoadConfig child = LoadConfig.of(cfg.runtime(), childTree(tree, c, files));
                 int code = LakeLoad.runOne(child, null, out, json, quiet, System.nanoTime()).code();
                 worst = worse(worst, code);
                 if (code == LakeLoad.FAILED || code == LakeLoad.LOCKED) {
@@ -156,7 +156,7 @@ final class ChildLoads {
         Map<String, BufferedWriter> writers = new HashMap<>();
         RowPlan plan = new RowPlan(cfg.source(), cfg.target().layout().sortBy());
         Meter meter = new Meter("children", 1);
-        try (FileAccess io = new FileAccess(S3Settings.from(cfg.source().storage()), Relocation.none(), null)) {
+        try (FileAccess io = new FileAccess(cfg.runtime(), S3Settings.from(cfg.source().storage()), Relocation.none(), null)) {
             List<InputFile> files = given != null ? given : Inputs.resolve(cfg.source().files(), cfg.source().recursive(), io);
             Map<Archives.Member, InputFile> members = new HashMap<>();
             Map<Archives.Plan, List<Archives.Member>> byArchive = new LinkedHashMap<>();

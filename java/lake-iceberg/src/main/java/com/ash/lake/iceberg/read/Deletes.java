@@ -46,15 +46,25 @@ import java.util.Set;
  */
 public final class Deletes {
 
-    private static final Cache<String, Object> FILES = Caffeine.newBuilder()
-            .maximumWeight(com.ash.lake.LakeOptions.current().icebergDeleteCacheRows())
-            .weigher((String k, Object v) -> 1 + (v instanceof Map<?, ?> m ? m.values().stream().mapToInt(a -> ((long[]) a).length).sum()
-                    : ((Set<?>) v).size())).build();
-    /**
-     * A delete file is read outside the cache's compute (2.9.7): Caffeine's synchronous {@code get(key, loader)} runs the loader inside a
-     * {@code synchronized} bin, and a file read there pins a virtual thread's carrier on Java 21. One read a file still serves every caller.
-     */
-    private static final com.ash.lake.common.SingleFlight<String> LOADS = new com.ash.lake.common.SingleFlight<>();
+    /** The delete files a runtime keeps read ({@code lake.iceberg.delete-cache-rows}): one cache per runtime. */
+    static final class Kept {
+        final Cache<String, Object> files;
+        /**
+         * A delete file is read outside the cache's compute (2.9.7): Caffeine's synchronous {@code get(key, loader)} runs the loader inside a
+         * {@code synchronized} bin, and a file read there pins a virtual thread's carrier on Java 21. One read a file still serves every caller.
+         */
+        final com.ash.lake.common.SingleFlight<String> loads = new com.ash.lake.common.SingleFlight<>();
+
+        Kept(long rows) {
+            files = Caffeine.newBuilder().maximumWeight(rows)
+                    .weigher((String k, Object v) -> 1 + (v instanceof Map<?, ?> m ? m.values().stream().mapToInt(a -> ((long[]) a).length).sum()
+                            : ((Set<?>) v).size())).build();
+        }
+
+        static Kept of(com.ash.lake.LakeRuntime runtime) {
+            return runtime.part(Kept.class, () -> new Kept(runtime.options().icebergDeleteCacheRows()));
+        }
+    }
 
     /** No deletes. */
     public static final Deletes NONE = new Deletes(new long[0], List.of());
@@ -69,9 +79,9 @@ public final class Deletes {
         this.equality = equality;
     }
 
-    /** Forgets every delete file read. */
-    public static void purge() {
-        FILES.invalidateAll();
+    /** Forgets every delete file {@code runtime} has read. */
+    public static void purge(com.ash.lake.LakeRuntime runtime) {
+        Kept.of(runtime).files.invalidateAll();
     }
 
     /** The field ids the equality deletes compare (a read must project them to apply the deletes). */
@@ -115,12 +125,14 @@ public final class Deletes {
         if (deleteFiles.isEmpty()) {
             return NONE;
         }
+        Kept kept = Kept.of(io.runtime());
+        Cache<String, Object> files = kept.files;
         List<long[]> pos = new ArrayList<>();
         List<Equality> eq = new ArrayList<>();
         for (DataFile d : deleteFiles) {
             if (d.content() == DataFile.POSITION_DELETES) {
                 @SuppressWarnings("unchecked")
-                Map<String, long[]> byFile = (Map<String, long[]>) LOADS.get(d.path(), FILES::getIfPresent, k -> positions(d, io), FILES::put);
+                Map<String, long[]> byFile = (Map<String, long[]>) kept.loads.get(d.path(), files::getIfPresent, k -> positions(d, io), files::put);
                 long[] p = byFile.get(data.path());
                 if (p != null) {
                     pos.add(p);
@@ -128,7 +140,7 @@ public final class Deletes {
             } else {
                 int[] ids = d.equalityIds().stream().mapToInt(Integer::intValue).toArray();
                 @SuppressWarnings("unchecked")
-                Set<List<Object>> keys = (Set<List<Object>>) LOADS.get(d.path() + "#eq", FILES::getIfPresent, k -> keys(d, ids, schema, io), FILES::put);
+                Set<List<Object>> keys = (Set<List<Object>>) kept.loads.get(d.path() + "#eq", files::getIfPresent, k -> keys(d, ids, schema, io), files::put);
                 eq.add(new Equality(ids, keys));
             }
         }
@@ -170,7 +182,7 @@ public final class Deletes {
     private static void read(DataFile d, List<NestedField> cols, FileAccess io, java.util.function.Consumer<Object[]> sink) {
         String p = io.resolve(d.path());
         try (ParquetRowReader r = new ParquetRowReader(ParquetInput.of(io.storage(p), p, d.fileSizeInBytes()), d.path(), d.fileSizeInBytes(), cols,
-                null, Map.of(), Expr.TRUE, io.codecs(), false)) {
+                null, Map.of(), Expr.TRUE, io.codecs(), com.ash.lake.io.ParquetFooters.of(io.runtime()), false)) {
             while (r.hasNext()) {
                 sink.accept(r.next().values());
             }

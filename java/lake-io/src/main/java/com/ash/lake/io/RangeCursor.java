@@ -15,6 +15,8 @@
  */
 package com.ash.lake.io;
 
+import com.ash.lake.spi.RangeReader;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;

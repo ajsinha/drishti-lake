@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 /**
@@ -36,8 +35,7 @@ import java.util.stream.Stream;
  * folder and its named {@code [lake.<name>]} settings need no catalog. With no host, {@link #NONE}: nothing shipped, no templates, and a
  * pack folder is read as it lies (its packs and its domain folders' packs).
  *
- * <p>{@link #current()} is the catalog in force: {@link #NONE} until a host calls {@link #use}. Step L6 replaces that one static holder
- * by the per-instance {@code LakeRuntime}.
+ * <p>A host registers its catalog with the {@link com.ash.lake.LakeRuntime} it builds; there is no catalog in force for the whole JVM.
  */
 public interface LakeCatalog {
 
@@ -97,23 +95,5 @@ public interface LakeCatalog {
     /** The system properties a loader's child process is started with, so it sees the host as this process does. */
     default Map<String, String> childProcessSettings() {
         return Map.of();
-    }
-
-    /** The catalog in force: {@link #NONE} until a host calls {@link #use}. */
-    static LakeCatalog current() {
-        return Holder.CURRENT.get();
-    }
-
-    /** Makes {@code catalog} the one in force (null: {@link #NONE}); returns the previous one. */
-    static LakeCatalog use(LakeCatalog catalog) {
-        return Holder.CURRENT.getAndSet(catalog == null ? NONE : catalog);
-    }
-
-    /** The one holder (until L6). */
-    final class Holder {
-        static final AtomicReference<LakeCatalog> CURRENT = new AtomicReference<>(NONE);
-
-        private Holder() {
-        }
     }
 }

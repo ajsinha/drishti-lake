@@ -183,8 +183,13 @@ public final class ReadyDesk {
         return packs;
     }
 
+    /** The runtime the desk reads lakes and packs with. */
+    com.ash.lake.LakeRuntime runtime() {
+        return settings.runtime();
+    }
+
     List<ReadyRule> rules() {
-        List<ReadyRule> host = com.ash.lake.spi.LakeCatalog.current().extensions(ReadyRule.class);     // a loaded module's too
+        List<ReadyRule> host = settings.runtime().catalog().extensions(ReadyRule.class);     // a loaded module's too
         if (host.isEmpty()) {
             return rules == null ? List.of() : List.copyOf(rules);
         }
@@ -194,7 +199,7 @@ public final class ReadyDesk {
     }
 
     Routes routes() throws IOException {
-        return Routes.read(Path.of(settings.rulesFile()), settings.lake(), packs).with(settings.defaultMode(), settings.newTables());
+        return Routes.read(settings.runtime(), Path.of(settings.rulesFile()), settings.lake(), packs).with(settings.defaultMode(), settings.newTables());
     }
 
     // -------------------------------------------------------------------------------------------------------------- what the form offers
@@ -243,9 +248,9 @@ public final class ReadyDesk {
         return out;
     }
 
-    private static List<com.ash.lake.config.PackEntry.PackTable> tablesOf(Routes.PackInfo info) {
+    private List<com.ash.lake.config.PackEntry.PackTable> tablesOf(Routes.PackInfo info) {
         try {
-            return info.dir() == null ? List.of() : com.ash.lake.config.PackEntry.tables(info.dir());
+            return info.dir() == null ? List.of() : com.ash.lake.config.PackEntry.tables(settings.runtime(), info.dir());
         } catch (IOException | RuntimeException e) {
             return List.of();
         }
@@ -264,7 +269,7 @@ public final class ReadyDesk {
 
     private List<String> lakes() {
         try {
-            return com.ash.lake.config.Lakes.current().all().values().stream().filter(l -> !l.inMemory()).map(com.ash.lake.config.Lake::name)
+            return com.ash.lake.config.Lakes.current(settings.runtime()).all().values().stream().filter(l -> !l.inMemory()).map(com.ash.lake.config.Lake::name)
                     .sorted().toList();
         } catch (RuntimeException e) {
             return List.of(settings.lake());
@@ -466,13 +471,13 @@ public final class ReadyDesk {
         }
         if (it.tar()) {
             try {
-                it.tables = LakeLoad.tarTables(it.file.toString());
+                it.tables = LakeLoad.tarTables(settings.runtime(), it.file.toString());
             } catch (IOException e) {
                 it.tarError = e.getMessage();
                 return;
             }
         }
-        FileRows.Counted c = FileRows.count(it.file, n -> it.rowsSoFar = n);
+        FileRows.Counted c = FileRows.count(settings.runtime(), it.file, n -> it.rowsSoFar = n);
         it.perTable = c.perDataset();
         it.rows = c.rows();
     }

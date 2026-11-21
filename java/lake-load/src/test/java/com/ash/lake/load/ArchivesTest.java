@@ -55,7 +55,7 @@ class ArchivesTest {
     Path tmp;
 
     static FileAccess io() {
-        return new FileAccess(S3Settings.from(Map.of()), Relocation.none(), null);
+        return new FileAccess(com.ash.lake.LakeRuntime.fromProcess(), S3Settings.from(Map.of()), Relocation.none(), null);
     }
 
     static Archives.Limits limits(JsonNode c) {

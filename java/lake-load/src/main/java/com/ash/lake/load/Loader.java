@@ -92,7 +92,7 @@ final class Loader {
         // the scratch folder goes however the load ends: success, failure, or the JVM stopped (Ctrl-C, SIGTERM, a container stopped)
         Thread cleanup = new Thread(() -> removeSpillDir(spillDir), "lakeload-spill-cleanup");
         Runtime.getRuntime().addShutdownHook(cleanup);
-        FileAccess io = new FileAccess(S3Settings.from(cfg.source().storage()), Relocation.none(), null);
+        FileAccess io = new FileAccess(cfg.runtime(), S3Settings.from(cfg.source().storage()), Relocation.none(), null);
         List<ParseWorker> workers = new ArrayList<>();
         try (Progress progress = new Progress(cfg.report().progress(), report); HeapWatch heap = new HeapWatch(report)) {
             List<InputFile> files = given != null ? given : Inputs.resolve(cfg.source().files(), cfg.source().recursive(), io);

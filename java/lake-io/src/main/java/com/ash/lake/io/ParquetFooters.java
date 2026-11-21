@@ -46,10 +46,19 @@ public final class ParquetFooters {
     static final int CHUNK_BYTES = 700;
     static final int FOOTER_BYTES = 1024;
     /** The most bytes of parsed footers kept: {@code lake.parquet.footer-cache-mb} (64). */
-    static final long LIMIT_BYTES = com.ash.lake.LakeOptions.current().footerCacheBytes();
+    final long limitBytes;
 
-    private static final Cache<String, ParquetMetadata> FOOTERS = Caffeine.newBuilder().maximumWeight(LIMIT_BYTES)
-            .weigher((String k, ParquetMetadata m) -> weight(m)).recordStats().build();
+    private final Cache<String, ParquetMetadata> footers;
+
+    ParquetFooters(long limitBytes) {
+        this.limitBytes = limitBytes;
+        this.footers = Caffeine.newBuilder().maximumWeight(limitBytes).weigher((String k, ParquetMetadata m) -> weight(m)).recordStats().build();
+    }
+
+    /** The parsed footers {@code runtime} keeps (one cache per runtime, sized by its options). */
+    public static ParquetFooters of(com.ash.lake.LakeRuntime runtime) {
+        return runtime.part(ParquetFooters.class, () -> new ParquetFooters(runtime.options().footerCacheBytes()));
+    }
 
     /** A parsed footer's weight in bytes: about {@link #CHUNK_BYTES} a column chunk (every row group's columns), plus its own. */
     static int weight(ParquetMetadata m) {
@@ -61,11 +70,9 @@ public final class ParquetFooters {
     }
 
     /** The bytes of parsed footers kept now (their weights), for Health and tests. */
-    public static long weightBytes() {
-        return FOOTERS.policy().eviction().map(e -> e.weightedSize().orElse(0L)).orElse(0L);
+    public long weightBytes() {
+        return footers.policy().eviction().map(e -> e.weightedSize().orElse(0L)).orElse(0L);
     }
-
-    private ParquetFooters() {}
 
     /**
      * Options for a read: row groups pruned by statistics only (a reader filters rows itself), no dictionary, bloom or
@@ -77,30 +84,30 @@ public final class ParquetFooters {
     }
 
     /** The footer of {@code in}, from the cache or read through {@code stream} (which stays open). */
-    public static ParquetMetadata footer(String path, long length, InputFile in, SeekableInputStream stream, ParquetReadOptions options)
+    public ParquetMetadata footer(String path, long length, InputFile in, SeekableInputStream stream, ParquetReadOptions options)
             throws IOException {
         String key = path + "|" + length;
-        ParquetMetadata footer = FOOTERS.getIfPresent(key);
+        ParquetMetadata footer = footers.getIfPresent(key);
         if (footer == null) {
             footer = ParquetFileReader.readFooter(in, options, stream);
-            FOOTERS.put(key, footer);
+            footers.put(key, footer);
         }
         return footer;
     }
 
     /** Forgets every parsed footer (a purge of a connector's caches; a file changed in place is read again). */
-    public static void purge() {
-        FOOTERS.invalidateAll();
+    public void purge() {
+        footers.invalidateAll();
     }
 
     /** Footers kept and the share of reads that found theirs here (for Health and tests). */
-    public static String stats() {
-        var s = FOOTERS.stats();
-        return FOOTERS.estimatedSize() + " footers, hits " + s.hitCount() + ", misses " + s.missCount();
+    public String stats() {
+        var s = footers.stats();
+        return footers.estimatedSize() + " footers, hits " + s.hitCount() + ", misses " + s.missCount();
     }
 
     /** Footer reads answered from the cache so far. */
-    public static long hits() {
-        return FOOTERS.stats().hitCount();
+    public long hits() {
+        return footers.stats().hitCount();
     }
 }

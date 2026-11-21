@@ -29,8 +29,7 @@ import java.util.function.Function;
  * <p>Two kinds: {@link #builder()} gives options of exactly the values set (nothing is read from the process: what an embedding host
  * builds); {@link #fromProcess()} reads each key when it is asked, a {@code -D} system property first, then the environment variable of
  * the same name ({@code lake.data.dir} is {@code LAKE_DATA_DIR}, {@link SettingsFile#envName}): what the command-line entry points use.
- * {@link #current()} is the options in force: the process's until a host calls {@link #use}. Step L6 replaces that one static holder by
- * the per-instance {@code LakeRuntime}; until then it is the only one.
+ * A {@link LakeRuntime} holds one; there is no options object in force for the whole JVM.
  */
 public final class LakeOptions {
 
@@ -72,8 +71,6 @@ public final class LakeOptions {
             ROW_GROUP_KB, ROW_GROUP_MB, PAGE_KB, PAGE_INDEX, FOOTER_CACHE_MB, DELETE_CACHE_ROWS, MANIFEST_CACHE_BYTES, LOADER_TRACE,
             ARCHIVE_MAX_MB, ARCHIVE_MAX_RATIO, ARCHIVE_MAX_MEMBERS, "lake.settings.file", "lake.repo.root", "lake.module.root");
 
-    private static volatile LakeOptions current;
-
     /** Whether a key is one of the product's options (not a named lake's setting). */
     public static boolean isOption(String key) {
         return KEYS.contains(key);
@@ -97,17 +94,26 @@ public final class LakeOptions {
         return new Builder();
     }
 
-    /** The options in force: the process's until a host calls {@link #use}. */
-    public static LakeOptions current() {
-        LakeOptions o = current;
-        return o == null ? fromProcess() : o;
-    }
-
-    /** Makes these the options in force (null: back to the process's); returns the previous ones. */
-    public static LakeOptions use(LakeOptions options) {
-        LakeOptions before = current();
-        current = options;
-        return before;
+    /**
+     * Every option these options name, by key (a loader's child process is started with them): the {@code lake.*} system properties of
+     * the process's options, else the values set.
+     */
+    public Map<String, String> given() {
+        Map<String, String> out = new java.util.TreeMap<>();
+        if (process) {
+            for (String k : System.getProperties().stringPropertyNames()) {
+                if (KEYS.contains(k) && value(k) != null) {
+                    out.put(k, value(k));
+                }
+            }
+        } else {
+            for (String k : KEYS) {
+                if (value(k) != null) {
+                    out.put(k, value(k));
+                }
+            }
+        }
+        return out;
     }
 
     /** Whether these options read the process. */
@@ -214,9 +220,7 @@ public final class LakeOptions {
             return set(CONFIG_DIR, absolute(dir, CONFIG_DIR));
         }
 
-        /** The folder of the lake files (default {@code <config>/lakes}). */
-    public static final String LAKES_DIR = "lake.lakes.dir";
-    /** The temporary folder's base, absolute. */
+        /** The temporary folder's base, absolute. */
         public Builder tempDir(Path dir) {
             return set(TMP_DIR, absolute(dir, TMP_DIR));
         }

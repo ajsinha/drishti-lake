@@ -83,24 +83,21 @@ public final class LakeWriter {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final String ENGINE_INFO = "Drishti lake build";
-    /**
+    /*
      * The most bytes one Parquet row group holds: lake.parquet.row-group-kb (default 256), or lake.parquet.row-group-mb. A single
-     * entity's read decodes at most its row group (its page, with the page index), so small groups make first reads cheap.
+     * entity's read decodes at most its row group (its page, with the page index), so small groups make first reads cheap. The most
+     * bytes one Parquet page holds: lake.parquet.page-kb (default 64), the unit the page index can skip to. Both from the runtime's options.
      */
-    static final long ROW_GROUP_BYTES = com.ash.lake.LakeOptions.current().rowGroupBytes();
-    /** The most bytes one Parquet page holds (lake.parquet.page-kb, default 64): the unit the page index can skip to. */
-    static final long PAGE_BYTES = com.ash.lake.LakeOptions.current().pageBytes();
 
     /** What a write did. */
     public record Result(long version, int files, long rows, int removed, List<String> leftOut) {}
 
     private final Engine engine;
 
-    public LakeWriter() {
+    public LakeWriter(com.ash.lake.LakeRuntime runtime) {
         // SNAPPY as delta-rs writes (Kernel writes uncompressed otherwise); small row groups and pages (Parquet's defaults are 128 MB
         // and 1 MB): a single entity's read decodes its row group, or with the page index only the page that holds it
-        this(DefaultEngine.create(new LocalWriteFileIO(Map.of("parquet.compression", "SNAPPY", "parquet.block.size", String.valueOf(ROW_GROUP_BYTES),
-                "parquet.page.size", String.valueOf(PAGE_BYTES)))));
+        this(DefaultEngine.create(new LocalWriteFileIO(runtime, parquetConf(runtime))));
     }
 
     LakeWriter(Engine engine) {
@@ -111,7 +108,7 @@ public final class LakeWriter {
      * A table in memory favours bytes over speed (docs/architecture/DATA_ARCHITECTURE.md section 5): ZSTD at level 3 by default ({@code codec}: zstd, lz4,
      * snappy; {@code zstd-level}), the same small row groups and pages as on disk.
      */
-    static Map<String, String> memoryConf(Map<String, String> settings) {
+    static Map<String, String> memoryConf(com.ash.lake.LakeRuntime runtime, Map<String, String> settings) {
         String codec = settings.getOrDefault("codec", "zstd").trim().toUpperCase(java.util.Locale.ROOT);
         if (codec.equals("LZ4")) {
             codec = "LZ4_RAW";                                   // the LZ4 Parquet readers agree on (the old LZ4 framing is deprecated)
@@ -120,20 +117,21 @@ public final class LakeWriter {
             throw new IllegalArgumentException("codec " + settings.get("codec") + " is not one of zstd, lz4, snappy, uncompressed");
         }
         return Map.of("parquet.compression", codec, "parquet.compression.codec.zstd.level", settings.getOrDefault("zstd-level", "3"),
-                "parquet.block.size", String.valueOf(ROW_GROUP_BYTES), "parquet.page.size", String.valueOf(PAGE_BYTES));
+                "parquet.block.size", String.valueOf(runtime.options().rowGroupBytes()), "parquet.page.size", String.valueOf(runtime.options().pageBytes()));
     }
 
-    private static Map<String, String> parquetConf() {
-        return Map.of("parquet.compression", "SNAPPY", "parquet.block.size", String.valueOf(ROW_GROUP_BYTES), "parquet.page.size", String.valueOf(PAGE_BYTES));
+    private static Map<String, String> parquetConf(com.ash.lake.LakeRuntime runtime) {
+        return Map.of("parquet.compression", "SNAPPY", "parquet.block.size", String.valueOf(runtime.options().rowGroupBytes()),
+                "parquet.page.size", String.valueOf(runtime.options().pageBytes()));
     }
 
     /**
-     * The writer for a table wherever it is (2.9.5): a local folder as {@link #LakeWriter()}, an object store ({@code s3://}, {@code s3a://})
+     * The writer for a table wherever it is (2.9.5): a local folder as {@link #LakeWriter(com.ash.lake.LakeRuntime)}, an object store ({@code s3://}, {@code s3a://})
      * through drishti-lakeio with its commits as exclusive creates ({@link StorageWriteFileIO}); {@code settings} are the S3 settings
      * ({@code s3.endpoint}, {@code s3.region}, {@code s3.access-key}, {@code s3.secret-key}; none: the AWS default chain).
      */
-    public static LakeWriter forTable(String table, Map<String, String> settings) {
-        return new LakeWriter(engineFor(table, settings));
+    public static LakeWriter forTable(com.ash.lake.LakeRuntime runtime, String table, Map<String, String> settings) {
+        return new LakeWriter(engineFor(runtime, table, settings));
     }
 
     /**
@@ -141,14 +139,14 @@ public final class LakeWriter {
      * ({@link StorageWriteFileIO}, commits as exclusive creates). Other writers that commit through Kernel use it too (the parallel lake
      * loader, 2.9.6, which writes its Parquet files itself and hands Kernel their statuses).
      */
-    public static Engine engineFor(String table, Map<String, String> settings) {
+    public static Engine engineFor(com.ash.lake.LakeRuntime runtime, String table, Map<String, String> settings) {
         if (com.ash.lake.io.LocalPaths.isLocal(table)) {
-            return DefaultEngine.create(new LocalWriteFileIO(parquetConf()));
+            return DefaultEngine.create(new LocalWriteFileIO(runtime, parquetConf(runtime)));
         }
-        if (com.ash.lake.io.StorageProviders.memoryOnly(table)) {
-            return DefaultEngine.create(new StorageWriteFileIO(com.ash.lake.io.S3Settings.from(Map.of()), memoryConf(settings)));
+        if (runtime.memoryOnly(table)) {
+            return DefaultEngine.create(new StorageWriteFileIO(runtime, com.ash.lake.io.S3Settings.from(Map.of()), memoryConf(runtime, settings)));
         }
-        return DefaultEngine.create(new StorageWriteFileIO(com.ash.lake.io.S3Settings.from(settings), parquetConf()));
+        return DefaultEngine.create(new StorageWriteFileIO(runtime, com.ash.lake.io.S3Settings.from(settings), parquetConf(runtime)));
     }
 
     /** Writes the manifest's parts; {@code partsDone} is told after each part. */

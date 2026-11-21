@@ -45,7 +45,7 @@ public record PackEntry(String domain, String table, String key, String date, Li
      * connectors where the pack does not declare that name itself: a source system is a module of its own, and its connectors have that one
      * home.
      */
-    static JsonNode manifest(Path file) throws IOException {
+    static JsonNode manifest(com.ash.lake.LakeRuntime runtime, Path file) throws IOException {
         JsonNode m = new YAMLMapper().readTree(Files.readString(file));
         String pack = m.path("pack").asText("");
         if (pack.isEmpty() || !(m instanceof com.fasterxml.jackson.databind.node.ObjectNode root) || m.path("connectors").isArray()) {
@@ -57,7 +57,7 @@ public record PackEntry(String domain, String table, String key, String date, Li
         com.fasterxml.jackson.databind.node.ObjectNode defs = root.path("connectors").isObject()
                 ? (com.fasterxml.jackson.databind.node.ObjectNode) root.get("connectors") : root.putObject("connectors");
         com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
-        for (Map.Entry<String, Map<String, Object>> e : ModuleConnectors.forKinds(kinds).entrySet()) {
+        for (Map.Entry<String, Map<String, Object>> e : ModuleConnectors.forKinds(runtime, kinds).entrySet()) {
             if (!defs.has(e.getKey())) {
                 defs.set(e.getKey(), json.valueToTree(e.getValue()));
             }
@@ -70,16 +70,16 @@ public record PackEntry(String domain, String table, String key, String date, Li
      * SWAPONE}), as text. The site's own connector file ({@code config/connectors/<name>.yaml}, beside the modules folder) wins over the
      * module's template, so a site tweak reaches the loader too. Empty without a connector or a {@code set:}.
      */
-    public static Map<String, String> constants(Path pack, String connector) throws IOException {
+    public static Map<String, String> constants(com.ash.lake.LakeRuntime runtime, Path pack, String connector) throws IOException {
         Map<String, String> out = new LinkedHashMap<>();
         if (connector == null) {
             return out;
         }
         Path file = Files.isDirectory(pack) ? pack.resolve("pack.yaml") : pack;
         // the layers (KERNEL_AND_MODULES.md section 18.5): the template's constants, then the site override's key by key (null removes one)
-        Path siteFile = com.ash.lake.LakeRoots.connectors().resolve(connector + ".yaml");
+        Path siteFile = runtime.roots().connectors().resolve(connector + ".yaml");
         JsonNode site = Files.isRegularFile(siteFile) ? new YAMLMapper().readTree(Files.readString(siteFile)) : null;
-        JsonNode template = manifest(file).path("connectors").path(connector);
+        JsonNode template = manifest(runtime, file).path("connectors").path(connector);
         if (!template.isMissingNode() && !(site != null && site.path("settings").size() > 0 && !site.path("plugin").isMissingNode()
                 && template.path("plugin").isMissingNode())) {
             addConstants(template.path("settings"), out);
@@ -103,9 +103,9 @@ public record PackEntry(String domain, String table, String key, String date, Li
     }
 
     /** The pack's entry for {@code kind}. */
-    public static PackEntry read(Path pack, String kind, String connector) throws IOException {
+    public static PackEntry read(com.ash.lake.LakeRuntime runtime, Path pack, String kind, String connector) throws IOException {
         Path file = Files.isDirectory(pack) ? pack.resolve("pack.yaml") : pack;
-        JsonNode m = manifest(file);
+        JsonNode m = manifest(runtime, file);
         String name = m.path("pack").asText(file.getParent().getFileName().toString());
         JsonNode ingest = m.path("ingest").path(kind);
         for (var it = m.path("lake").path("tables").fields(); it.hasNext(); ) {
@@ -220,9 +220,9 @@ public record PackEntry(String domain, String table, String key, String date, Li
      * Every table the pack's Delta and Iceberg connectors write, by folder ({@code trade_endur} of {@code trade-endur}; a kind's own name
      * when the connector names no table): a tar's folder or a file's name may be a table name, which resolves to its kind and connector.
      */
-    public static List<PackTable> tables(Path pack) throws IOException {
+    public static List<PackTable> tables(com.ash.lake.LakeRuntime runtime, Path pack) throws IOException {
         Path file = Files.isDirectory(pack) ? pack.resolve("pack.yaml") : pack;
-        JsonNode m = manifest(file);
+        JsonNode m = manifest(runtime, file);
         JsonNode defs = m.path("connectors");
         List<PackTable> out = new ArrayList<>();
         for (var it = defs.fields(); it.hasNext(); ) {

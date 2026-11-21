@@ -67,7 +67,12 @@ public final class LakeUndo {
         System.exit(run(args, System.out));
     }
 
+    /** Runs as the command line does, with the process's settings (no host). */
     public static int run(String[] args, PrintStream out) {
+        return run(com.ash.lake.LakeRuntime.fromProcess(), args, out);
+    }
+
+    public static int run(com.ash.lake.LakeRuntime runtime, String[] args, PrintStream out) {
         String root = null;
         String id = null;
         List<String> only = new ArrayList<>();
@@ -91,7 +96,7 @@ public final class LakeUndo {
             return 1;
         }
         try {
-            List<Done> done = undo(root, id, only, dry);
+            List<Done> done = undo(runtime, root, id, only, dry);
             if (json) {
                 out.println(JSON.writerWithDefaultPrettyPrinter().writeValueAsString(done));
             } else if (done.isEmpty()) {
@@ -110,13 +115,12 @@ public final class LakeUndo {
     }
 
     /**
-     * Undoes load {@code id} in every table of the lake at {@code root}, Delta here and Iceberg by the Iceberg maintenance when it is on the
-     * class path (the server's): a line per table and date ({@code table}, {@code format}, {@code date}, {@code removed}, {@code restored},
+     * Undoes load {@code id} in every table of the lake at {@code root}, Delta here and Iceberg by the Iceberg maintenance: a line per table and date ({@code table}, {@code format}, {@code date}, {@code removed}, {@code restored},
      * {@code replaced}). {@code only}: these {@code domain/table}s (Delta); empty: every one.
      */
-    public static List<Map<String, Object>> undoAll(String root, String id, List<String> only, boolean dryRun) throws Exception {
+    public static List<Map<String, Object>> undoAll(com.ash.lake.LakeRuntime runtime, String root, String id, List<String> only, boolean dryRun) throws Exception {
         List<Map<String, Object>> out = new ArrayList<>();
-        for (Done d : undo(root, id, only, dryRun)) {
+        for (Done d : undo(runtime, root, id, only, dryRun)) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("table", d.table());
             m.put("format", "delta");
@@ -126,15 +130,8 @@ public final class LakeUndo {
             m.put("replaced", d.replaced());
             out.add(m);
         }
-        Class<?> ice;
-        try {
-            ice = Class.forName("com.ash.lake.iceberg.table.IcebergMaintenance");
-        } catch (ClassNotFoundException e) {
-            return out;                                         // no Iceberg here: Delta tables only
-        }
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> lines = (List<Map<String, Object>>) ice.getMethod("undoLake", String.class, String.class, boolean.class, Path.class)
-                .invoke(null, root, id, dryRun, Path.of(System.getProperty("java.io.tmpdir")));
+        List<Map<String, Object>> lines = com.ash.lake.iceberg.table.IcebergMaintenance.undoLake(runtime, root, id, dryRun,
+                com.ash.lake.common.TempFiles.of(runtime).subDir("iceberg-undo"));
         for (Map<String, Object> u : lines) {
             Map<String, Object> m = new LinkedHashMap<>(u);
             m.put("format", "iceberg");
@@ -144,14 +141,14 @@ public final class LakeUndo {
     }
 
     /** Undoes load {@code id} in the Delta tables under {@code root} ({@code only}: these {@code domain/table}s; empty: every one). */
-    public static List<Done> undo(String root, String id, List<String> only, boolean dryRun) throws IOException {
+    public static List<Done> undo(com.ash.lake.LakeRuntime runtime, String root, String id, List<String> only, boolean dryRun) throws IOException {
         List<Done> out = new ArrayList<>();
         for (Path t : deltaTables(Path.of(root))) {
             String name = Path.of(root).relativize(t).toString().replace('\\', '/');
             if (!only.isEmpty() && !only.contains(name)) {
                 continue;
             }
-            out.addAll(undoTable(t.toString(), name, id, dryRun));
+            out.addAll(undoTable(runtime, t.toString(), name, id, dryRun));
         }
         return out;
     }
@@ -173,8 +170,8 @@ public final class LakeUndo {
     }
 
     /** One table: each date whose files may hold the load's rows is rewritten without them (restored from before when it replaced). */
-    static List<Done> undoTable(String table, String name, String id, boolean dryRun) throws IOException {
-        Engine engine = LakeWriter.engineFor(table, Map.of());
+    static List<Done> undoTable(com.ash.lake.LakeRuntime runtime, String table, String name, String id, boolean dryRun) throws IOException {
+        Engine engine = LakeWriter.engineFor(runtime, table, Map.of());
         Snapshot s;
         try {
             s = Table.forPath(engine, table).getLatestSnapshot(engine);
@@ -222,7 +219,7 @@ public final class LakeUndo {
                     kept = all;
                 }
             }
-            long version = dryRun ? -1 : rewrite(engine, table, s, date, kept);
+            long version = dryRun ? -1 : rewrite(runtime, engine, table, s, date, kept);
             out.add(new Done(name, date, removed, restored, replacedAt > 0, version));
         }
         return out;
@@ -233,9 +230,9 @@ public final class LakeUndo {
      * a file sent again is loaded again when a later load replaced its date). Null when it cannot be said (not a Delta table, unreadable):
      * the caller keeps its own answer.
      */
-    public static java.util.Set<String> datesHolding(String table, String id) {
+    public static java.util.Set<String> datesHolding(com.ash.lake.LakeRuntime runtime, String table, String id) {
         try {
-            Engine engine = LakeWriter.engineFor(table, Map.of());
+            Engine engine = LakeWriter.engineFor(runtime, table, Map.of());
             Snapshot s = Table.forPath(engine, table).getLatestSnapshot(engine);
             if (s.getSchema().indexOf(RowPlan.LOAD_ID) < 0) {
                 return null;
@@ -353,12 +350,12 @@ public final class LakeUndo {
     }
 
     /** The date rewritten with {@code rows} (one commit: its files replaced); with none, the date's files removed. Returns the version. */
-    static long rewrite(Engine engine, String table, Snapshot s, String date, List<TableUpkeep.Staged> rows) throws IOException {
+    static long rewrite(com.ash.lake.LakeRuntime runtime, Engine engine, String table, Snapshot s, String date, List<TableUpkeep.Staged> rows) throws IOException {
         List<String> partitions = s.getPartitionColumnNames();
         if (rows.isEmpty()) {
             return removeDates(engine, table, s, date::equals);
         }
-        Path dir = com.ash.lake.common.TempFiles.createDir("drishti-undo-");
+        Path dir = com.ash.lake.common.TempFiles.of(runtime).createDir("lake-undo-");
         try {
             Map<Map<String, String>, BufferedWriter> files = new LinkedHashMap<>();
             Map<Map<String, String>, Path> paths = new LinkedHashMap<>();
@@ -390,7 +387,7 @@ public final class LakeUndo {
             paths.forEach((pv, p) -> parts.add(new LakeManifest.Part(p, counts.get(pv), pv)));
             LakeManifest m = new LakeManifest(table, partitions, columns, promoted, "overwrite-dates", 50_000,
                     List.of("id", "business_date", RowPlan.LOAD_ID), parts);
-            return LakeWriter.forTable(table, Map.of()).write(m, n -> { }).version();
+            return LakeWriter.forTable(runtime, table, Map.of()).write(m, n -> { }).version();
         } finally {
             try (Stream<Path> s2 = Files.walk(dir)) {
                 s2.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());

@@ -62,20 +62,20 @@ public final class LakeLoad {
 
     /** Runs a load as the command line would; returns the exit code. */
     /** The lake domain of a pack's tables (its first Delta or Iceberg connector's {@code domain}, else the pack's name). */
-    public static String packDomain(java.nio.file.Path pack) throws java.io.IOException {
-        return com.ash.lake.config.PackEntry.read(pack, "_", null).domain();   // no table of the kind: the pack's first Delta or Iceberg connector's domain, else its name
+    public static String packDomain(com.ash.lake.LakeRuntime runtime, java.nio.file.Path pack) throws java.io.IOException {
+        return com.ash.lake.config.PackEntry.read(runtime, pack, "_", null).domain();   // no table of the kind: the pack's first Delta or Iceberg connector's domain, else its name
     }
 
     /**
      * The tables and dates a tar feed holds ({@code <table>/<YYYY-MM-DD>/}; DATA_LAKE_GUIDE.md section 4.4), checked as the loader checks
      * it (every problem refuses it, an {@link java.io.IOException} saying them all); a local file.
      */
-    public static Map<String, java.util.SortedSet<java.time.LocalDate>> tarTables(String path) throws java.io.IOException {
+    public static Map<String, java.util.SortedSet<java.time.LocalDate>> tarTables(com.ash.lake.LakeRuntime runtime, String path) throws java.io.IOException {
         Map<String, java.util.SortedSet<java.time.LocalDate>> out = new java.util.TreeMap<>();
-        try (com.ash.lake.iceberg.io.FileAccess io = new com.ash.lake.iceberg.io.FileAccess(com.ash.lake.io.S3Settings.from(Map.of()),
+        try (com.ash.lake.iceberg.io.FileAccess io = new com.ash.lake.iceberg.io.FileAccess(runtime, com.ash.lake.io.S3Settings.from(Map.of()),
                 com.ash.lake.iceberg.io.Relocation.none(), null)) {
             Archives.Plan p = Archives.plan(io, path, java.nio.file.Files.size(java.nio.file.Path.of(path)), null,
-                    Archives.Limits.defaults(com.ash.lake.LakeOptions.current().lookup()));
+                    Archives.Limits.defaults(runtime.options().lookup()));
             p.datasets().forEach((table, members) -> members.forEach(m -> out.computeIfAbsent(table, k -> new java.util.TreeSet<>()).add(m.date())));
         }
         return out;
@@ -99,7 +99,13 @@ public final class LakeLoad {
                 + "-" + ProcessHandle.current().pid() + (n > 1 ? "-" + n : "");
     }
 
+    /** Runs a load as the command line does, with the process's settings (no host). */
     public static int run(String[] args, PrintStream out) {
+        return run(com.ash.lake.LakeRuntime.fromProcess(), args, out);
+    }
+
+    /** Runs a load as the command line would, in {@code runtime}; returns the exit code. */
+    public static int run(com.ash.lake.LakeRuntime runtime, String[] args, PrintStream out) {
         RUN.set(null);
         String given = null;
         for (int i = 0; i + 1 < args.length; i++) {
@@ -109,13 +115,13 @@ public final class LakeLoad {
         }
         RUN.set(given != null ? given : runId());
         try {
-            return runOnce(args, out);
+            return runOnce(runtime, args, out);
         } finally {
             RUN.remove();
         }
     }
 
-    private static int runOnce(String[] args, PrintStream out) {
+    private static int runOnce(com.ash.lake.LakeRuntime runtime, String[] args, PrintStream out) {
         long t0 = System.nanoTime();
         String config = null;
         List<String> sets = new ArrayList<>();
@@ -164,7 +170,7 @@ public final class LakeLoad {
         }
         LoadConfig cfg;
         try {
-            cfg = LoadConfig.read(config == null ? null : Path.of(config), sets);
+            cfg = LoadConfig.read(runtime, config == null ? null : Path.of(config), sets);
         } catch (IOException | IllegalArgumentException e) {
             out.println("lakeload: the configuration: " + e.getMessage());
             return FAILED;
@@ -234,7 +240,7 @@ public final class LakeLoad {
             error = e.getMessage();
         } catch (Exception | OutOfMemoryError e) {
             error = oneLine(e);
-            if (com.ash.lake.LakeOptions.current().loaderTrace()) {
+            if (cfg.runtime().options().loaderTrace()) {
                 e.printStackTrace(out);
             }
         } finally {

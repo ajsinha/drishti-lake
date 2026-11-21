@@ -18,7 +18,7 @@ package com.ash.lake.delta.write;
 import com.ash.lake.delta.NativeFileIO;
 import com.ash.lake.io.LocalPaths;
 import com.ash.lake.io.S3Settings;
-import com.ash.lake.io.Storage;
+import com.ash.lake.spi.Storage;
 import io.delta.kernel.defaults.engine.fileio.OutputFile;
 import io.delta.kernel.defaults.engine.fileio.PositionOutputStream;
 import io.delta.kernel.utils.CloseableIterator;
@@ -39,8 +39,8 @@ import java.util.Map;
  */
 final class StorageWriteFileIO extends ReadingFileIO {
 
-    StorageWriteFileIO(S3Settings s3, Map<String, String> conf) {
-        super(new NativeFileIO(s3, conf), conf);
+    StorageWriteFileIO(com.ash.lake.LakeRuntime runtime, S3Settings s3, Map<String, String> conf) {
+        super(new NativeFileIO(runtime, s3, conf), conf);
     }
 
     private Storage storage(String path) {

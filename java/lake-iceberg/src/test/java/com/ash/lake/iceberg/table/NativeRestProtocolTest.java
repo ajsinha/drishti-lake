@@ -128,7 +128,7 @@ class NativeRestProtocolTest {
 
     @Test
     void tokenConfigListingLoadWithETagVendedCredentialsAndAConflict() throws Exception {
-        try (Catalog c = Catalogs.open(settings())) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), settings())) {
             assertThat(c.tables()).containsExactly("currencies");
             Table t = c.load("currencies").orElseThrow();
             assertThat(t.metadata().schema().field("CCY")).isNotNull();
@@ -148,7 +148,7 @@ class NativeRestProtocolTest {
     void aRefusedCredentialSaysSo() {
         Map<String, String> s = settings();
         s.put("credential", "drishti:wrong");
-        assertThatThrownBy(() -> Catalogs.open(s)).hasMessageContaining("refused the credential");
+        assertThatThrownBy(() -> Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), s)).hasMessageContaining("refused the credential");
     }
 
     @Test
@@ -156,7 +156,7 @@ class NativeRestProtocolTest {
         try (FakeProxy proxy = FakeProxy.start()) {
             Map<String, String> s = settings();
             s.put("proxy.url", proxy.url());
-            try (Catalog c = Catalogs.open(s)) {
+            try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), s)) {
                 assertThat(c.tables()).containsExactly("currencies");
             }
             assertThat(proxy.forwarded()).isGreaterThanOrEqualTo(3);                 // token, config, listing

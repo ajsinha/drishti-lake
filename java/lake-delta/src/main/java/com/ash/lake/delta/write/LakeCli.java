@@ -62,7 +62,7 @@ public final class LakeCli {
         }
         try {
             LakeManifest m = LakeManifest.read(manifest);
-            LakeWriter.Result r = new LakeWriter().write(m, n -> {
+            LakeWriter.Result r = new LakeWriter(com.ash.lake.LakeRuntime.fromProcess()).write(m, n -> {   // a command line: the process's settings
                 out.println("{\"partsDone\":" + n + "}");
                 out.flush();
             });

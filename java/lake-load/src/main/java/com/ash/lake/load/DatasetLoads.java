@@ -61,7 +61,7 @@ final class DatasetLoads {
     /** The loads, or null when the input holds no archive and no {@code datasets:} is configured (the load as it always was). */
     static List<Load> plan(LoadConfig cfg, PrintStream out, boolean quiet) throws IOException {
         List<InputFile> resolved;
-        try (FileAccess io = new FileAccess(S3Settings.from(cfg.source().storage()), Relocation.none(), null)) {
+        try (FileAccess io = new FileAccess(cfg.runtime(), S3Settings.from(cfg.source().storage()), Relocation.none(), null)) {
             resolved = Inputs.resolve(cfg.source().files(), cfg.source().recursive(), io);
             boolean any = resolved.stream().anyMatch(InputFile::isArchive);
             if (!any && cfg.datasets().isEmpty()) {

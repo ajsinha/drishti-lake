@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -39,11 +38,6 @@ class LakeNamedSectionTest {
     @TempDir
     Path dir;
     private final List<String> set = new ArrayList<>();
-
-    @BeforeEach
-    void processView() {
-        NamedLakeSettings.useView(null, null);
-    }
 
     @AfterEach
     void clear() {
@@ -79,7 +73,7 @@ class LakeNamedSectionTest {
                 [site]
                 site.archive-base=/lakes/cold
                 """);
-        Lakes all = Lakes.read(folder, Placeholders::process);
+        Lakes all = Lakes.read(com.ash.lake.LakeRuntime.fromProcess(), folder);
         assertThat(all.get("risk").root()).isEqualTo("s3://bank-risk/drishti");
         assertThat(all.get("risk").storage()).containsEntry("s3.region", "eu-west-1");
         assertThat(all.get("trading").root()).isEqualTo("/lakes/trading");
@@ -88,7 +82,7 @@ class LakeNamedSectionTest {
 
         System.setProperty("lake.trading.root", "/lakes/trading-2");          // move one lake (an explicit -D)
         set.add("lake.trading.root");
-        Lakes moved = Lakes.read(folder, Placeholders::process);
+        Lakes moved = Lakes.read(com.ash.lake.LakeRuntime.fromProcess(), folder);
         assertThat(moved.get("trading").root()).isEqualTo("/lakes/trading-2");
         assertThat(moved.get("risk").root()).as("the other lake never moves").isEqualTo("s3://bank-risk/drishti");
         assertThat(moved.get("archive").root()).isEqualTo("/lakes/cold/archive");
@@ -105,7 +99,7 @@ class LakeNamedSectionTest {
     void twoConnectorsNamingTwoLakesReadTwoRoots() throws Exception {
         Path folder = lakes();
         ini("[lake.risk]\nroot=/lakes/risk\n[lake.trading]\nroot=/lakes/trading\n[site]\nsite.archive-base=/lakes/cold\n");
-        Lakes all = Lakes.read(folder, Placeholders::process);
+        Lakes all = Lakes.read(com.ash.lake.LakeRuntime.fromProcess(), folder);
         Map<String, String> risk = ConnectorLake.expand("risk-store", "delta", List.of("var-result"), Map.of("lake", "risk"), () -> all, w -> { });
         Map<String, String> trading = ConnectorLake.expand("trade-store", "delta", List.of("trade"), Map.of("lake", "trading"), () -> all, w -> { });
         assertThat(risk.get("root")).startsWith("/lakes/risk");
@@ -116,9 +110,9 @@ class LakeNamedSectionTest {
 
     @Test
     void aLoaderStartedFromThisProcessIsHandedTheLakeSections() throws Exception {
-        System.setProperty(Lakes.PROPERTY, lakes().toString());
+        System.setProperty(Lakes.PROPERTY, lakes().toString());     // a command line's: the process's settings
         ini("[lake.risk]\nroot=/lakes/risk\nstorage.s3.region=eu-west-1\n[site]\nsite.archive-base=/lakes/cold\n");
-        assertThat(Lakes.environment()).containsEntry("lake.risk.root", "/lakes/risk").containsEntry("lake.risk.storage.s3.region", "eu-west-1")
+        assertThat(Lakes.environment(com.ash.lake.LakeRuntime.fromProcess())).containsEntry("lake.risk.root", "/lakes/risk").containsEntry("lake.risk.storage.s3.region", "eu-west-1")
                 .containsEntry("site.archive-base", "/lakes/cold");
     }
 }

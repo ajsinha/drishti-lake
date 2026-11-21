@@ -95,7 +95,7 @@ class NativeReadInteropTest {
     @MethodSource("tables")
     void everySnapshotReadsAsPyicebergReadIt(String name) throws Exception {
         JsonNode want = Fixtures.expected(root).get(name);
-        try (Catalog c = Catalogs.open(Fixtures.settings(root))) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Fixtures.settings(root))) {
             Table t = c.load(name).orElseThrow();
             assertThat(t.metadata().formatVersion()).isEqualTo(want.path("format-version").asInt());
             for (JsonNode snap : want.path("snapshots")) {

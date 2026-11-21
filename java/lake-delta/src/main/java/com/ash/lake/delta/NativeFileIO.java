@@ -15,14 +15,14 @@
  */
 package com.ash.lake.delta;
 
-import com.ash.lake.io.FileEntry;
+import com.ash.lake.spi.FileEntry;
 import com.ash.lake.io.LocalPaths;
 import com.ash.lake.io.LocalStorage;
 import com.ash.lake.io.NativeCodecs;
 import com.ash.lake.io.ParquetInput;
 import com.ash.lake.io.S3Settings;
 import com.ash.lake.io.S3Storage;
-import com.ash.lake.io.Storage;
+import com.ash.lake.spi.Storage;
 import io.delta.kernel.defaults.engine.fileio.FileIO;
 import io.delta.kernel.defaults.engine.fileio.InputFile;
 import io.delta.kernel.defaults.engine.fileio.OutputFile;
@@ -47,6 +47,7 @@ public final class NativeFileIO implements FileIO {
 
     private static final Set<String> S3_SCHEMES = Set.of("s3", "s3a", "s3n");
 
+    private final com.ash.lake.LakeRuntime runtime;
     private final LocalStorage local;
     private final S3Settings s3Settings;
     private final Map<String, String> conf;
@@ -65,14 +66,16 @@ public final class NativeFileIO implements FileIO {
     }
 
     /**
+     * @param runtime the runtime whose storages ({@code mem://}), options and caches this reads with
      * @param s3Settings how to reach S3 when a path asks for it
      * @param conf Kernel's tuning keys ({@code delta.kernel.default.parquet.reader.batch-size}, …), as for Hadoop
      */
-    public NativeFileIO(S3Settings s3Settings, Map<String, String> conf) {
-        this(new LocalStorage(), s3Settings, conf);
+    public NativeFileIO(com.ash.lake.LakeRuntime runtime, S3Settings s3Settings, Map<String, String> conf) {
+        this(runtime, new LocalStorage(), s3Settings, conf);
     }
 
-    NativeFileIO(LocalStorage local, S3Settings s3Settings, Map<String, String> conf) {
+    NativeFileIO(com.ash.lake.LakeRuntime runtime, LocalStorage local, S3Settings s3Settings, Map<String, String> conf) {
+        this.runtime = java.util.Objects.requireNonNull(runtime, "runtime");
         this.local = local;
         this.s3Settings = s3Settings;
         this.conf = Map.copyOf(conf);
@@ -85,10 +88,20 @@ public final class NativeFileIO implements FileIO {
         return codecs;
     }
 
-    /** Whether the native engine can read paths of this scheme ({@code file}, {@code s3}, {@code s3a}, {@code s3n}, {@code mem}). */
+    /** Whether the native engine reads paths of this scheme with no provider registered ({@code file}, {@code s3}, {@code s3a}, {@code s3n}). */
     public static boolean supports(String path) {
         String scheme = LocalPaths.scheme(path);
-        return scheme.equals("file") || S3_SCHEMES.contains(scheme) || com.ash.lake.io.StorageProviders.supports(path);
+        return scheme.equals("file") || S3_SCHEMES.contains(scheme);
+    }
+
+    /** Whether this reads {@code path}: the built-in schemes and those of the runtime's providers ({@code mem}). */
+    public boolean reads(String path) {
+        return supports(path) || runtime.supports(path);
+    }
+
+    /** The runtime this reads with. */
+    public com.ash.lake.LakeRuntime runtime() {
+        return runtime;
     }
 
     /** The storage that serves {@code path}. */
@@ -100,8 +113,8 @@ public final class NativeFileIO implements FileIO {
         if (S3_SCHEMES.contains(scheme)) {
             return s3();
         }
-        if (com.ash.lake.io.StorageProviders.supports(path)) {
-            return com.ash.lake.io.StorageProviders.storage(path);    // mem://, the in-memory lake (docs/architecture/DATA_ARCHITECTURE.md): never a disk
+        if (runtime.supports(path)) {
+            return runtime.storage(path);                            // mem://, the in-memory lake: never a disk
         }
         throw new UnsupportedOperationException("the native Delta engine reads local disk, S3 (s3://, s3a://) and memory (mem://), not " + scheme
                 + "://; set the connector's engine to hadoop for this lake");

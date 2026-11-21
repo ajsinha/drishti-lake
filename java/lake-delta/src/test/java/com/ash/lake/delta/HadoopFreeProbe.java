@@ -31,7 +31,7 @@ public final class HadoopFreeProbe {
     /** Reads {@code table} (latest, version 0, a checkpointed copy if given, one row group) and describes what it read. */
     public static List<String> run(String table, String checkpointed) throws Exception {
         List<String> out = new ArrayList<>();
-        try (NativeEngine engine = NativeEngine.create()) {
+        try (NativeEngine engine = NativeEngine.create(com.ash.lake.LakeRuntime.builder().build())) {
             out.add("latest " + Table.forPath(engine, table).getLatestSnapshot(engine).getVersion());
             out.add("rows " + TableReader.rows(engine, table, null).size());
             out.add("v0 " + TableReader.rows(engine, table, 0L).size());

@@ -43,14 +43,18 @@ import org.apache.iceberg.exceptions.NoSuchTableException;
  */
 public final class RestCatalog implements Catalog {
 
-    private final org.apache.iceberg.rest.RESTCatalog catalog;
+    private final org.apache.iceberg.rest.RESTSessionCatalog session;
+    private final org.apache.iceberg.catalog.Catalog catalog;
+    private final org.apache.iceberg.catalog.SupportsNamespaces namespaces;
     private final Namespace namespace;
     private final FileAccess io;
     private final String uri;
     private final ProxySettings proxy;
 
-    private RestCatalog(org.apache.iceberg.rest.RESTCatalog catalog, Namespace namespace, FileAccess io, String uri, ProxySettings proxy) {
-        this.catalog = catalog;
+    private RestCatalog(org.apache.iceberg.rest.RESTSessionCatalog session, Namespace namespace, FileAccess io, String uri, ProxySettings proxy) {
+        this.session = session;
+        this.catalog = session.asCatalog(org.apache.iceberg.catalog.SessionCatalog.SessionContext.createEmpty());
+        this.namespaces = (org.apache.iceberg.catalog.SupportsNamespaces) catalog;
         this.namespace = namespace;
         this.io = io;
         this.uri = uri;
@@ -70,7 +74,6 @@ public final class RestCatalog implements Catalog {
             }
         });
         props.put("uri", uri);
-        props.put("io-impl", DrishtiFileIO.class.getName());
         for (String k : List.of("warehouse", "credential", "token", "scope", "oauth2-server-uri", "prefix")) {
             if (s.getOrDefault(k, "").isBlank()) {
                 props.remove(k);
@@ -88,7 +91,16 @@ public final class RestCatalog implements Catalog {
                 props.put("rest.client.proxy.password", proxy.password());
             }
         }
-        org.apache.iceberg.rest.RESTCatalog c = new org.apache.iceberg.rest.RESTCatalog();
+        // Iceberg's own REST client, as its RESTCatalog makes it; each table's files through a DrishtiFileIO of this runtime (the
+        // catalog's settings and the credentials it vends for the table), handed over explicitly rather than named as io-impl
+        org.apache.iceberg.rest.RESTSessionCatalog c = new org.apache.iceberg.rest.RESTSessionCatalog(
+                config -> org.apache.iceberg.rest.HTTPClient.builder(config).uri(config.get("uri"))
+                        .withHeaders(org.apache.iceberg.rest.RESTUtil.configHeaders(config)).build(),
+                (context, tableProps) -> {
+                    DrishtiFileIO f = new DrishtiFileIO(io.runtime());
+                    f.initialize(tableProps);
+                    return f;
+                });
         try {
             c.initialize(s.getOrDefault("source-name", "drishti"), props);
         } catch (org.apache.iceberg.exceptions.NotAuthorizedException e) {
@@ -130,9 +142,9 @@ public final class RestCatalog implements Catalog {
 
     @Override
     public Table create(String name, Schema schema, PartitionSpec spec, SortOrder order, Map<String, String> properties) throws IOException {
-        if (!namespace.isEmpty() && !catalog.namespaceExists(namespace)) {
+        if (!namespace.isEmpty() && !namespaces.namespaceExists(namespace)) {
             try {
-                catalog.createNamespace(namespace);
+                namespaces.createNamespace(namespace);
             } catch (AlreadyExistsException e) {
                 // another writer created it meanwhile
             }
@@ -149,7 +161,7 @@ public final class RestCatalog implements Catalog {
     @Override
     public boolean reachable() {
         try {
-            return namespace.isEmpty() || catalog.namespaceExists(namespace);
+            return namespace.isEmpty() || namespaces.namespaceExists(namespace);
         } catch (RuntimeException e) {
             return false;
         }
@@ -163,7 +175,7 @@ public final class RestCatalog implements Catalog {
     @Override
     public void close() {
         try {
-            catalog.close();
+            session.close();
         } catch (IOException e) {
             // closing: nothing to save
         }

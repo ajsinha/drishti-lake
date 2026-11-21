@@ -77,7 +77,7 @@ public final class TaskReader implements Closeable {
         }
         String p = io.resolve(task.file().path());
         this.reader = new ParquetRowReader(ParquetInput.of(io.storage(p), p, task.file().fileSizeInBytes()), task.file().path(),
-                task.file().fileSizeInBytes(), read, table.nameMapping().orElse(null), constants, filter, io.codecs(),
+                task.file().fileSizeInBytes(), read, table.nameMapping().orElse(null), constants, filter, io.codecs(), com.ash.lake.io.ParquetFooters.of(io.runtime()),
                 pageIndex && !deletes.hasPositions());
     }
 

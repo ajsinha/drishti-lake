@@ -255,7 +255,7 @@ public final class DataInbox {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("lake", name);
         out.put("lakeFrom", from);
-        List<Map<String, Object>> lines = com.ash.lake.load.LakeUndo.undoAll(Cycle.lakeRoot(name), id, List.of(), dryRun);
+        List<Map<String, Object>> lines = com.ash.lake.load.LakeUndo.undoAll(settings.runtime(), Cycle.lakeRoot(settings.runtime(), name), id, List.of(), dryRun);
         out.put("lines", lines);
         if (!dryRun) {
             out.put("signals", signalUndone(id, line, lines));

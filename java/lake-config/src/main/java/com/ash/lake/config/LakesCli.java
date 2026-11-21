@@ -72,13 +72,14 @@ public final class LakesCli {
             throw new IllegalArgumentException("give a command: dump, table, check, migrate-config or add-entry");
         }
         Map<String, String> o = options(args);
-        Path dir = o.containsKey("dir") ? Path.of(o.get("dir")) : Lakes.dir();
+        com.ash.lake.LakeRuntime rt = com.ash.lake.LakeRuntime.fromProcess();   // a command line: the process's settings, no host
+        Path dir = o.containsKey("dir") ? Path.of(o.get("dir")) : Lakes.dir(rt);
         switch (args[0]) {
             case "dump" -> {
-                return Map.of("dir", dir.toString(), "lakes", Lakes.read(dir, com.ash.lake.Placeholders::process).describe());
+                return Map.of("dir", dir.toString(), "lakes", Lakes.read(rt, dir).describe());
             }
             case "table" -> {
-                Lake l = Lakes.read(dir, com.ash.lake.Placeholders::process).get(need(o, "lake"));
+                Lake l = Lakes.read(rt, dir).get(need(o, "lake"));
                 LakeTable t = l.require(o.get("domain"), need(o, "kind"), o.get("table"));
                 Map<String, Object> m = t.describe();
                 m.put("location", l.location(t));
@@ -89,7 +90,7 @@ public final class LakesCli {
                 return m;
             }
             case "check" -> {
-                Lakes lakes = Lakes.read(dir, com.ash.lake.Placeholders::process);
+                Lakes lakes = Lakes.read(rt, dir);
                 Map<String, Map.Entry<String, Map<String, String>>> conns = o.containsKey("connectors") ? connectors(Path.of(o.get("connectors")))
                         : Map.of();
                 List<LakeCheck.Finding> f = LakeCheck.check(lakes, conns);
@@ -97,7 +98,7 @@ public final class LakesCli {
                         "errors", f.stream().filter(x -> x.level().equals("error")).count());
             }
             case "migrate-config" -> {
-                LakeFiles.Migration m = LakeFiles.migrate(Path.of(need(o, "connectors")), dir, o.containsKey("write"));
+                LakeFiles.Migration m = LakeFiles.migrate(rt, Path.of(need(o, "connectors")), dir, o.containsKey("write"));
                 Map<String, Object> r = new LinkedHashMap<>();
                 r.put("written", o.containsKey("write"));
                 r.put("lake-files", m.lakeFiles().keySet().stream().map(Path::toString).toList());
@@ -114,9 +115,9 @@ public final class LakesCli {
             case "add-entry" -> {
                 String lake = need(o, "lake");
                 Path file = Lakes.file(dir, lake);
-                Lakes.read(dir, com.ash.lake.Placeholders::process).get(lake);
+                Lakes.read(rt, dir).get(lake);
                 String kind = need(o, "kind");
-                LakeTable t = PackEntry.read(Path.of(need(o, "pack")), kind, o.get("connector")).toTable(kind);
+                LakeTable t = PackEntry.read(rt, Path.of(need(o, "pack")), kind, o.get("connector")).toTable(kind);
                 boolean added = LakeFiles.addTable(file, t);
                 return Map.of("lake", lake, "table", t.name(), "added", added, "message", added
                         ? "the pack's recommended entry for " + t.name() + " was copied into " + file + "; edit it there from now on"
@@ -129,7 +130,7 @@ public final class LakesCli {
                 for (String p : need(o, "packs").split(",")) {
                     roots.add(Path.of(p.strip()));
                 }
-                Map<String, JsonNode> wanted = LakeFiles.packTables(LakeFiles.packFiles(roots), lake);
+                Map<String, JsonNode> wanted = LakeFiles.packTables(rt, LakeFiles.packFiles(rt, roots), lake);
                 List<String> added = o.containsKey("write") ? LakeFiles.addEntries(file, wanted) : LakeFiles.missing(file, wanted);
                 return Map.of("lake", lake, "file", file.toString(), "tables", wanted.size(), "written", o.containsKey("write") && !added.isEmpty(),
                         "missing", added);

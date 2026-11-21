@@ -15,6 +15,8 @@
  */
 package com.ash.lake.io;
 
+import com.ash.lake.spi.Storage;
+
 import java.nio.file.Path;
 import org.junit.jupiter.api.io.TempDir;
 

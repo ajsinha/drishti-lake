@@ -82,7 +82,7 @@ class LakeWriterTest {
     }
 
     private Map<String, String> read(Path table) throws IOException {
-        try (NativeEngine engine = NativeEngine.create(Map.of())) {
+        try (NativeEngine engine = NativeEngine.create(com.ash.lake.LakeRuntime.builder().build())) {
             return TableReader.rows(engine, table.toString(), null);
         }
     }

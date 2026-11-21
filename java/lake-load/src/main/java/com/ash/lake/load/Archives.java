@@ -17,7 +17,7 @@ package com.ash.lake.load;
 
 import com.ash.lake.common.FileDates;
 import com.ash.lake.iceberg.io.FileAccess;
-import com.ash.lake.io.RangeReader;
+import com.ash.lake.spi.RangeReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;

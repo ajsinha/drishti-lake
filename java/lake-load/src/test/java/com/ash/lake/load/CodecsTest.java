@@ -116,12 +116,12 @@ class CodecsTest {
     @org.junit.jupiter.api.Disabled("SPLIT EXEMPTION (parked, SPLIT_EXEMPTIONS.md): reads the host's shipped packs; L9 gives it a pack of the kit's own (the parity kit's pack cases)")
     void aPackGivesTheDomainTableLayoutKeyAndFlattenedFieldsAsLakeBuildReadsThem() throws IOException {
         java.nio.file.Path packs = java.nio.file.Path.of(TestRoots.module(), "host-packs");     // the host's shipped packs: not in this repository
-        LoadConfig risk = LoadConfig.read(null, List.of("source.files=x.jsonl", "source.pack=" + packs.resolve("market-risk"), "source.date=BUSINESS_DATE",
+        LoadConfig risk = LoadConfig.read(com.ash.lake.LakeRuntime.fromProcess(), null, List.of("source.files=x.jsonl", "source.pack=" + packs.resolve("market-risk"), "source.date=BUSINESS_DATE",
                 "target.lake=/l", "target.kind=scenario-pv"));
         assertThat(risk.target().domain()).isEqualTo("risk");
         assertThat(risk.source().vectors()).containsExactly("SCENARIO_PV");
         assertThat(risk.source().promote()).contains("LEGAL_ENTITY", "DESK", "TT_BOOK");
-        LoadConfig trades = LoadConfig.read(null, List.of("source.files=x.jsonl", "source.pack=" + packs.resolve("trading"), "source.connector=trade-endur",
+        LoadConfig trades = LoadConfig.read(com.ash.lake.LakeRuntime.fromProcess(), null, List.of("source.files=x.jsonl", "source.pack=" + packs.resolve("trading"), "source.connector=trade-endur",
                 "source.as-of=2026-10-15", "target.lake=/l", "target.kind=trade"));
         assertThat(trades.tablePath()).isEqualTo("/l/trading/trade_endur");
         assertThat(trades.source().id()).isEqualTo("TRADE_ID");
@@ -132,13 +132,13 @@ class CodecsTest {
 
     @Test
     void theConfigurationNamesAMistakeAndTheBudgetHoldsItsShares() throws IOException {
-        assertThatThrownBy(() -> LoadConfig.read(null, List.of("source.files=x.jsonl", "source.date=D", "target.path=/t", "target.layuot.x=1")))
+        assertThatThrownBy(() -> LoadConfig.read(com.ash.lake.LakeRuntime.fromProcess(), null, List.of("source.files=x.jsonl", "source.date=D", "target.path=/t", "target.layuot.x=1")))
                 .hasMessageContaining("layuot is not a key");
-        assertThatThrownBy(() -> LoadConfig.read(null, List.of("source.files=x.jsonl", "source.date-from=field", "target.path=/t")))
+        assertThatThrownBy(() -> LoadConfig.read(com.ash.lake.LakeRuntime.fromProcess(), null, List.of("source.files=x.jsonl", "source.date-from=field", "target.path=/t")))
                 .hasMessageContaining("source.date-from field: auto");
-        assertThatThrownBy(() -> LoadConfig.read(null, List.of("source.files=x.jsonl", "source.date=D", "target.path=/t",
+        assertThatThrownBy(() -> LoadConfig.read(com.ash.lake.LakeRuntime.fromProcess(), null, List.of("source.files=x.jsonl", "source.date=D", "target.path=/t",
                 "source.storage-options.secret-key=abc"))).hasMessageContaining("never put in the file");
-        LoadConfig c = LoadConfig.read(null, List.of("source.files=x.jsonl", "source.date=D", "target.path=/l/risk/pv", "memory.budget-mb=100",
+        LoadConfig c = LoadConfig.read(com.ash.lake.LakeRuntime.fromProcess(), null, List.of("source.files=x.jsonl", "source.date=D", "target.path=/l/risk/pv", "memory.budget-mb=100",
                 "source.storage-options.endpoint=${NO_SUCH_VAR:-http://minio:9000}"));
         assertThat(c.memory().budget()).isEqualTo(100L << 20);
         assertThat(c.memory().queueBytes() + c.memory().sortBytes() + c.memory().writeBytes()).isEqualTo(100L << 20);

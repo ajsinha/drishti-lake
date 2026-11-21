@@ -108,7 +108,7 @@ final class ParquetBatches implements CloseableIterator<ColumnarBatch> {
     static long[] rowGroups(NativeFileIO io, FileStatus file) throws IOException {
         InputFile in = io.newParquetFile(file.getPath(), file.getSize());
         try (SeekableInputStream stream = in.newStream()) {
-            return ParquetFooters.footer(file.getPath(), file.getSize(), in, stream, ParquetFooters.options(io.codecs()).build())
+            return ParquetFooters.of(io.runtime()).footer(file.getPath(), file.getSize(), in, stream, ParquetFooters.options(io.codecs()).build())
                     .getBlocks().stream().mapToLong(b -> b.getTotalByteSize()).toArray();
         }
     }
@@ -130,8 +130,6 @@ final class ParquetBatches implements CloseableIterator<ColumnarBatch> {
         }
     }
 
-    /** Whether single-entity reads use the page index (lake.parquet.page-index, default true; every Parquet library is one version, the root pom). */
-    static final boolean PAGE_INDEX = com.ash.lake.LakeOptions.current().parquetPageIndex();
     /** This read skips the pages the page index rules out. */
     private boolean pageFiltered;
 
@@ -140,7 +138,7 @@ final class ParquetBatches implements CloseableIterator<ColumnarBatch> {
         SeekableInputStream stream = in.newStream();
         try {
             // the footer from the shared cache: a Delta data file never changes once written
-            ParquetMetadata footer = ParquetFooters.footer(file.getPath(), file.getSize(), in, stream, options().build());
+            ParquetMetadata footer = ParquetFooters.of(io.runtime()).footer(file.getPath(), file.getSize(), in, stream, options().build());
             if (fromGroup > 0 || toGroup < footer.getBlocks().size()) {
                 java.util.List<org.apache.parquet.hadoop.metadata.BlockMetaData> blocks = footer.getBlocks();
                 int to = Math.min(toGroup, blocks.size());
@@ -150,7 +148,7 @@ final class ParquetBatches implements CloseableIterator<ColumnarBatch> {
             Optional<FilterPredicate> filter = predicate.flatMap(p -> ParquetFilterUtils.toParquetFilter(fileSchema, p));
             // a single entity's read (id = …) also uses the page index, when the file has one: only the page that can hold the id
             // is decompressed, not its whole row group (a file without the index reads the row group, as before)
-            pageFiltered = filter.isPresent() && !rowIndex && PAGE_INDEX;
+            pageFiltered = filter.isPresent() && !rowIndex && io.runtime().options().parquetPageIndex();   // lake.parquet.page-index, default true
             ParquetReadOptions withFilter = options().useColumnIndexFilter(pageFiltered)
                     .withRecordFilter(filter.map(FilterCompat::get).orElse(FilterCompat.NOOP)).build();
             reader = ParquetFileReader.open(in, footer, withFilter, stream);      // the reader owns the stream now

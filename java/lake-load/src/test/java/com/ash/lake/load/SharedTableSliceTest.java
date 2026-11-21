@@ -112,7 +112,7 @@ class SharedTableSliceTest {
                     .containsExactlyInAnyOrderEntriesOf(Map.of("WSS", 15, "SWAPONE", 24, "ICI", 23));
             if (format.equals("delta")) {                // its undo brings WSS's rows before it back, the other systems' rows once
                 String id = again.path("loads").fieldNames().next();
-                LakeUndo.undo(lake.toString(), id, List.of(), false);
+                LakeUndo.undo(com.ash.lake.LakeRuntime.fromProcess(), lake.toString(), id, List.of(), false);
                 assertThat(bySystem(format, lake, "trades_shared")).as("after the undo of WSS's reload")
                         .containsExactlyInAnyOrderEntriesOf(Map.of("WSS", 21, "SWAPONE", 24, "ICI", 23));
             }

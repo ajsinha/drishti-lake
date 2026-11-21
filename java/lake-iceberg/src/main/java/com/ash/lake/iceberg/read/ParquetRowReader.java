@@ -88,10 +88,11 @@ public final class ParquetRowReader implements Closeable {
      * @param mapping the table's name mapping, for files without field ids (or null)
      * @param constants values of columns the file does not hold (identity partition columns: the partition value)
      * @param filter comparisons of top-level columns, for row-group pruning
+     * @param footers the runtime's parsed footers
      * @param pageIndex also skip pages by the column index (only when positions are not needed)
      */
     public ParquetRowReader(InputFile in, String path, long length, List<NestedField> projection, NameMapping mapping, Map<Integer, Object> constants,
-            Expr filter, NativeCodecs codecs, boolean pageIndex) throws IOException {
+            Expr filter, NativeCodecs codecs, ParquetFooters footers, boolean pageIndex) throws IOException {
         this.path = path;
         this.projection = List.copyOf(projection);
         this.constants = constants;
@@ -99,7 +100,7 @@ public final class ParquetRowReader implements Closeable {
         ParquetFileReader opened = null;
         try {
             ParquetReadOptions base = ParquetFooters.options(codecs).build();
-            ParquetMetadata footer = ParquetFooters.footer(path, length, in, stream, base);
+            ParquetMetadata footer = footers.footer(path, length, in, stream, base);
             MessageType fileSchema = footer.getFileMetaData().getSchema();
             Converters.Ids ids = ids(fileSchema, mapping);
             MessageType requested = requested(fileSchema, ids);

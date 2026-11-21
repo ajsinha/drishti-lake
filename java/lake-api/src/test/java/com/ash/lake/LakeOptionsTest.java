@@ -49,18 +49,13 @@ class LakeOptionsTest {
     }
 
     @Test
-    void theProcessOptionsReadTheProductsNamesAndAHostMayReplaceThem() {
-        assertThat(LakeOptions.current().readsProcess()).isTrue();
-        assertThat(LakeOptions.current().value(LakeOptions.DATA_DIR)).isEqualTo(System.getProperty("lake.data.dir"));
-        LakeOptions host = LakeOptions.builder().home(Path.of("/opt/host")).build();
-        LakeOptions before = LakeOptions.use(host);
-        try {
-            assertThat(LakeRoots.home()).isEqualTo(Path.of("/opt/host"));
-            assertThat(LakeRoots.data()).isEqualTo("/opt/host/data");
-            assertThat(LakeRoots.connectors()).isEqualTo(Path.of("/opt/host/config/connectors"));
-        } finally {
-            LakeOptions.use(before.readsProcess() ? null : before);
-        }
-        assertThat(LakeOptions.current().readsProcess()).isTrue();
+    void theProcessOptionsReadTheProductsNamesAndAHostsAreItsOwn() {
+        assertThat(LakeRuntime.fromProcess().options().readsProcess()).isTrue();
+        assertThat(LakeRuntime.fromProcess().options().value(LakeOptions.DATA_DIR)).isEqualTo(System.getProperty("lake.data.dir"));
+        LakeRuntime host = LakeRuntime.builder().options(LakeOptions.builder().home(Path.of("/opt/host")).build()).build();
+        assertThat(host.roots().home()).isEqualTo(Path.of("/opt/host"));
+        assertThat(host.roots().data()).isEqualTo("/opt/host/data");
+        assertThat(host.roots().connectors()).isEqualTo(Path.of("/opt/host/config/connectors"));
+        assertThat(LakeRuntime.fromProcess().roots().home()).isEqualTo(Path.of(System.getProperty("lake.home")).normalize());
     }
 }

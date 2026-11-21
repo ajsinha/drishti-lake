@@ -25,7 +25,9 @@ def to_host(src):
         if new == "com.ash.lake.tck":
             continue
         src = re.sub(r"(import\s+)" + re.escape(new) + r"\b", lambda m: m.group(1) + old, src)
-    return src
+    # the host at the freeze has no LakeRuntime (step L6): its readers take no runtime argument
+    src = "\n".join(l for l in src.split("\n") if not l.rstrip().endswith("// lake-only"))
+    return src.replace("(RT, ", "(").replace("(RT)", "()")
 
 
 def sh(cmd, **kw):

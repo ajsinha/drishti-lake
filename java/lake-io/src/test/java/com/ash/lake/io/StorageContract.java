@@ -15,6 +15,9 @@
  */
 package com.ash.lake.io;
 
+import com.ash.lake.spi.Storage;
+import com.ash.lake.spi.RangeReader;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

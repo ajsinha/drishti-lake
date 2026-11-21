@@ -92,11 +92,12 @@ public final class IcebergLoader {
      * {@code -Dlake.loader.trace=true} prints the stack trace as well.
      */
     public static void main(String[] args) {
+        com.ash.lake.LakeRuntime runtime = com.ash.lake.LakeRuntime.fromProcess();             // a command line: the process's settings
         try {
-            load(args);
+            load(runtime, args);
         } catch (Exception | Error e) {
             System.err.println("iceberg: " + oneLine(e, settingsOf(args)));
-            if (com.ash.lake.LakeOptions.current().loaderTrace()) {
+            if (runtime.options().loaderTrace()) {
                 e.printStackTrace();
             }
             System.exit(1);
@@ -174,12 +175,12 @@ public final class IcebergLoader {
     }
 
     /** A load from Java (other modules' tests and tools): as {@link #main}, its failure thrown rather than ending the process. */
-    public static void run(String[] args) throws Exception {
-        load(args);
+    public static void run(com.ash.lake.LakeRuntime runtime, String[] args) throws Exception {
+        load(runtime, args);
     }
 
     /** The load itself (tests call it, and see its exceptions). */
-    static void load(String[] args) throws Exception {
+    static void load(com.ash.lake.LakeRuntime runtime, String[] args) throws Exception {
         String file = args[0];
         Map<String, String> settings = new HashMap<>();
         if (args.length > 1 && !args[1].startsWith("--")) {
@@ -210,9 +211,9 @@ public final class IcebergLoader {
             i++;
         }
         if (!settings.containsKey("root") && !"rest".equalsIgnoreCase(settings.getOrDefault("catalog", ""))) {
-            settings.put("root", com.ash.lake.LakeRoots.under("iceberg"));   // a folder catalog with no root given: the data folder's
+            settings.put("root", runtime.roots().under("iceberg"));   // a folder catalog with no root given: the data folder's
         }
-        IcebergLoader.Run run = new IcebergLoader.Run(settings, fileRows, rowGroupBytes, budget, threads,
+        IcebergLoader.Run run = new IcebergLoader.Run(runtime, settings, fileRows, rowGroupBytes, budget, threads,
                 spill.resolve("drishti-iceberg-" + ProcessHandle.current().pid()), LoadGuard.fromArgs(args));
         run.asOf = RowFeed.asOf(args);
         run.load(file, keepDays);
@@ -237,10 +238,12 @@ public final class IcebergLoader {
         private final Map<String, ReentrantLock> commitLocks = new ConcurrentHashMap<>();
         /** Per table, its days of fewer than {@link #SMALL_DAY} rows, committed together once all are written. */
         private final Map<String, Map<LocalDate, List<?>>> smallDays = new ConcurrentHashMap<>();
+        private final com.ash.lake.LakeRuntime runtime;
         /** The business date given for a plain input ({@code --as-of}; {@link RowFeed}), null: its name's, or today. */
         LocalDate asOf;
 
-        Run(Map<String, String> settings, int fileRows, long rowGroupBytes, long budget, int threads, Path spillDir, LoadGuard guard) {
+        Run(com.ash.lake.LakeRuntime runtime, Map<String, String> settings, int fileRows, long rowGroupBytes, long budget, int threads, Path spillDir, LoadGuard guard) {
+            this.runtime = runtime;
             this.settings = settings;
             this.guard = guard;
             this.fileRows = fileRows;
@@ -409,7 +412,7 @@ public final class IcebergLoader {
             return lakes.computeIfAbsent(domain, d -> {
                 Map<String, String> s = new HashMap<>(settings);
                 s.put("domain", d);
-                return LayoutLake.of(s);
+                return LayoutLake.of(runtime, s);
             });
         }
     }

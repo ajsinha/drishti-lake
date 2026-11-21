@@ -133,7 +133,7 @@ class NativePlanningTest {
     @ParameterizedTest
     @MethodSource("filters")
     void aFilterPrunesFilesButNoMatchingRow(String table, Expr filter) throws Exception {
-        try (Catalog c = Catalogs.open(Fixtures.settings(root))) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Fixtures.settings(root))) {
             Table t = c.load(table).orElseThrow();
             Snapshot s = t.currentSnapshot().orElseThrow();
             List<FileTask> all = t.plan(s, Expr.TRUE, pool);

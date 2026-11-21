@@ -74,7 +74,7 @@ final class IcebergTarget implements TableTarget {
         settings.putAll(cfg.target().iceberg());
         settings.putIfAbsent("root", cfg.lakeRoot());
         settings.put("domain", dt[0]);
-        this.catalog = Catalogs.open(settings);
+        this.catalog = Catalogs.open(cfg.runtime(), settings);
         this.name = dt[1];
     }
 

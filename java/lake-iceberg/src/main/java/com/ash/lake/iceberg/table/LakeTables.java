@@ -50,8 +50,8 @@ interface LakeTables extends Closeable {
     @Override
     void close() throws IOException;
 
-    static LakeTables open(Map<String, String> settings) {
-        LakeTables lake = new Native(Catalogs.open(settings), settings);
+    static LakeTables open(com.ash.lake.LakeRuntime runtime, Map<String, String> settings) {
+        LakeTables lake = new Native(Catalogs.open(runtime, settings), settings);
         Map<String, String> names = Named.of(settings);
         return names.isEmpty() ? lake : new Named(lake, names);
     }

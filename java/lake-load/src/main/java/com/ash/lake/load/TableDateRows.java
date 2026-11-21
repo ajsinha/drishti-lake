@@ -56,8 +56,8 @@ public final class TableDateRows {
     private TableDateRows() {}
 
     /** Counts the rows of {@code date} in the table at {@code location}. */
-    public static Counts count(String location, String date, List<String> columns) throws IOException {
-        Engine engine = LakeWriter.engineFor(location, Map.of());
+    public static Counts count(com.ash.lake.LakeRuntime runtime, String location, String date, List<String> columns) throws IOException {
+        Engine engine = LakeWriter.engineFor(runtime, location, Map.of());
         Snapshot s;
         try {
             s = Table.forPath(engine, location).getLatestSnapshot(engine);

@@ -32,7 +32,7 @@ class RoutesTest {
     @TempDir Path tmp;
 
     private Routes routes(Fixture f) throws IOException {
-        return Routes.read(f.rules, f.lake.toString(), f.packs());
+        return Routes.read(com.ash.lake.LakeRuntime.fromProcess(), f.rules, f.lake.toString(), f.packs());
     }
 
     @Test
@@ -65,9 +65,9 @@ class RoutesTest {
         Routes.Route r = routes(f).route("named-latest.jsonl", dated);
         assertThat(List.of(String.valueOf(r.asOf()), r.dateBy())).containsExactly("2026-10-29", "2026-10-29 from the .ready file");
         Path load = tmp.resolve("load.yaml");
-        LoaderProcess.writeConfig(load, r, List.of(Files.writeString(tmp.resolve("x.jsonl"), "{}\n")), tmp.resolve("s.json"), tmp.resolve("r.jsonl"), 0, tmp.resolve("spill"));
+        LoaderProcess.writeConfig(com.ash.lake.LakeRuntime.fromProcess(), load, r, List.of(Files.writeString(tmp.resolve("x.jsonl"), "{}\n")), tmp.resolve("s.json"), tmp.resolve("r.jsonl"), 0, tmp.resolve("spill"));
         assertThat(Files.readString(load)).containsPattern("as-of: \"?2026-10-29\"?").containsPattern("mode: \"?append\"?");
-        assertThatThrownBy(() -> Routes.read(writeRule(f, "date-from: field"), "lake", f.packs())).isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> Routes.read(com.ash.lake.LakeRuntime.fromProcess(), writeRule(f, "date-from: field"), "lake", f.packs())).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("auto (the .ready file's business-date");
     }
 
@@ -75,16 +75,16 @@ class RoutesTest {
     void datePatternTakesTheDateFromADashedNameAndTheReadyFileStillWins() throws Exception {
         Fixture f = new Fixture(tmp);
         Path rules = writeRule(f, "date-from: name\n      date-pattern: '-(\\d{4}-\\d{2}-\\d{2})\\.'");
-        Routes.Route r = Routes.read(rules, "lake", f.packs()).route("x-swap-2026-10-30.jsonl.gz", ReadyNote.EMPTY);
+        Routes.Route r = Routes.read(com.ash.lake.LakeRuntime.fromProcess(), rules, "lake", f.packs()).route("x-swap-2026-10-30.jsonl.gz", ReadyNote.EMPTY);
         assertThat(List.of(String.valueOf(r.asOf()), r.dateBy())).containsExactly("2026-10-30", "2026-10-30 from the name (date-pattern)");
-        assertThatThrownBy(() -> Routes.read(rules, "lake", f.packs()).route("x-swap-latest.jsonl.gz", ReadyNote.EMPTY)).isInstanceOf(Routes.Unrouted.class)
+        assertThatThrownBy(() -> Routes.read(com.ash.lake.LakeRuntime.fromProcess(), rules, "lake", f.packs()).route("x-swap-latest.jsonl.gz", ReadyNote.EMPTY)).isInstanceOf(Routes.Unrouted.class)
                 .hasMessageContaining("carries none");
-        assertThatThrownBy(() -> Routes.read(rules, "lake", f.packs()).route("x-swap-2026-13-45.jsonl.gz", ReadyNote.EMPTY)).isInstanceOf(Routes.Unrouted.class);
-        Routes.Route ready = Routes.read(rules, "lake", f.packs()).route("x-swap-2026-10-30.jsonl.gz", ReadyNote.of(null, null, null, null, LocalDate.parse("2026-10-29")));
+        assertThatThrownBy(() -> Routes.read(com.ash.lake.LakeRuntime.fromProcess(), rules, "lake", f.packs()).route("x-swap-2026-13-45.jsonl.gz", ReadyNote.EMPTY)).isInstanceOf(Routes.Unrouted.class);
+        Routes.Route ready = Routes.read(com.ash.lake.LakeRuntime.fromProcess(), rules, "lake", f.packs()).route("x-swap-2026-10-30.jsonl.gz", ReadyNote.of(null, null, null, null, LocalDate.parse("2026-10-29")));
         assertThat(List.of(String.valueOf(ready.asOf()), ready.dateBy())).containsExactly("2026-10-29", "2026-10-29 from the .ready file");
         Path compact = writeRule(f, "date-from: name\n      date-pattern: '_(\\d{8})\\.'\n      date-format: YYYYMMDD");
-        assertThat(Routes.read(compact, "lake", f.packs()).route("x-swap_20261030.jsonl.gz", ReadyNote.EMPTY).asOf()).isEqualTo(LocalDate.parse("2026-10-30"));
-        assertThatThrownBy(() -> Routes.read(writeRule(f, "date-pattern: '(a)(b)'"), "lake", f.packs())).isInstanceOf(IllegalArgumentException.class)
+        assertThat(Routes.read(com.ash.lake.LakeRuntime.fromProcess(), compact, "lake", f.packs()).route("x-swap_20261030.jsonl.gz", ReadyNote.EMPTY).asOf()).isEqualTo(LocalDate.parse("2026-10-30"));
+        assertThatThrownBy(() -> Routes.read(com.ash.lake.LakeRuntime.fromProcess(), writeRule(f, "date-pattern: '(a)(b)'"), "lake", f.packs())).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("exactly one capture group");
     }
 
@@ -124,7 +124,7 @@ class RoutesTest {
                 new ReadyNote(null, null, null, null, null, null, null, null, true, null, java.util.Map.of(), false)))
                 .hasMessageContaining("a new table needs its pack");
         Path load = tmp.resolve("new.yaml");
-        LoaderProcess.writeConfig(load, r, List.of(Files.writeString(tmp.resolve("x.jsonl"), "{}\n")), tmp.resolve("s.json"), tmp.resolve("r.jsonl"), 0, tmp.resolve("spill"));
+        LoaderProcess.writeConfig(com.ash.lake.LakeRuntime.fromProcess(), load, r, List.of(Files.writeString(tmp.resolve("x.jsonl"), "{}\n")), tmp.resolve("s.json"), tmp.resolve("r.jsonl"), 0, tmp.resolve("spill"));
         assertThat(Files.readString(load)).doesNotContain("pack:").containsPattern("domain: \"?demo\"?").containsPattern("table: \"?deals\"?");
     }
 

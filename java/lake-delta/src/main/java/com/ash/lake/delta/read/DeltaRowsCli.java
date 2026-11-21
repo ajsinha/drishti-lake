@@ -95,7 +95,7 @@ public final class DeltaRowsCli {
             System.exit(2);
         }
         try (OutputStream out = new BufferedOutputStream(new java.io.FileOutputStream(java.io.FileDescriptor.out), 1 << 16)) {
-            write(NativeEngine.create(), table, version, date, columns, out);
+            write(NativeEngine.create(com.ash.lake.LakeRuntime.fromProcess()), table, version, date, columns, out);
         } catch (RuntimeException e) {
             Throwable root = e;
             while (root.getCause() != null && root.getCause() != root) {

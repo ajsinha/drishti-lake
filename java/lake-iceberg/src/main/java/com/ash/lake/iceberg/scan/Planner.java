@@ -52,9 +52,9 @@ public final class Planner {
 
     private Planner() {}
 
-    /** Forgets every parsed manifest. */
-    public static void purge() {
-        DrishtiFileIO.purge();
+    /** Forgets every manifest parsed for {@code runtime}. */
+    public static void purge(com.ash.lake.LakeRuntime runtime) {
+        DrishtiFileIO.purge(runtime);
     }
 
     /** The data files of {@code snapshot} that may hold rows matching {@code filter}, each with its delete files. */

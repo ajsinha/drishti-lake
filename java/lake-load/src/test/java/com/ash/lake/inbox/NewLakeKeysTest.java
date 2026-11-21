@@ -52,13 +52,13 @@ class NewLakeKeysTest {
         lakes = tmp.resolve("config/lakes");
         data = tmp.resolve("data");
         System.setProperty(Lakes.PROPERTY, lakes.toString());
-        Lakes.useProperties(k -> k.equals("drishti.data.dir") ? data.toString() : null);
+        System.setProperty("drishti.data.dir", data.toString());   // the process's settings: the runtime reads them
     }
 
     @AfterEach
     void reset() {
         System.clearProperty(Lakes.PROPERTY);
-        Lakes.useProperties(null);
+        System.clearProperty("drishti.data.dir");
     }
 
     /** A pack in the lake form, as the shipped trading pack: one kind with a table per source system, no id: in its entries, no ingest key. */
@@ -121,18 +121,18 @@ class NewLakeKeysTest {
         assertThat(PackEntry.contractKey(pack, "nothing")).isNull();
         Files.writeString(pack.resolve("contracts/two.contract.yaml"), "key: [A, B]\n");
         assertThat(PackEntry.contractKey(pack, "two")).as("a key of two fields is no row id").isNull();
-        LakeTable t = PackEntry.read(pack, "trade", "trade-calypso").toTable("trade");
+        LakeTable t = PackEntry.read(com.ash.lake.LakeRuntime.fromProcess(), pack, "trade", "trade-calypso").toTable("trade");
         assertThat(t.name()).isEqualTo("book.trade_calypso");
         assertThat(t.id()).isEqualTo("TRADE_ID");
-        assertThat(PackEntry.read(pack, "var-limit", null).toTable("var-limit").id()).isEqualTo("NODE_ID");
-        assertThat(PackEntry.tables(pack)).extracting(PackEntry.PackTable::table)
+        assertThat(PackEntry.read(com.ash.lake.LakeRuntime.fromProcess(), pack, "var-limit", null).toTable("var-limit").id()).isEqualTo("NODE_ID");
+        assertThat(PackEntry.tables(com.ash.lake.LakeRuntime.fromProcess(), pack)).extracting(PackEntry.PackTable::table)
                 .containsExactly("trade_endur", "trade_calypso", "var-limit");
     }
 
     @Test
     void aTableNameResolvesToItsKindAndConnectorAndUnderscoresMatchHyphens() throws Exception {
         Path pack = bookPack(tmp);
-        Routes routes = Routes.read(tmp.resolve("none.yaml"), "demo", packs(pack));
+        Routes routes = Routes.read(com.ash.lake.LakeRuntime.fromProcess(), tmp.resolve("none.yaml"), "demo", packs(pack));
         Routes.Route r = routes.route("trade_endur.2026-11-06.jsonl.gz", null);
         assertThat(r.kind()).isEqualTo("trade");
         assertThat(r.connector()).isEqualTo("trade-endur");
@@ -165,7 +165,7 @@ class NewLakeKeysTest {
                   risk:
                 """).replace("    book.var-limit:", "    book.trades_shared: {kind: trade, partition-by: [SOURCE_SYSTEM], promote: [SOURCE_SYSTEM]}\n    book.var-limit:");
         Files.writeString(pack.resolve("pack.yaml"), y);
-        Routes routes = Routes.read(tmp.resolve("none.yaml"), "demo", packs(pack));
+        Routes routes = Routes.read(com.ash.lake.LakeRuntime.fromProcess(), tmp.resolve("none.yaml"), "demo", packs(pack));
         List<Routes.Route> tar = routes.routeTar("eod.tar", List.of("trade_endur", "trade_wss", "trade_swapone", "trade_ici"), ReadyNote.EMPTY);
         assertThat(tar).extracting(Routes.Route::connector).containsExactly("trade-endur", "trade-wss", "trade-swapone", "trade-ici");
         assertThat(tar).extracting(Routes.Route::kind).containsOnly("trade");
@@ -177,10 +177,10 @@ class NewLakeKeysTest {
     @Test
     void theReadyFilesKeyWinsInTheNewLakesEntry() throws Exception {
         Path pack = bookPack(tmp);
-        Routes routes = Routes.read(tmp.resolve("none.yaml"), "demo", packs(pack));
+        Routes routes = Routes.read(com.ash.lake.LakeRuntime.fromProcess(), tmp.resolve("none.yaml"), "demo", packs(pack));
         Path marker = Files.writeString(tmp.resolve("t.ready"), "lake: keylake\nkey: OTHER_ID\n");
         Routes.Route r = routes.route("trade_endur.2026-11-06.jsonl", ReadyNote.read(marker));
-        LoaderProcess.lakeEntry(r);
+        LoaderProcess.lakeEntry(com.ash.lake.LakeRuntime.fromProcess(), r);
         Lake lake = Lakes.readFile(lakes.resolve("keylake.yaml"), k -> null);
         assertThat(lake.tables().get("book.trade_endur").id()).isEqualTo("OTHER_ID");
     }
@@ -274,7 +274,7 @@ class NewLakeKeysTest {
 
     @Test
     void aFileOfTheRemovedRiskHierarchyKindIsRefusedSayingWhatReplacesIt() throws Exception {
-        Routes routes = Routes.read(tmp.resolve("none.yaml"), "demo", packs(bookPack(tmp)));
+        Routes routes = Routes.read(com.ash.lake.LakeRuntime.fromProcess(), tmp.resolve("none.yaml"), "demo", packs(bookPack(tmp)));
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> routes.route("risk_hierarchy.2026-11-06.jsonl", null))
                 .isInstanceOf(Routes.Unrouted.class).hasMessageContaining("the risk-hierarchy kind is removed")
                 .hasMessageContaining("promoted columns").hasMessageContaining("hierarchies:");
@@ -282,7 +282,7 @@ class NewLakeKeysTest {
 
     @Test
     void aFileOfTheRemovedPortfolioKindIsRefusedSayingWhatReplacesIt() throws Exception {
-        Routes routes = Routes.read(tmp.resolve("none.yaml"), "demo", packs(bookPack(tmp)));
+        Routes routes = Routes.read(com.ash.lake.LakeRuntime.fromProcess(), tmp.resolve("none.yaml"), "demo", packs(bookPack(tmp)));
         for (String file : List.of("portfolio.2026-09-30.jsonl.gz", "PORTFOLIO.2026-09-30.jsonl")) {
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> routes.route(file, null))
                     .isInstanceOf(Routes.Unrouted.class).hasMessageContaining("the portfolio kind is removed")

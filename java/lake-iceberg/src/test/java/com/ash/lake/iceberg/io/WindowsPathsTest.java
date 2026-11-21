@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
 class WindowsPathsTest {
 
     final LocalStorage windows = new LocalStorage(true);
-    final FileAccess io = new FileAccess(windows, S3Settings.from(Map.of()), Map.of("s3://prod/wh", "file:/C:/copy/wh"), null);
+    final FileAccess io = new FileAccess(com.ash.lake.LakeRuntime.fromProcess(), windows, S3Settings.from(Map.of()), Map.of("s3://prod/wh", "file:/C:/copy/wh"), null);
 
     @Test
     void everyWindowsFormIsLocal() {

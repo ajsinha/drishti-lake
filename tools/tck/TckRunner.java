@@ -81,6 +81,9 @@ import java.util.concurrent.Executors;
  */
 public final class TckRunner {
 
+    /** The runtime the dumps read with: the process's, as a command line (the reference bridge drops it). */
+    static final com.ash.lake.LakeRuntime RT = com.ash.lake.LakeRuntime.fromProcess();   // lake-only
+
     private static final ObjectMapper JSON = new ObjectMapper().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
 
     public static void main(String[] args) throws Exception {
@@ -165,7 +168,7 @@ public final class TckRunner {
         if (!Files.isDirectory(Path.of(table, "_delta_log"))) {
             return out;
         }
-        Engine engine = NativeEngine.create();
+        Engine engine = NativeEngine.create(RT);
         Snapshot s = io.delta.kernel.Table.forPath(engine, table).getLatestSnapshot(engine);
         Scan scan = s.getScanBuilder().build();
         Row state = scan.getScanState(engine);
@@ -244,7 +247,7 @@ public final class TckRunner {
         s.put("domain", domain);
         Map<String, Map<String, Object>> out = new TreeMap<>();
         ExecutorService pool = Executors.newFixedThreadPool(2);
-        try (Catalog c = Catalogs.open(s)) {
+        try (Catalog c = Catalogs.open(RT, s)) {
             Optional<Table> found = c.load(table);
             if (found.isEmpty() || found.get().currentSnapshot().isEmpty()) {
                 return out;

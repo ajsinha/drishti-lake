@@ -85,9 +85,9 @@ public final class LoaderProcess implements LoadRunner {
      * lake file is the truth. The load's batch id (the files' names and sizes) is always written: a table whose lake entry says
      * {@code load-mode: append} records it in the commit, so a repeated or retried file is never appended twice.
      */
-    public static void writeConfig(Path config, Routes.Route r, List<Path> files, Path summary, Path rejects, double rejectMaxPercent, Path spill)
+    public static void writeConfig(com.ash.lake.LakeRuntime runtime, Path config, Routes.Route r, List<Path> files, Path summary, Path rejects, double rejectMaxPercent, Path spill)
             throws IOException {
-        lakeEntry(r);
+        lakeEntry(runtime, r);
         ObjectNode root = JsonNodeFactory.instance.objectNode();
         ObjectNode s = root.putObject("source");
         ArrayNode list = s.putArray("files");
@@ -111,7 +111,7 @@ public final class LoaderProcess implements LoadRunner {
         // the table: the route's, else the pack connector's (trade-endur: trade_endur), which picks among several tables of one kind
         boolean named = r.lake() != null && r.lake().matches("[a-z0-9][a-z0-9_-]*");      // a lake of config/lakes/ (else a folder: the old form)
         put(t, "table", r.table() != null || !named || r.connector() == null || r.newDomain() != null ? r.table()
-                : com.ash.lake.config.PackEntry.read(r.packDir(), r.kind(), r.connector()).table());
+                : com.ash.lake.config.PackEntry.read(runtime, r.packDir(), r.kind(), r.connector()).table());
         // the mode (DATA_LAKE_GUIDE.md section 5): the .ready file's, else the lake file's entry for the table, else the inbox's default
         t.put(r.modeGiven() ? "mode" : "default-mode", "append".equals(r.mode()) ? "append" : "replace-date");
         t.put("batch-id", batchId(files));
@@ -131,25 +131,25 @@ public final class LoaderProcess implements LoadRunner {
      * with the pack's recommended entry for the kind (DATA_LAKE_GUIDE.md section 4). A lake the shipped files describe (the demo lake on a
      * server without its file) is never shadowed by a new file.
      */
-    static void lakeEntry(Routes.Route r) throws IOException {
+    static void lakeEntry(com.ash.lake.LakeRuntime runtime, Routes.Route r) throws IOException {
         if (r.lake() == null || !com.ash.lake.config.Lakes.validName(r.lake())) {
             return;                                         // a folder (the old form): the loader reads it with its one warning
         }
-        Path dir = com.ash.lake.config.Lakes.dir();
+        Path dir = com.ash.lake.config.Lakes.dir(runtime);
         Path file = dir.resolve(r.lake() + ".yaml");
         if (!Files.isRegularFile(file)) {
-            if (com.ash.lake.config.Lakes.shipped().contains(r.lake())) {
+            if (com.ash.lake.config.Lakes.shipped(runtime).contains(r.lake())) {
                 return;                                     // a shipped lake (demo) read from the jar: its entries are the truth
             }
-            List<com.ash.lake.config.LakeTable> tables = r.newDomain() != null ? List.of() : List.of(packEntry(r));
+            List<com.ash.lake.config.LakeTable> tables = r.newDomain() != null ? List.of() : List.of(packEntry(runtime, r));
             if (com.ash.lake.config.LakeFiles.create(dir, r.lake(), tables, "the data inbox for the pack " + r.pack() + "'s " + r.kind())) {
                 LOG.info("lake {} did not exist: {} was created (its tables under <data>/delta/{}/), with the pack {}'s recommended entry for {}; "
                         + "point the pack's connectors at it (lake: {}) and restart to read it", r.lake(), file, r.lake(), r.pack(), r.kind(), r.lake());
                 return;
             }
         }
-        com.ash.lake.config.Lake lake = com.ash.lake.config.Lakes.readFile(file, com.ash.lake.Placeholders::process);
-        com.ash.lake.config.LakeTable entry = packEntry(r);
+        com.ash.lake.config.Lake lake = com.ash.lake.config.Lakes.readFile(file, runtime.settings());
+        com.ash.lake.config.LakeTable entry = packEntry(runtime, r);
         // the table's entry already there; or, with no connector naming one table, any table of the kind (the lake file is the truth)
         if (lake.tables().containsKey(entry.name())
                 || (r.connector() == null && lake.tables().values().stream().anyMatch(x -> x.kind().equals(r.kind())))) {
@@ -166,8 +166,8 @@ public final class LoaderProcess implements LoadRunner {
      * rule's {@code key:}, else the kind's key (the pack's ingest key, else its data contract's): a table created by its first load takes
      * the key, so its rows are never all rejected for want of an id.
      */
-    static com.ash.lake.config.LakeTable packEntry(Routes.Route r) throws IOException {
-        com.ash.lake.config.LakeTable t = com.ash.lake.config.PackEntry.read(r.packDir(), r.kind(), r.connector()).toTable(r.kind());
+    static com.ash.lake.config.LakeTable packEntry(com.ash.lake.LakeRuntime runtime, Routes.Route r) throws IOException {
+        com.ash.lake.config.LakeTable t = com.ash.lake.config.PackEntry.read(runtime, r.packDir(), r.kind(), r.connector()).toTable(r.kind());
         return r.key() != null ? t.withId(r.key()) : t;
     }
 
@@ -197,7 +197,8 @@ public final class LoaderProcess implements LoadRunner {
     public Result run(Path config, List<String> extra, Path log) {
         Path tmp = null;
         try {
-            tmp = TempFiles.createDir("dataload-");
+            com.ash.lake.LakeRuntime runtime = settings.runtime();
+            tmp = TempFiles.of(runtime).createDir("dataload-");
             List<String> cmd = new ArrayList<>();
             boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
             Path nice = Path.of("/usr/bin/nice");
@@ -208,21 +209,16 @@ public final class LoaderProcess implements LoadRunner {
             cmd.add("-Xmx" + settings.loaderHeap());
             cmd.add("-Djava.io.tmpdir=" + tmp.toAbsolutePath());
             cmd.add("-D" + com.ash.lake.LakeOptions.TMP_DIR + "=" + tmp.toAbsolutePath());
-            cmd.add("-D" + com.ash.lake.config.Lakes.PROPERTY + "=" + com.ash.lake.config.Lakes.dir().toAbsolutePath());
-            // the settings this process reads (LakeOptions: lake.home, lake.config.dir, lake.settings.file, ...; the named lakes'
-            // lake.<name>.*; not the temp folder, set above): the loader takes no folder from its working folder
-            List<String> keys = new ArrayList<>();
-            System.getProperties().stringPropertyNames().stream()
-                    .filter(k -> k.startsWith("lake.") && !k.equals(com.ash.lake.LakeOptions.TMP_DIR) && !k.equals(com.ash.lake.config.Lakes.PROPERTY))
-                    .sorted().forEach(keys::add);
-            for (String key : keys) {
-                String v = System.getProperty(key);
-                if (v != null && !v.isBlank()) {
-                    cmd.add("-D" + key + "=" + v);
-                }
-            }
+            cmd.add("-D" + com.ash.lake.config.Lakes.PROPERTY + "=" + com.ash.lake.config.Lakes.dir(runtime).toAbsolutePath());
+            // the runtime's options (lake.home, lake.config.dir, lake.settings.file, ...) and its named lakes' lake.<name>.*, not the temp
+            // folder (set above): the loader takes no folder from its working folder
+            java.util.Map<String, String> given = new java.util.TreeMap<>(runtime.options().given());
+            given.putAll(com.ash.lake.config.NamedLakeSettings.of(runtime).all());
+            given.remove(com.ash.lake.LakeOptions.TMP_DIR);
+            given.remove(com.ash.lake.config.Lakes.PROPERTY);
+            given.forEach((k, v) -> cmd.add("-D" + k + "=" + v));
             // what the host's catalog needs its child to see (its module boot's result, say)
-            com.ash.lake.spi.LakeCatalog.current().childProcessSettings().forEach((k, v) -> cmd.add("-D" + k + "=" + v));
+            runtime.catalog().childProcessSettings().forEach((k, v) -> cmd.add("-D" + k + "=" + v));
             cmd.addAll(launch);
             cmd.add("--config");
             cmd.add(config.toAbsolutePath().toString());
@@ -230,7 +226,7 @@ public final class LoaderProcess implements LoadRunner {
             ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.appendTo(log.toFile()));
             // the settings the lake files refer to, as this server resolves them (a DRISHTI_DELTA_ROOT given as a --setting included):
             // the loader reads the same lake files through the same reader and lands where this server's connectors read
-            pb.environment().putAll(com.ash.lake.config.Lakes.environment());
+            pb.environment().putAll(com.ash.lake.config.Lakes.environment(runtime));
             Process p = pb.start();
             running = p;
             boolean done = p.waitFor(settings.loadTimeout().toMillis(), TimeUnit.MILLISECONDS);

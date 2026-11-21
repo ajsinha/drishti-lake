@@ -21,7 +21,7 @@ import com.ash.lake.iceberg.meta.Bridge;
 import com.ash.lake.iceberg.meta.PartitionSpec;
 import com.ash.lake.iceberg.meta.SortOrder;
 import com.ash.lake.iceberg.types.Schema;
-import com.ash.lake.io.Storage;
+import com.ash.lake.spi.Storage;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;

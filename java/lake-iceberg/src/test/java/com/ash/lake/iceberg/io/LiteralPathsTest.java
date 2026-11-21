@@ -41,7 +41,7 @@ class LiteralPathsTest {
 
     @Test
     void theLibrarysEncodedFoldersAreRead(@TempDir Path dir) throws Exception {
-        FileAccess io = FileAccess.local();
+        FileAccess io = FileAccess.local(com.ash.lake.LakeRuntime.fromProcess());
         for (String folder : new String[] {"g=a%2Fb", "g=100%25", "g=a%252Fb", "g=%C3%A9%E6%BC%A2", "g=a+b", "g=..", "g=x%01y"}) {
             Path f = Files.createDirectories(dir.resolve(folder)).resolve("f.parquet");
             Files.writeString(f, folder);

@@ -80,14 +80,14 @@ class LakeRelocateTest {
 
     @Test
     void theKnownFoldersMoveByRenameAndEveryTableMeasuresTheSame() throws Exception {
-        LakeRelocate.Measure risk = LakeRelocate.measure(delta.resolve("risk/scenario-pv"));
+        LakeRelocate.Measure risk = LakeRelocate.measure(com.ash.lake.LakeRuntime.fromProcess(), delta.resolve("risk/scenario-pv"));
         assertThat(risk.rows()).isEqualTo(120);
-        LakeRelocate.Outcome o = LakeRelocate.relocate(lakes(), "demo", false);
+        LakeRelocate.Outcome o = LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), lakes(), "demo", false);
         assertThat(o.state()).as(o.message()).isEqualTo("moved");
         assertThat(o.folders()).containsExactly("risk", "trading", LakeState.STATE);
         assertThat(names(delta)).as("another lake's folder stays; the demo lake in its own").containsExactly("demo", "risk-results");
         assertThat(names(delta.resolve("demo"))).containsExactly(LakeState.STATE, "risk", "trading");
-        assertThat(LakeRelocate.measure(delta.resolve("demo/risk/scenario-pv"))).isEqualTo(risk);
+        assertThat(LakeRelocate.measure(com.ash.lake.LakeRuntime.fromProcess(), delta.resolve("demo/risk/scenario-pv"))).isEqualTo(risk);
         assertThat(o.tables()).containsOnlyKeys("risk/scenario-pv", "trading/trade");
         assertThat(Files.readString(delta.resolve("demo/_drishti-lake/runs.log"))).isEqualTo("a run\n");
         JsonNode rec = new ObjectMapper().readTree(delta.resolve("demo/_drishti-lake/" + LakeRelocate.RECORD).toFile());
@@ -97,13 +97,13 @@ class LakeRelocateTest {
         Path more = PvData.byDate(tmp.resolve("in2"), PvData.lines(30, 8, 1, 9));
         JsonNode s = LakeLoadTest.load(tmp, PvData.config(more.toString(), delta.resolve("demo").toString(), "delta"));
         assertThat(s.path("exit").asInt()).as(s.path("said").asText() + s.path("error").asText()).isZero();
-        assertThat(LakeRelocate.relocate(lakes(), "demo", false).state()).as("it runs once").isEqualTo("done-before");
+        assertThat(LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), lakes(), "demo", false).state()).as("it runs once").isEqualTo("done-before");
     }
 
     @Test
     void aDryRunMeasuresAndMovesNothing() throws Exception {
         List<String> before = names(delta);
-        LakeRelocate.Outcome o = LakeRelocate.relocate(lakes(), "demo", true);
+        LakeRelocate.Outcome o = LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), lakes(), "demo", true);
         assertThat(o.state()).as(o.message()).isEqualTo("would-move");
         assertThat(o.tables()).hasSize(2);
         assertThat(names(delta)).isEqualTo(before);
@@ -113,7 +113,7 @@ class LakeRelocateTest {
     void anythingUnknownIsRefusedAndNothingMoves() throws Exception {
         Files.createDirectories(delta.resolve("my-own-tables/x"));
         List<String> before = names(delta);
-        LakeRelocate.Outcome o = LakeRelocate.relocate(lakes(), "demo", false);
+        LakeRelocate.Outcome o = LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), lakes(), "demo", false);
         assertThat(o.state()).isEqualTo("refused");
         assertThat(o.message()).contains("my-own-tables").contains("belong to no lake").contains("nothing was moved");
         assertThat(names(delta)).isEqualTo(before);
@@ -122,7 +122,7 @@ class LakeRelocateTest {
     @Test
     void anExistingTargetIsRefused() throws Exception {
         Files.createDirectories(delta.resolve("demo/trading"));                                   // a target that holds something
-        LakeRelocate.Outcome o = LakeRelocate.relocate(lakes(), "demo", false);
+        LakeRelocate.Outcome o = LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), lakes(), "demo", false);
         assertThat(o.state()).isEqualTo("refused");
         assertThat(o.message()).contains("exists already");
         assertThat(names(delta)).contains("risk", "trading");
@@ -135,7 +135,7 @@ class LakeRelocateTest {
         Files.writeString(delta.resolve("demo/README.md"), "the demo lake\n");                   // as committed
         Files.createDirectories(delta.resolve("risklake"));
         Files.writeString(delta.resolve("risklake/README.md"), "the risklake lake\n");           // another lake's empty folder
-        LakeRelocate.Outcome o = LakeRelocate.relocate(lakes(), "demo", false);
+        LakeRelocate.Outcome o = LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), lakes(), "demo", false);
         assertThat(o.state()).as(o.message()).isEqualTo("moved");
         assertThat(names(delta)).containsExactly("demo", "risk-results", "risklake");
         assertThat(names(delta.resolve("demo"))).containsExactly("README.md", LakeState.STATE, "risk", "trading");
@@ -146,7 +146,7 @@ class LakeRelocateTest {
     void anIcebergTableOrAMissingDataFileIsRefused() throws Exception {
         Path ice = Files.createDirectories(delta.resolve("trading/trade_calypso/metadata"));
         Files.writeString(ice.resolve("v1.metadata.json"), "{}");
-        LakeRelocate.Outcome o = LakeRelocate.relocate(lakes(), "demo", false);
+        LakeRelocate.Outcome o = LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), lakes(), "demo", false);
         assertThat(o.state()).isEqualTo("refused");
         assertThat(o.message()).contains("Iceberg");
         Files.delete(ice.resolve("v1.metadata.json"));
@@ -157,7 +157,7 @@ class LakeRelocateTest {
             parquet = s.filter(p -> p.toString().endsWith(".parquet")).findFirst().orElseThrow();
         }
         Files.move(parquet, tmp.resolve("aside.parquet"));
-        o = LakeRelocate.relocate(lakes(), "demo", false);
+        o = LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), lakes(), "demo", false);
         assertThat(o.state()).isEqualTo("refused");
         assertThat(o.message()).contains("trading/trade").contains("not there");
         assertThat(Files.exists(delta.resolve("demo"))).isFalse();
@@ -168,7 +168,7 @@ class LakeRelocateTest {
         Path lock = delta.resolve(LakeState.STATE).resolve("lock");
         Files.writeString(lock, "a build\n");
         try (FileChannel ch = FileChannel.open(lock, StandardOpenOption.WRITE); FileLock held = ch.lock()) {
-            LakeRelocate.Outcome o = LakeRelocate.relocate(lakes(), "demo", false);
+            LakeRelocate.Outcome o = LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), lakes(), "demo", false);
             assertThat(o.state()).isEqualTo("refused");
             assertThat(o.message()).contains("holds the lake's lock");
             assertThat(held.isValid()).isTrue();
@@ -178,10 +178,10 @@ class LakeRelocateTest {
 
     @Test
     void anErrorDuringTheMoveOrTheCheckMovesEverythingBack() throws Exception {
-        LakeRelocate.Measure risk = LakeRelocate.measure(delta.resolve("risk/scenario-pv"));
+        LakeRelocate.Measure risk = LakeRelocate.measure(com.ash.lake.LakeRuntime.fromProcess(), delta.resolve("risk/scenario-pv"));
         List<String> before = names(delta);
         for (String step : List.of("moved 1", "moved 2", "verify", "record")) {
-            LakeRelocate.Outcome o = LakeRelocate.relocate(lakes(), "demo", false, s -> {
+            LakeRelocate.Outcome o = LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), lakes(), "demo", false, s -> {
                 if (s.equals(step)) {
                     throw new IOException("a fault at " + step);
                 }
@@ -189,17 +189,17 @@ class LakeRelocateTest {
             assertThat(o.state()).as(step + ": " + o.message()).isEqualTo("rolled-back");
             assertThat(o.message()).contains("a fault at " + step).contains("nothing was deleted");
             assertThat(names(delta)).as(step).isEqualTo(before);
-            assertThat(LakeRelocate.measure(delta.resolve("risk/scenario-pv"))).isEqualTo(risk);
+            assertThat(LakeRelocate.measure(com.ash.lake.LakeRuntime.fromProcess(), delta.resolve("risk/scenario-pv"))).isEqualTo(risk);
             assertThat(Files.readString(delta.resolve(LakeState.STATE).resolve("runs.log"))).isEqualTo("a run\n");
         }
-        assertThat(LakeRelocate.relocate(lakes(), "demo", false).state()).as("and it moves after").isEqualTo("moved");
+        assertThat(LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), lakes(), "demo", false).state()).as("and it moves after").isEqualTo("moved");
     }
 
     @Test
     void aLakeWithItsOwnRootOrNothingAtTheOldPlaceIsLeftAlone() throws Exception {
-        assertThat(LakeRelocate.relocate(lakes(delta.toString()), "demo", false).state()).as("DRISHTI_DELTA_ROOT names the root").isEqualTo("nothing");
+        assertThat(LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), lakes(delta.toString()), "demo", false).state()).as("DRISHTI_DELTA_ROOT names the root").isEqualTo("nothing");
         Path fresh = tmp.resolve("fresh/delta/demo");
-        LakeRelocate.Outcome o = LakeRelocate.relocate(Lakes.of(Lakes.parse("lake: demo\nroot: '" + fresh + "'\ntables:\n  risk.scenario-pv: {}\n",
+        LakeRelocate.Outcome o = LakeRelocate.relocate(com.ash.lake.LakeRuntime.fromProcess(), Lakes.of(Lakes.parse("lake: demo\nroot: '" + fresh + "'\ntables:\n  risk.scenario-pv: {}\n",
                 "demo", k -> null)), "demo", false);
         assertThat(o.state()).isEqualTo("nothing");
         assertThat(Files.exists(fresh)).isFalse();

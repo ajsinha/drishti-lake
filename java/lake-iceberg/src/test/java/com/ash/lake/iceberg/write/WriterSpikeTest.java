@@ -83,7 +83,7 @@ public class WriterSpikeTest {                                    // public: the
 
     /** Writes and reads one file; runs inside the isolated loader. */
     public static String probe(String dir, String codec) throws Exception {
-        FileAccess io = FileAccess.local();
+        FileAccess io = FileAccess.local(com.ash.lake.LakeRuntime.fromProcess());
         String path = Path.of(dir).toUri() + "f-" + codec + ".parquet";
         Map<String, String> props = Map.of("write.parquet.compression-codec", codec, "write.metadata.metrics.column.doc", "none",
                 "write.parquet.row-group-size-bytes", "4096");
@@ -108,7 +108,7 @@ public class WriterSpikeTest {                                    // public: the
         out.add("nested " + Values.fromBytes(Type.Primitive.STRING, f.upperBounds().get(8)));
         String p = io.resolve(path);
         try (ParquetRowReader r = new ParquetRowReader(ParquetInput.of(io.storage(p), p, f.fileSizeInBytes()), path, f.fileSizeInBytes(),
-                SCHEMA.columns(), null, Map.of(), Expr.eq(1, "T-0333"), io.codecs(), false)) {
+                SCHEMA.columns(), null, Map.of(), Expr.eq(1, "T-0333"), io.codecs(), com.ash.lake.io.ParquetFooters.of(io.runtime()), false)) {
             while (r.hasNext()) {
                 Object[] row = r.next().values();
                 if ("T-0333".equals(row[0])) {

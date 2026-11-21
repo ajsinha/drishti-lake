@@ -63,7 +63,7 @@ public final class TableDump {
 
     /** The latest version of a Delta table; {@code settings} the S3 ones (empty for local). */
     public static Map<String, Map<String, Object>> delta(String table, Map<String, String> settings) throws Exception {
-        Engine engine = settings.isEmpty() ? NativeEngine.create() : NativeEngine.create(settings);
+        Engine engine = NativeEngine.create(com.ash.lake.LakeRuntime.fromProcess(), settings);
         Snapshot s = io.delta.kernel.Table.forPath(engine, table).getLatestSnapshot(engine);
         Scan scan = s.getScanBuilder().build();
         Row state = scan.getScanState(engine);
@@ -142,7 +142,7 @@ public final class TableDump {
         s.put("domain", domain);
         Map<String, Map<String, Object>> out = new TreeMap<>();
         ExecutorService pool = Executors.newFixedThreadPool(2);
-        try (Catalog c = Catalogs.open(s)) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), s)) {
             Table t = c.load(table).orElseThrow();
             var schema = t.metadata().schema();
             List<Integer> ids = schema.columns().stream().map(NestedField::id).toList();

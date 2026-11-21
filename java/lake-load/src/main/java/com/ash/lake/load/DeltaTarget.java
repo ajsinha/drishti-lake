@@ -83,9 +83,9 @@ import java.util.Optional;
 final class DeltaTarget implements TableTarget {
 
     static final String ENGINE_INFO = "Drishti parallel loader";   // the commits' engineInfo (lake undo's too)
-    /** The writer's row groups and pages: as {@link LakeWriter} (lake.parquet.row-group-kb, 256; lake.parquet.page-kb, 64). */
-    private static final long ROW_GROUP = com.ash.lake.LakeOptions.current().rowGroupBytes();
-    private static final long PAGE = com.ash.lake.LakeOptions.current().pageBytes();
+    /** The writer's row groups and pages: as {@link LakeWriter} (lake.parquet.row-group-kb, 256; lake.parquet.page-kb, 64), the runtime's. */
+    private final long rowGroup;
+    private final long page;
 
     private final String path;
     private final LoadConfig cfg;
@@ -109,8 +109,10 @@ final class DeltaTarget implements TableTarget {
         this.plan = plan;
         this.path = cfg.tablePath();
         Map<String, String> s3 = cfg.target().storage();
-        this.engine = LakeWriter.engineFor(path, s3);
-        this.io = new FileAccess(S3Settings.from(s3), com.ash.lake.iceberg.io.Relocation.none(), null);
+        this.rowGroup = cfg.runtime().options().rowGroupBytes();
+        this.page = cfg.runtime().options().pageBytes();
+        this.engine = LakeWriter.engineFor(cfg.runtime(), path, s3);
+        this.io = new FileAccess(cfg.runtime(), S3Settings.from(s3), com.ash.lake.iceberg.io.Relocation.none(), null);
         if (LocalPaths.isLocal(path)) {
             Files.createDirectories(Path.of(LocalPaths.toLocal(path, LocalPaths.WINDOWS)));
         }
@@ -172,8 +174,8 @@ final class DeltaTarget implements TableTarget {
         fileSchema = new Schema(0, fields);
         sources = TableTarget.sources(fileSchema, plan);
         Map<String, String> base = new LinkedHashMap<>();
-        base.put("write.parquet.row-group-size-bytes", String.valueOf(ROW_GROUP));
-        base.put("write.parquet.page-size-bytes", String.valueOf(PAGE));
+        base.put("write.parquet.row-group-size-bytes", String.valueOf(rowGroup));
+        base.put("write.parquet.page-size-bytes", String.valueOf(page));
         base.put("write.metadata.metrics.default", "full");             // Delta statistics: exact minimum and maximum
         base.put("write.metadata.metrics.column.doc", "none");
         options = TableTarget.writerOptions(base, cfg.target().layout(), "snappy", vectors);

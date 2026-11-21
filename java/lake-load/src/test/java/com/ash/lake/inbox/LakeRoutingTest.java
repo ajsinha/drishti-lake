@@ -50,13 +50,13 @@ class LakeRoutingTest {
         lakes = tmp.resolve("config/lakes");
         data = tmp.resolve("data");
         System.setProperty(Lakes.PROPERTY, lakes.toString());
-        Lakes.useProperties(k -> k.equals("drishti.data.dir") ? data.toString() : null);
+        System.setProperty("drishti.data.dir", data.toString());   // the process's settings: the runtime reads them
     }
 
     @AfterEach
     void reset() {
         System.clearProperty(Lakes.PROPERTY);
-        Lakes.useProperties(null);
+        System.clearProperty("drishti.data.dir");
     }
 
     /** The fixture's packs, with the lakes the connectors read ({@code null}: not known). */
@@ -91,7 +91,7 @@ class LakeRoutingTest {
         Files.writeString(marker, "lake: Risk Lake\n");
         assertThatThrownBy(() -> ReadyNote.read(marker)).hasMessageContaining("lake Risk Lake").hasMessageContaining("[a-z0-9][a-z0-9_-]*");
         Files.writeString(f.rules, "dataload:\n  rules:\n    - match: \"trades-*\"\n      pack: demo-pack\n      kind: trade\n      lake: rulelake\n");
-        Routes routes = Routes.read(f.rules, "demo", f.packs());
+        Routes routes = Routes.read(com.ash.lake.LakeRuntime.fromProcess(), f.rules, "demo", f.packs());
         assertThat(routes.route("trades-a.2026-11-02.jsonl", note).lake()).isEqualTo("risklake");
         assertThat(routes.route("trades-a.2026-11-02.jsonl", null).lake()).isEqualTo("rulelake");
         assertThat(routes.route("anything.jsonl", ReadyNote.of("demo-pack", "trade", null, null, null)).lake()).isEqualTo("demo");

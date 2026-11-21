@@ -62,7 +62,12 @@ public final class LakeRetention {
         System.exit(run(args, System.out));
     }
 
+    /** Runs as the command line does, with the process's settings (no host). */
     public static int run(String[] args, PrintStream out) {
+        return run(com.ash.lake.LakeRuntime.fromProcess(), args, out);
+    }
+
+    public static int run(com.ash.lake.LakeRuntime runtime, String[] args, PrintStream out) {
         String root = null;
         String format = "delta";
         String table = null;
@@ -91,12 +96,12 @@ public final class LakeRetention {
                 throw new IllegalArgumentException("give --lake ROOT and --table domain/table");
             }
             if (dates != null) {
-                Map<String, Object> done = dropDates(root, format, table, dates(dates), dry);
+                Map<String, Object> done = dropDates(runtime, root, format, table, dates(dates), dry);
                 out.println(json ? JSON.writeValueAsString(done) : table + ": " + done.get("dropped") + " rows " + (dry ? "would be deleted" : "deleted")
                         + " in " + ((List<?>) done.get("dates")).size() + " business dates");
                 return 0;
             }
-            Map<String, Object> done = apply(root, format, table, new RowRetention(ttl, on, max), Instant.now(), dry);
+            Map<String, Object> done = apply(runtime, root, format, table, new RowRetention(ttl, on, max), Instant.now(), dry);
             out.println(json ? JSON.writeValueAsString(done) : table + ": " + done.get("dropped") + " rows " + (dry ? "would be dropped" : "dropped")
                     + " in " + ((List<?>) done.get("dates")).size() + " business dates");
             return 0;
@@ -110,11 +115,11 @@ public final class LakeRetention {
      * The retention applied to {@code domain/table} of the lake (or files store) at {@code root}: {@code table}, {@code format}, {@code rows}
      * (before), {@code dropped}, {@code dates} (a line per business date changed: {@code date}, {@code rows}, {@code dropped}).
      */
-    public static Map<String, Object> apply(String root, String format, String table, RowRetention r, Instant now, boolean dryRun) throws Exception {
+    public static Map<String, Object> apply(com.ash.lake.LakeRuntime runtime, String root, String format, String table, RowRetention r, Instant now, boolean dryRun) throws Exception {
         List<Map<String, Object>> dates = switch (format) {
-            case "delta" -> delta(root, table, r, now, dryRun);
+            case "delta" -> delta(runtime, root, table, r, now, dryRun);
             case "files" -> files(root, table, r, now, dryRun);
-            case "iceberg" -> iceberg(root, table, r, dryRun);
+            case "iceberg" -> iceberg(runtime, root, table, r, dryRun);
             default -> throw new IllegalArgumentException("format " + format + " is delta, iceberg or files");
         };
         Map<String, Object> m = new LinkedHashMap<>();
@@ -160,12 +165,12 @@ public final class LakeRetention {
      * {@code held} (the dates the table held before), {@code dropped} (rows), {@code dates} (a line per date removed: {@code date},
      * {@code rows}, {@code dropped}; {@code rows} is -1 when a Delta file states no row count), {@code version} (Delta: the commit).
      */
-    public static Map<String, Object> dropDates(String root, String format, String table, java.util.function.Predicate<String> wanted, boolean dryRun)
+    public static Map<String, Object> dropDates(com.ash.lake.LakeRuntime runtime, String root, String format, String table, java.util.function.Predicate<String> wanted, boolean dryRun)
             throws Exception {
         Map<String, Object> got = switch (format) {
-            case "delta" -> deltaDates(root, table, wanted, dryRun);
+            case "delta" -> deltaDates(runtime, root, table, wanted, dryRun);
             case "files" -> filesDates(root, table, wanted, dryRun);
-            case "iceberg" -> icebergDates(root, table, wanted, dryRun);
+            case "iceberg" -> icebergDates(runtime, root, table, wanted, dryRun);
             default -> throw new IllegalArgumentException("format " + format + " is delta, iceberg or files");
         };
         @SuppressWarnings("unchecked")
@@ -184,10 +189,10 @@ public final class LakeRetention {
     }
 
     /** A Delta table: the dates' files removed in one commit (the writer's remove actions, as an undo that leaves a date empty). */
-    static Map<String, Object> deltaDates(String root, String table, java.util.function.Predicate<String> wanted, boolean dryRun) throws IOException {
+    static Map<String, Object> deltaDates(com.ash.lake.LakeRuntime runtime, String root, String table, java.util.function.Predicate<String> wanted, boolean dryRun) throws IOException {
         Map<String, Object> out = new LinkedHashMap<>();
         String path = Path.of(root).resolve(table).toString();
-        Engine engine = LakeWriter.engineFor(path, Map.of());
+        Engine engine = LakeWriter.engineFor(runtime, path, Map.of());
         Snapshot s;
         try {
             s = Table.forPath(engine, path).getLatestSnapshot(engine);
@@ -285,22 +290,11 @@ public final class LakeRetention {
         return out;
     }
 
-    /** An Iceberg table, by the Iceberg plugin (on the server's class path): whole partitions deleted, one commit. */
-    @SuppressWarnings("unchecked")
-    static Map<String, Object> icebergDates(String root, String table, java.util.function.Predicate<String> wanted, boolean dryRun) throws Exception {
-        Class<?> ice;
-        try {
-            ice = Class.forName("com.ash.lake.iceberg.table.IcebergMaintenance");
-        } catch (ClassNotFoundException e) {
-            throw new IOException("the Iceberg plugin is not on the class path");
-        }
+    /** An Iceberg table, by the Iceberg maintenance: whole partitions deleted, one commit. */
+    static Map<String, Object> icebergDates(com.ash.lake.LakeRuntime runtime, String root, String table, java.util.function.Predicate<String> wanted, boolean dryRun) throws Exception {
         int slash = table.indexOf('/');
-        try {
-            return (Map<String, Object>) ice.getMethod("dropDates", String.class, String.class, String.class, java.util.function.Predicate.class, boolean.class)
-                    .invoke(null, root, slash < 0 ? "" : table.substring(0, slash), table.substring(slash + 1), wanted, dryRun);
-        } catch (java.lang.reflect.InvocationTargetException e) {
-            throw e.getCause() instanceof Exception x ? x : e;
-        }
+        return com.ash.lake.iceberg.table.IcebergMaintenance.dropDates(runtime, root, slash < 0 ? "" : table.substring(0, slash), table.substring(slash + 1),
+                wanted, dryRun);
     }
 
     private static List<Map<String, Object>> line(List<Map<String, Object>> out, String date, long rows, long dropped) {
@@ -313,10 +307,10 @@ public final class LakeRetention {
     }
 
     /** A Delta table: every date holding a dropped row is rewritten (one commit), by the writer that commits a load. */
-    static List<Map<String, Object>> delta(String root, String table, RowRetention r, Instant now, boolean dryRun) throws IOException {
+    static List<Map<String, Object>> delta(com.ash.lake.LakeRuntime runtime, String root, String table, RowRetention r, Instant now, boolean dryRun) throws IOException {
         List<Map<String, Object>> out = new ArrayList<>();
         String path = Path.of(root).resolve(table).toString();
-        Engine engine = LakeWriter.engineFor(path, Map.of());
+        Engine engine = LakeWriter.engineFor(runtime, path, Map.of());
         Snapshot s;
         try {
             s = Table.forPath(engine, path).getLatestSnapshot(engine);
@@ -359,7 +353,7 @@ public final class LakeRetention {
             }
             line(out, date, part.size(), part.size() - kept.size());
             if (!dryRun) {
-                LakeUndo.rewrite(engine, path, s, date, kept);
+                LakeUndo.rewrite(runtime, engine, path, s, date, kept);
                 s = Table.forPath(engine, path).getLatestSnapshot(engine);
             }
         }
@@ -429,18 +423,10 @@ public final class LakeRetention {
         return out;
     }
 
-    /** An Iceberg table, by the Iceberg plugin (on the server's class path), as {@link LakeUndo#undoAll} does. */
-    @SuppressWarnings("unchecked")
-    static List<Map<String, Object>> iceberg(String root, String table, RowRetention r, boolean dryRun) throws Exception {
-        Class<?> ice;
-        try {
-            ice = Class.forName("com.ash.lake.iceberg.table.IcebergMaintenance");
-        } catch (ClassNotFoundException e) {
-            throw new IOException("the Iceberg plugin is not on the class path");
-        }
+    /** An Iceberg table, by the Iceberg maintenance, as {@link LakeUndo#undoAll} does. */
+    static List<Map<String, Object>> iceberg(com.ash.lake.LakeRuntime runtime, String root, String table, RowRetention r, boolean dryRun) throws Exception {
         int slash = table.indexOf('/');
-        return (List<Map<String, Object>>) ice.getMethod("retentionTable", String.class, String.class, String.class, String.class, String.class,
-                Integer.class, boolean.class, Path.class).invoke(null, root, slash < 0 ? "" : table.substring(0, slash), table.substring(slash + 1),
-                r.ttl(), r.on(), r.maxRows(), dryRun, Path.of(System.getProperty("java.io.tmpdir")));
+        return com.ash.lake.iceberg.table.IcebergMaintenance.retentionTable(runtime, root, slash < 0 ? "" : table.substring(0, slash),
+                table.substring(slash + 1), r.ttl(), r.on(), r.maxRows(), dryRun, com.ash.lake.common.TempFiles.of(runtime).subDir("iceberg-retention"));
     }
 }

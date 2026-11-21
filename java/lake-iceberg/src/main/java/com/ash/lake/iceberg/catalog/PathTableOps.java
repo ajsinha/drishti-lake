@@ -17,9 +17,9 @@ package com.ash.lake.iceberg.catalog;
 
 import com.ash.lake.iceberg.io.DrishtiFileIO;
 import com.ash.lake.iceberg.io.FileAccess;
-import com.ash.lake.io.FileEntry;
+import com.ash.lake.spi.FileEntry;
 import com.ash.lake.io.S3Storage;
-import com.ash.lake.io.Storage;
+import com.ash.lake.spi.Storage;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;

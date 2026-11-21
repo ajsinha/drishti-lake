@@ -99,6 +99,10 @@ public final class LakeRelocate {
 
     /** {@code --lake NAME [--dry-run]}: the outcome as JSON; exit 0 moved, nothing or done before, 1 refused, rolled back or failed. */
     static int run(String[] args, PrintStream out) {
+        return run(com.ash.lake.LakeRuntime.fromProcess(), args, out);
+    }
+
+    static int run(com.ash.lake.LakeRuntime runtime, String[] args, PrintStream out) {
         String name = null;
         boolean dry = false;
         for (int i = 0; i < args.length; i++) {
@@ -117,7 +121,7 @@ public final class LakeRelocate {
         }
         Outcome o;
         try {
-            o = relocate(Lakes.read(Lakes.dir(), com.ash.lake.Placeholders::process), name, dry, Faults.NONE);
+            o = relocate(runtime, Lakes.read(runtime, Lakes.dir(runtime)), name, dry, Faults.NONE);
         } catch (IllegalArgumentException | java.io.UncheckedIOException e) {
             o = new Outcome("refused", e.getMessage(), name, null, null, List.of(), Map.of());
         }
@@ -144,16 +148,16 @@ public final class LakeRelocate {
         return m;
     }
 
-    /** {@link #relocate(Lakes, String, boolean, Faults)} without faults. */
-    public static Outcome relocate(Lakes lakes, String name, boolean dryRun) {
-        return relocate(lakes, name, dryRun, Faults.NONE);
+    /** {@link #relocate(com.ash.lake.LakeRuntime, Lakes, String, boolean, Faults)} without faults. */
+    public static Outcome relocate(com.ash.lake.LakeRuntime runtime, Lakes lakes, String name, boolean dryRun) {
+        return relocate(runtime, lakes, name, dryRun, Faults.NONE);
     }
 
     /**
      * Moves lake {@code name} from the folder that holds its root into its root, when its tables are there in the older layout (see the
      * class comment). Never throws for a refusal: the outcome says it.
      */
-    public static Outcome relocate(Lakes lakes, String name, boolean dryRun, Faults faults) {
+    public static Outcome relocate(com.ash.lake.LakeRuntime runtime, Lakes lakes, String name, boolean dryRun, Faults faults) {
         Lake lake = lakes.get(name);
         if (lake.inMemory() || !LocalPaths.isLocal(lake.root())) {
             return new Outcome("nothing", "lake " + name + " is not on a local disk (" + lake.root() + "): nothing to move", name, null, null, List.of(), Map.of());
@@ -252,7 +256,7 @@ public final class LakeRelocate {
                     continue;
                 }
                 for (Path t : tables(from.resolve(n))) {
-                    before.put(from.relativize(t).toString().replace('\\', '/'), measure(t));
+                    before.put(from.relativize(t).toString().replace('\\', '/'), measure(runtime, t));
                 }
             }
         } catch (Refusal r) {
@@ -286,7 +290,7 @@ public final class LakeRelocate {
                 }
                 faults.at("verify");
                 for (var e : before.entrySet()) {
-                    Measure after = measure(to.resolve(e.getKey()));
+                    Measure after = measure(runtime, to.resolve(e.getKey()));
                     if (!after.equals(e.getValue()) || after.missing() > 0) {
                         throw new IOException("table " + e.getKey() + " differs after the move: before " + e.getValue() + ", after " + after);
                     }
@@ -374,8 +378,8 @@ public final class LakeRelocate {
     }
 
     /** One Delta table: its version, data files, rows (each data file's footer: the rows written) and data files not on the disk. */
-    static Measure measure(Path table) throws IOException {
-        Engine engine = LakeWriter.engineFor(table.toString(), Map.of());
+    static Measure measure(com.ash.lake.LakeRuntime runtime, Path table) throws IOException {
+        Engine engine = LakeWriter.engineFor(runtime, table.toString(), Map.of());
         Snapshot s = Table.forPath(engine, table.toString()).getLatestSnapshot(engine);
         long files = 0;
         long rows = 0;

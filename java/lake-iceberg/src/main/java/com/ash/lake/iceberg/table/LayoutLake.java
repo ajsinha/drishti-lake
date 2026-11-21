@@ -100,8 +100,8 @@ interface LayoutLake extends Closeable {
     @Override
     void close() throws IOException;
 
-    static LayoutLake of(Map<String, String> settings) {
-        return new Native(Catalogs.open(settings));
+    static LayoutLake of(com.ash.lake.LakeRuntime runtime, Map<String, String> settings) {
+        return new Native(Catalogs.open(runtime, settings));
     }
 
     /** drishti-iceberg. */

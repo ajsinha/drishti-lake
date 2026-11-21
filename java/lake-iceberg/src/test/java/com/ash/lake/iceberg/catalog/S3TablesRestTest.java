@@ -95,7 +95,7 @@ class S3TablesRestTest {
 
     @Test
     void urlsFromTheArnSignedForS3TablesAndKindsReadAsS3TablesNames() throws Exception {
-        try (Catalog c = Catalogs.open(settings())) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), settings())) {
             assertThat(c.describe()).startsWith("S3 Tables ").contains("namespace risk_results");
             assertThat(c.reachable()).isTrue();
             assertThat(c.tables()).containsExactly("pnl_vector");
@@ -113,6 +113,6 @@ class S3TablesRestTest {
         Map<String, String> s = settings();
         s.put("catalog", "rest");                        // a plain REST catalog: no SigV4, so the stand-in answers 403
         s.put("warehouse", S3TablesTest.ARN);
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> Catalogs.open(s)).hasMessageContaining("Forbidden");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), s)).hasMessageContaining("Forbidden");
     }
 }

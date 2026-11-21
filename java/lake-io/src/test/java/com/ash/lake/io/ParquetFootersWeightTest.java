@@ -63,7 +63,8 @@ class ParquetFootersWeightTest {
         // the 1,000,000-position benchmark's lake: 16,487 row groups of 34 columns weighed about 385 MB on the heap
         long bench = (long) ParquetFooters.FOOTER_BYTES + 16_487L * (64 + 34L * ParquetFooters.CHUNK_BYTES);
         assertThat(bench).isBetween(350L << 20, 420L << 20);
-        assertThat(ParquetFooters.LIMIT_BYTES).as("the default bound, -Ddrishti.parquet.footer-cache-mb").isEqualTo(64L << 20);
-        assertThat(ParquetFooters.weightBytes()).isLessThanOrEqualTo(ParquetFooters.LIMIT_BYTES);
+        ParquetFooters cache = ParquetFooters.of(com.ash.lake.LakeRuntime.builder().build());
+        assertThat(cache.limitBytes).as("the default bound, lake.parquet.footer-cache-mb").isEqualTo(64L << 20);
+        assertThat(cache.weightBytes()).isLessThanOrEqualTo(cache.limitBytes);
     }
 }

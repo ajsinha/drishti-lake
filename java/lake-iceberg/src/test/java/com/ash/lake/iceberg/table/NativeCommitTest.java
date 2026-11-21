@@ -65,7 +65,7 @@ class NativeCommitTest {
     void writersCommittingAtOnceLoseNothing() throws Exception {
         Path root = Files.createTempDirectory("drishti-iceberg-commits");
         Map<String, String> settings = Map.of("root", root.toString(), "domain", "desk");
-        try (Catalog setup = Catalogs.open(settings)) {
+        try (Catalog setup = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), settings)) {
             NativeLayout.open(setup, "trade", Map.of("mtm", true), IcebergLayout.DEFAULT_ROW_GROUP_BYTES, 1000);
         }
         int writers = 4;
@@ -76,7 +76,7 @@ class NativeCommitTest {
             for (int w = 0; w < writers; w++) {
                 int me = w;
                 done.add(pool.submit(() -> {
-                    try (Catalog c = Catalogs.open(settings)) {                 // each writer its own catalog, as separate processes would
+                    try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), settings)) {                 // each writer its own catalog, as separate processes would
                         Table t = c.load("trade").orElseThrow();
                         start.await();
                         for (int i = 0; i < commitsEach; i++) {
@@ -93,7 +93,7 @@ class NativeCommitTest {
                 f.get();
             }
         }
-        try (Catalog c = Catalogs.open(settings); ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), settings); ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
             Table t = c.load("trade").orElseThrow();
             assertThat(t.metadata().snapshots()).hasSize(writers * commitsEach);
             assertThat(liveRows(t, pool)).isEqualTo(writers * commitsEach * 10L);
@@ -109,7 +109,7 @@ class NativeCommitTest {
     @Test
     void aRewriteOfADayThatChangedMeanwhileIsRefused() throws Exception {
         Path root = Files.createTempDirectory("drishti-iceberg-validate");
-        try (Catalog c = Catalogs.open(Map.of("root", root.toString(), "domain", "desk")); ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Map.of("root", root.toString(), "domain", "desk")); ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
             Table t = NativeLayout.open(c, "trade", Map.of("mtm", true), IcebergLayout.DEFAULT_ROW_GROUP_BYTES, 1000);
             LocalDate day = LocalDate.of(2026, 9, 30);
             NativeLayout.commitDays(t, Map.of(day, NativeLayout.writeDay(t, day, rows("A", 10).iterator(), 1000)));

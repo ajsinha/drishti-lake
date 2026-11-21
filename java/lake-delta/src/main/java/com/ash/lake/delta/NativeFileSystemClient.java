@@ -15,7 +15,7 @@
  */
 package com.ash.lake.delta;
 
-import com.ash.lake.io.RangeReader;
+import com.ash.lake.spi.RangeReader;
 import io.delta.kernel.engine.FileReadRequest;
 import io.delta.kernel.engine.FileSystemClient;
 import io.delta.kernel.utils.CloseableIterator;

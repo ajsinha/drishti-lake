@@ -41,7 +41,7 @@ class InboxChecksTest {
     void rejectedRowsAreSaidWithTheirCountAndReasonInTheOutcomeTheNoticesAndTheBoard() throws IOException {
         Fixture f = new Fixture(tmp);
         f.settings = new DataLoadSettings(true, f.root.toString(), java.time.Duration.ofMinutes(10), 30, null, null, "256m",
-                java.time.Duration.ofMinutes(5), 50.0, false, 30, f.lake.toString(), f.rules.toString(), false, null, null);     // up to half rejected
+                java.time.Duration.ofMinutes(5), 50.0, false, 30, f.lake.toString(), f.rules.toString(), false, null, null, com.ash.lake.LakeRuntime.fromProcess());     // up to half rejected
         f.drop("trades-r.2026-11-02.jsonl", Fixture.rows("2026-11-02", "R1", "R2") + "{\"DESK\":\"RATES\",\"BUSINESS_DATE\":\"2026-11-02\"}\n", "");
         DataInbox inbox = inbox(f);
         Cycle.Report r = inbox.cycle("test");

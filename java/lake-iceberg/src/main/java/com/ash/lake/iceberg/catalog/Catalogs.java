@@ -46,12 +46,12 @@ public final class Catalogs {
 
     private Catalogs() {}
 
-    public static Catalog open(Map<String, String> settings) {
+    public static Catalog open(com.ash.lake.LakeRuntime runtime, Map<String, String> settings) {
         String domain = settings.getOrDefault("domain", "").trim();
         if (domain.contains("..") || domain.startsWith("/")) {
             throw new IllegalArgumentException("domain escapes the Iceberg root: " + domain);
         }
-        FileAccess io = new FileAccess(S3Settings.from(settings), relocate(settings.getOrDefault("relocate", "")), settings.get("lz4-decoder"));
+        FileAccess io = new FileAccess(runtime, S3Settings.from(settings), relocate(settings.getOrDefault("relocate", "")), settings.get("lz4-decoder"));
         Map<String, String> files = new LinkedHashMap<>();
         settings.forEach((k, v) -> {
             if (k.startsWith("metadata-location.") && !v.isBlank()) {
@@ -77,8 +77,8 @@ public final class Catalogs {
         if (!files.isEmpty() && settings.getOrDefault("root", "").isBlank()) {
             return new StaticCatalog(files, io);
         }
-        String root = settings.getOrDefault("root", "").isBlank() ? com.ash.lake.LakeRoots.under("iceberg") : settings.get("root").trim();
-        if (!FileAccess.supports(root)) {
+        String root = settings.getOrDefault("root", "").isBlank() ? runtime.roots().under("iceberg") : settings.get("root").trim();
+        if (!io.reads(root)) {
             io.close();
             throw new UnsupportedOperationException("Iceberg tables are not read from " + root
                     + ": Iceberg tables are read from local disk, S3 and memory");

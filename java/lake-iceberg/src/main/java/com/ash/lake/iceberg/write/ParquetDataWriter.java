@@ -22,7 +22,7 @@ import com.ash.lake.iceberg.types.Schema;
 import com.ash.lake.iceberg.types.Type;
 import com.ash.lake.iceberg.types.Values;
 import com.ash.lake.io.ParquetFooters;
-import com.ash.lake.io.Storage;
+import com.ash.lake.spi.Storage;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.OutputStream;

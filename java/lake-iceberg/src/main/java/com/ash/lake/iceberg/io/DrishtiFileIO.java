@@ -16,9 +16,9 @@
 package com.ash.lake.iceberg.io;
 
 import com.ash.lake.iceberg.types.UnsupportedFeature;
-import com.ash.lake.io.RangeReader;
+import com.ash.lake.spi.RangeReader;
 import com.ash.lake.io.S3Settings;
-import com.ash.lake.io.Storage;
+import com.ash.lake.spi.Storage;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -45,38 +45,48 @@ import org.apache.iceberg.io.SeekableInputStream;
  * {@code winutils.exe}. Iceberg's own code reads and writes metadata and manifests through it. Parsed manifests are kept by Iceberg's
  * manifest cache, switched on by {@link #properties()}.
  *
- * <p>A REST catalog creates one per table ({@code io-impl}), passing the connector's settings and the credentials it vends for the table.
+ * <p>A REST catalog creates one per table (its file-IO builder), passing the connector's settings and the credentials it vends for the table.
  */
 public final class DrishtiFileIO implements FileIO {
 
     private static final long serialVersionUID = 1L;
-    private static final Set<DrishtiFileIO> ALL = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
-    private static final Map<String, String> CACHE = Map.of("io.manifest.cache-enabled", "true",
-            "io.manifest.cache.expiration-interval-ms", String.valueOf(24 * 3_600_000L),
-            "io.manifest.cache.max-total-bytes", String.valueOf(com.ash.lake.LakeOptions.current().icebergManifestCacheBytes()),
-            "io.manifest.cache.max-content-length", String.valueOf(64L << 20));
-
+    /** The file IOs a runtime has opened (weakly held), whose parsed manifests {@link #purge} drops. */
+    private static final class Opened {
+        final Set<DrishtiFileIO> all = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+    }
+    private final transient com.ash.lake.LakeRuntime runtime;
     private transient volatile FileAccess access;
     private transient boolean owned;
-    private Map<String, String> properties = CACHE;
+    private Map<String, String> properties;
     private long expiresAt = Long.MAX_VALUE;
 
-    /** For Iceberg's {@code io-impl}: {@link #initialize} follows. */
-    public DrishtiFileIO() {
-        ALL.add(this);
+    /** For a REST catalog's tables: {@link #initialize} follows, with the catalog's settings and the credentials it vends. */
+    public DrishtiFileIO(com.ash.lake.LakeRuntime runtime) {
+        this.runtime = java.util.Objects.requireNonNull(runtime, "runtime");
+        this.properties = cache(runtime);
+        runtime.part(Opened.class, Opened::new).all.add(this);
     }
 
     /** Over file access someone else closes. */
     public DrishtiFileIO(FileAccess access) {
-        this();
+        this(access.runtime());
         this.access = access;
     }
 
-    /** Forgets every kept manifest. */
-    public static void purge() {
+    /** Iceberg's manifest cache, switched on and sized by the runtime's options. */
+    private static Map<String, String> cache(com.ash.lake.LakeRuntime runtime) {
+        return Map.of("io.manifest.cache-enabled", "true",
+                "io.manifest.cache.expiration-interval-ms", String.valueOf(24 * 3_600_000L),
+                "io.manifest.cache.max-total-bytes", String.valueOf(runtime.options().icebergManifestCacheBytes()),
+                "io.manifest.cache.max-content-length", String.valueOf(64L << 20));
+    }
+
+    /** Forgets every manifest kept for {@code runtime}'s file IOs. */
+    public static void purge(com.ash.lake.LakeRuntime runtime) {
+        Set<DrishtiFileIO> opened = runtime.part(Opened.class, Opened::new).all;
         List<DrishtiFileIO> all;
-        synchronized (ALL) {
-            all = List.copyOf(ALL);
+        synchronized (opened) {
+            all = List.copyOf(opened);
         }
         all.forEach(ManifestFiles::dropCache);
     }
@@ -84,7 +94,7 @@ public final class DrishtiFileIO implements FileIO {
     @Override
     public void initialize(Map<String, String> given) {
         Map<String, String> p = new HashMap<>(given);
-        p.putAll(CACHE);
+        p.putAll(cache(runtime));
         properties = Map.copyOf(p);
         if (access != null) {
             return;
@@ -101,7 +111,7 @@ public final class DrishtiFileIO implements FileIO {
                     Boolean.parseBoolean(given.getOrDefault("s3.path-style-access", String.valueOf(s.pathStyle()))));
         }
         expiresAt = Long.parseLong(given.getOrDefault("s3.session-token-expires-at-ms", String.valueOf(Long.MAX_VALUE)));
-        access = new FileAccess(s, Relocation.parse(given.getOrDefault("relocate", "")), given.get("lz4-decoder"));
+        access = new FileAccess(runtime, s, Relocation.parse(given.getOrDefault("relocate", "")), given.get("lz4-decoder"));
         owned = true;
     }
 

@@ -13,15 +13,15 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.io;
+package com.ash.lake.spi;
 
 /**
  * A storage for one more URI scheme, beyond the local disk and S3 this module serves itself. The engines (the native Delta engine, the
- * Iceberg engine, the lake writer) reach such a scheme only through this interface and {@link StorageProviders}, never through the module
- * that implements it. The in-memory lake ({@code drishti-lakeload}, docs/architecture/DATA_ARCHITECTURE.md) provides {@code mem://} this way.
+ * Iceberg engine, the lake writer) reach such a scheme only through this interface and the {@link com.ash.lake.LakeRuntime} that holds
+ * it, never through the module that implements it. The in-memory lake provides {@code mem://} this way.
  *
- * <p>An implementation is listed in {@code META-INF/services/com.ash.lake.io.StorageProvider} of its module and found with
- * {@link java.util.ServiceLoader}: its scheme works wherever its module is on the class path, and nowhere else.
+ * <p>A provider is registered explicitly when a runtime is built ({@link com.ash.lake.LakeRuntime.Builder#storage}); its scheme works in
+ * that runtime and nowhere else. Nothing is found on the class path.
  */
 public interface StorageProvider {
 

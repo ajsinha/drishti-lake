@@ -18,7 +18,7 @@ package com.ash.lake;
 import java.nio.file.Path;
 
 /**
- * The named roots every default folder sits under, read through the options in force ({@link LakeOptions#current()}): the install
+ * The named roots every default folder sits under, read from one runtime's options ({@link LakeRuntime#roots()}): the install
  * folder ({@code lake.home}), the configuration folder ({@code lake.config.dir}, default {@code <home>/config}), the data folder
  * ({@code lake.data.dir}, default {@code <home>/data}) and the connectors folder. A relative value is under the install folder; nothing
  * is ever taken from the process's working folder: with no install folder named, a default is refused with a message naming the setting.
@@ -30,11 +30,19 @@ public final class LakeRoots {
     /** Its environment variable. */
     public static final String HOME_ENV = SettingsFile.envName(LakeOptions.HOME);
 
-    private LakeRoots() {
+    private final LakeOptions options;
+
+    LakeRoots(LakeOptions options) {
+        this.options = options;
+    }
+
+    /** The roots of {@code options}. */
+    public static LakeRoots of(LakeOptions options) {
+        return new LakeRoots(java.util.Objects.requireNonNull(options, "options"));
     }
 
     /** The install folder, absolute; refused when nothing names it. */
-    public static Path home() {
+    public Path home() {
         String h = setting(HOME);
         if (h == null) {
             throw new IllegalStateException(HOME + " (" + HOME_ENV + ") is not set: name the install folder, or"
@@ -48,44 +56,44 @@ public final class LakeRoots {
     }
 
     /** A path under the install folder, e.g. {@code home("sutras")}. */
-    public static String home(String sub) {
+    public String home(String sub) {
         return home().resolve(sub).normalize().toString();
     }
 
     /** The configuration folder. */
-    public static String config() {
+    public String config() {
         return base(LakeOptions.CONFIG_DIR, "config").toString();
     }
 
     /** A path under the configuration folder, e.g. {@code config("bi")}. */
-    public static String config(String sub) {
+    public String config(String sub) {
         return base(LakeOptions.CONFIG_DIR, "config").resolve(sub).normalize().toString();
     }
 
     /** The data folder. */
-    public static String data() {
+    public String data() {
         return base(LakeOptions.DATA_DIR, "data").toString();
     }
 
     /** A folder under the data folder as text joined with a slash, e.g. {@code under("delta")}. */
-    public static String under(String sub) {
+    public String under(String sub) {
         String r = data();
         return (r.endsWith("/") || r.endsWith("\\") ? r : r + "/") + sub;
     }
 
     /** A path under the data folder, e.g. {@code data("collab")}. */
-    public static String data(String sub) {
+    public String data(String sub) {
         return base(LakeOptions.DATA_DIR, "data").resolve(sub).normalize().toString();
     }
 
     /** The connectors folder: {@code lake.connectors.dir}, else {@code <config>/connectors}; absolute. */
-    public static Path connectors() {
+    public Path connectors() {
         String v = setting(LakeOptions.CONNECTORS_DIR);
         return v == null ? Path.of(config("connectors")) : anchored(v);
     }
 
     /** A value as an absolute path: as given when absolute, else under the install folder (never the working folder). */
-    public static Path anchored(String value) {
+    public Path anchored(String value) {
         Path p = Path.of(value);
         return p.isAbsolute() ? p.normalize() : home().resolve(p).normalize();
     }
@@ -143,12 +151,12 @@ public final class LakeRoots {
         return home.resolve(x).normalize().toString();
     }
 
-    private static Path base(String key, String underHome) {
+    private Path base(String key, String underHome) {
         String v = setting(key);
         return v == null ? home().resolve(underHome) : anchored(v);
     }
 
-    private static String setting(String key) {
-        return LakeOptions.current().value(key);
+    private String setting(String key) {
+        return options.value(key);
     }
 }

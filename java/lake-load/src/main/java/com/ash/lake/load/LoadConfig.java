@@ -49,7 +49,7 @@ import java.util.function.Function;
  * ({@code ${MINIO_ENDPOINT}}); keys and secrets are never taken from the file: S3 credentials come from the AWS default chain.
  */
 record LoadConfig(Source source, Target target, Parallel parallel, Memory memory, Rejects rejects, Report report, boolean lock, Archive archive,
-        Map<String, LoadConfig> datasets, String datasetsSummary, ObjectNode tree) {
+        Map<String, LoadConfig> datasets, String datasetsSummary, ObjectNode tree, com.ash.lake.LakeRuntime runtime) {
 
     /**
      * Archives in the input (DATA_GUIDE.md section 2.7): the name of a folderless archive's dataset ({@code source.dataset}), the caps
@@ -145,11 +145,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
             "report", Set.of("summary", "manifest", "progress", "run-log", "dry-run"));
 
     /** Reads {@code file} (YAML or JSON) and applies {@code overrides} ({@code key.path=value}). */
-    static LoadConfig read(Path file, List<String> overrides) throws IOException {
-        return read(file, overrides, com.ash.lake.Placeholders::process);
-    }
-
-    static LoadConfig read(Path file, List<String> overrides, Function<String, String> env) throws IOException {
+    static LoadConfig read(com.ash.lake.LakeRuntime rt, Path file, List<String> overrides) throws IOException {
         JsonNode root = file == null ? JsonNodeFactory.instance.objectNode() : new YAMLMapper().readTree(Files.readString(file));
         if (root == null || root.isMissingNode() || root.isNull()) {
             root = JsonNodeFactory.instance.objectNode();
@@ -161,7 +157,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         for (String o : overrides) {
             set(tree, o);
         }
-        return of(tree, env);
+        return of(rt, tree);
     }
 
     /** {@code a.b.c=value}: the value read as YAML ({@code [A, B]} is a list, {@code 8} a number). */
@@ -184,16 +180,16 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         at.set(path[path.length - 1], value);
     }
 
-    static LoadConfig of(ObjectNode tree, Function<String, String> env) {
+    static LoadConfig of(com.ash.lake.LakeRuntime rt, ObjectNode tree) {
         check("", tree);
         JsonNode ds = tree.get("datasets");
         if (ds != null && !ds.isNull()) {
-            Map<String, LoadConfig> each = datasets(tree, ds, env);
+            Map<String, LoadConfig> each = datasets(rt, tree, ds);
             LoadConfig first = each.values().iterator().next();
             return new LoadConfig(first.source, first.target, first.parallel, first.memory, first.rejects, first.report, first.lock, first.archive,
-                    each, new Reader(env).text(tree.path("report"), "summary", null), tree);
+                    each, new Reader(rt).text(tree.path("report"), "summary", null), tree, rt);
         }
-        return single(tree, env);
+        return single(rt, tree);
     }
 
     /**
@@ -202,7 +198,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
      * configuration read and checked now, before anything is read. A dataset's summary, manifest, progress and rejects files get its
      * name ({@code summary-trade.json}); the summary named is the run's, over every dataset.
      */
-    private static Map<String, LoadConfig> datasets(ObjectNode tree, JsonNode ds, Function<String, String> env) {
+    private static Map<String, LoadConfig> datasets(com.ash.lake.LakeRuntime rt, ObjectNode tree, JsonNode ds) {
         Map<String, JsonNode> named = new java.util.TreeMap<>(Archives.BY_NAME);
         if (ds.isArray()) {
             ds.forEach(n -> named.put(n.asText().trim(), JsonNodeFactory.instance.objectNode()));
@@ -259,7 +255,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
                 own.with("rejects").put("file", named(own.path("rejects").get("file").asText(), name));
             }
             try {
-                out.put(name, single(own, env));
+                out.put(name, single(rt, own));
             } catch (IllegalArgumentException x) {
                 throw new IllegalArgumentException("datasets." + name + ": " + x.getMessage());
             }
@@ -288,7 +284,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
     /** This configuration as a dry run (read and checked, nothing written, no run log). */
     LoadConfig dryRun() {
         Report r = new Report(report.summary(), report.manifest(), report.progress(), false, true);
-        return new LoadConfig(source, target, parallel, memory, rejects, r, lock, archive, datasets, datasetsSummary, tree);
+        return new LoadConfig(source, target, parallel, memory, rejects, r, lock, archive, datasets, datasetsSummary, tree, runtime);
     }
 
     /**
@@ -298,16 +294,16 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
      * split it, and a replace takes out only this load's slice of each date. A shared table with no such column refuses a replace: it would
      * take out the other connectors' rows of the date.
      */
-    static Source withSlice(Source src, String packDir, String connector, String kind, String table, String format, String loadMode) {
+    static Source withSlice(com.ash.lake.LakeRuntime rt, Source src, String packDir, String connector, String kind, String table, String format, String loadMode) {
         if (packDir == null || connector == null || kind == null || src.set().isEmpty()) {
             return src;
         }
         List<String> sharing = new ArrayList<>();
         try {
             Map<String, String> tableOf = new LinkedHashMap<>();
-            for (PackEntry.PackTable x : PackEntry.tables(Path.of(packDir))) {
+            for (PackEntry.PackTable x : PackEntry.tables(rt, Path.of(packDir))) {
                 if (x.kind().equals(kind)) {
-                    tableOf.put(x.connector(), siteTable(x.connector(), x.table()));
+                    tableOf.put(x.connector(), siteTable(rt, x.connector(), x.table()));
                 }
             }
             String mine = table != null ? table.substring(table.lastIndexOf('.') + 1) : tableOf.get(connector);
@@ -338,8 +334,8 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
     }
 
     /** A connector's table as the site's own connector file names it ({@code settings.lake-tables}, its first entry's table), else the template's. */
-    private static String siteTable(String connector, String template) {
-        Path f = com.ash.lake.LakeRoots.connectors().resolve(connector + ".yaml");
+    private static String siteTable(com.ash.lake.LakeRuntime rt, String connector, String template) {
+        Path f = rt.roots().connectors().resolve(connector + ".yaml");
         if (!Files.isRegularFile(f)) {
             return template;
         }
@@ -352,8 +348,8 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         }
     }
 
-    private static LoadConfig single(ObjectNode tree, Function<String, String> env) {
-        Reader r = new Reader(env);
+    private static LoadConfig single(com.ash.lake.LakeRuntime rt, ObjectNode tree) {
+        Reader r = new Reader(rt);
         JsonNode s = tree.path("source");
         JsonNode t = tree.path("target");
         JsonNode l = t.path("layout");
@@ -400,7 +396,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
                 throw new IllegalArgumentException("source.pack needs target.kind (the kind whose layout the pack gives)");
             }
             try {
-                pack = PackEntry.read(Path.of(packDir), kind, r.text(s, "connector", null));
+                pack = PackEntry.read(rt, Path.of(packDir), kind, r.text(s, "connector", null));
             } catch (IOException e) {
                 throw new IllegalArgumentException("source.pack " + packDir + ": " + e.getMessage());
             }
@@ -412,8 +408,8 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         String lakeRef = r.text(t, "lake", null);
         Lake lake = null;
         LakeTable entry = null;
-        if (lakeRef != null && isLakeName(lakeRef)) {
-            lake = Lakes.read(Lakes.dir(), env).get(lakeRef);
+        if (lakeRef != null && isLakeName(rt, lakeRef)) {
+            lake = Lakes.read(rt, Lakes.dir(rt)).get(lakeRef);
             String kind = r.text(t, "kind", null);
             if (kind == null) {
                 throw new IllegalArgumentException("target.kind: name the kind whose table of lake " + lakeRef + " this load writes");
@@ -460,7 +456,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         Map<String, String> constants = new java.util.LinkedHashMap<>();
         if (packDir != null) {
             try {
-                constants.putAll(PackEntry.constants(Path.of(packDir), r.text(s, "connector", null)));
+                constants.putAll(PackEntry.constants(rt, Path.of(packDir), r.text(s, "connector", null)));
             } catch (IOException e) {
                 throw new IllegalArgumentException("source.pack " + packDir + ": " + e.getMessage());
             }
@@ -501,7 +497,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
             throw new IllegalArgumentException("source.partition-by is Delta's: an Iceberg table of the layout is partitioned by business date alone "
                     + "(keep the fields as promote: columns)");
         }
-        src = withSlice(src, packDir, r.text(s, "connector", null), r.text(t, "kind", null), r.text(t, "table", null), tf, loadMode);
+        src = withSlice(rt, src, packDir, r.text(s, "connector", null), r.text(t, "kind", null), r.text(t, "table", null), tf, loadMode);
         Map<String, String> targetStorage =t.has("storage-options") ? storage(r, t.path("storage-options"), "target.storage-options") : sourceStorage;
         Map<String, String> iceberg = r.map(t.path("iceberg"), "target.iceberg");
         iceberg.keySet().stream().filter(k -> SECRETS.contains(k) && !isReference(t.path("iceberg").path(k).asText())).findFirst().ifPresent(k -> {
@@ -567,15 +563,15 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         Rejects rej = new Rejects(r.text(rj, "file", null), rj.has("max-pct") ? rj.get("max-pct").asDouble() : 100.0, rj.path("keep").asInt(50));
         Report rep = new Report(r.text(rp, "summary", null), r.text(rp, "manifest", null), r.text(rp, "progress", null), r.bool(rp, "run-log", true),
                 r.bool(rp, "dry-run", false));
-        return new LoadConfig(src, tgt, par, memory, rej, rep, tree.path("lock").asBoolean(true), archive(r, s), Map.of(), null, tree);
+        return new LoadConfig(src, tgt, par, memory, rej, rep, tree.path("lock").asBoolean(true), archive(r, s), Map.of(), null, tree, rt);
     }
 
     /** Whether {@code target.lake} names a lake of config/lakes/ (a plain name) rather than a folder or a URL (the old form). */
-    static boolean isLakeName(String ref) {
+    static boolean isLakeName(com.ash.lake.LakeRuntime rt, String ref) {
         if (!ref.matches("[a-z0-9][a-z0-9_-]*")) {
             return false;                                   // ./data/delta, /lake, s3://bucket/delta: a folder, the old form
         }
-        return Lakes.dir().resolve(ref + ".yaml").toFile().isFile() || !new java.io.File(ref).isDirectory();
+        return Lakes.dir(rt).resolve(ref + ".yaml").toFile().isFile() || !new java.io.File(ref).isDirectory();
     }
 
     /** A value of the load file that the lake file also gives: they must be the same, else the load is refused naming both. */
@@ -719,11 +715,16 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
     }
 
     /** Reads values with {@code ${VAR}} expanded. */
-    record Reader(Function<String, String> env) {
+    record Reader(com.ash.lake.LakeRuntime runtime) {
+
+        /** The settings references are resolved with: the runtime's. */
+        Function<String, String> env() {
+            return runtime.settings();
+        }
 
         /** Every {@code ${key}} / {@code ${key:-default}} through the one resolver (com.ash.lake.Placeholders), this reader's view. */
         String expand(String s) {
-            return com.ash.lake.Placeholders.require(s, env);
+            return com.ash.lake.Placeholders.require(s, env());
         }
 
         String text(JsonNode n, String key, String dflt) {

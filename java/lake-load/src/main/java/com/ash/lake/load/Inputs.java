@@ -16,10 +16,10 @@
 package com.ash.lake.load;
 
 import com.ash.lake.iceberg.io.FileAccess;
-import com.ash.lake.io.FileEntry;
+import com.ash.lake.spi.FileEntry;
 import com.ash.lake.io.LocalPaths;
-import com.ash.lake.io.RangeReader;
-import com.ash.lake.io.Storage;
+import com.ash.lake.spi.RangeReader;
+import com.ash.lake.spi.Storage;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;

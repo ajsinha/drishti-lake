@@ -163,7 +163,7 @@ class IcebergSpecInteropTest {
     /** The rows drishti-iceberg reads with {@code filter}, as "id|g"; each file's partition tuple checked against Drishti's transforms. */
     static TreeSet<String> drishtiRows(Table t, Expr filter) throws Exception {
         TreeSet<String> out = new TreeSet<>();
-        try (Catalog c = Catalogs.open(Map.of("metadata-location.special", metadataFile(t)))) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Map.of("metadata-location.special", metadataFile(t)))) {
             com.ash.lake.iceberg.Table d = c.load("special").orElseThrow();
             var schema = d.metadata().schema();
             List<Integer> ids = schema.columns().stream().map(f -> f.id()).toList();
@@ -268,7 +268,7 @@ class IcebergSpecInteropTest {
         TreeSet<String> want = libraryRows(t);
         assertThat(want).hasSize(13).doesNotContain("1|a/b", "2|<null>").contains("2|null", "2|..", "1|100%", "1|<null>");
         TreeSet<String> got = new TreeSet<>();
-        try (Catalog c = Catalogs.open(Map.of("metadata-location.deletes", metadataFile(t)))) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Map.of("metadata-location.deletes", metadataFile(t)))) {
             com.ash.lake.iceberg.Table d = c.load("deletes").orElseThrow();
             var schema = d.metadata().schema();
             for (FileTask task : d.plan(d.currentSnapshot().orElseThrow(), Expr.TRUE, pool)) {
@@ -291,7 +291,7 @@ class IcebergSpecInteropTest {
         var schema = new com.ash.lake.iceberg.types.Schema(0, cols);
         var spec = new com.ash.lake.iceberg.meta.PartitionSpec(0, List.of(new com.ash.lake.iceberg.meta.PartitionSpec.Field(2, 1000, "g",
                 com.ash.lake.iceberg.meta.Transform.Identity.INSTANCE)));
-        try (var c = com.ash.lake.iceberg.catalog.Catalogs.open(Map.of("root", root.toString(), "domain", "x"))) {
+        try (var c = com.ash.lake.iceberg.catalog.Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Map.of("root", root.toString(), "domain", "x"))) {
             var t = c.create("t", schema, spec, com.ash.lake.iceberg.meta.SortOrder.UNSORTED, Map.of("format-version", "2"));
             var ice = t.iceberg();
             List<com.ash.lake.iceberg.manifest.DataFile> files = new java.util.ArrayList<>();
@@ -341,7 +341,7 @@ class IcebergSpecInteropTest {
         }
         t.manageSnapshots().createTag("eod", snapshots.get(0)).createBranch("audit", snapshots.get(1)).commit();
         Thread.sleep(5);
-        try (Catalog c = Catalogs.open(Map.of("root", root.toString(), "domain", "ns"))) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Map.of("root", root.toString(), "domain", "ns"))) {
             com.ash.lake.iceberg.Table d = c.load("tagged").orElseThrow();
             assertThat(d.metadata().allRefs()).containsKeys("main", "eod", "audit");
             assertThat(Operations.expireSnapshots(d, System.currentTimeMillis(), 1)).isEqualTo(1);    // only the untagged third
@@ -367,7 +367,7 @@ class IcebergSpecInteropTest {
         try (Stream<Path> s = Files.list(dir)) {
             assertThat(s.map(p -> p.getFileName().toString()).filter(n -> n.startsWith("my")).toList()).containsExactly("my lake 100% é");
         }
-        try (Catalog c = Catalogs.open(Map.of("root", root.toString(), "domain", "desk"))) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Map.of("root", root.toString(), "domain", "desk"))) {
             assertThat(c.load("trades")).isPresent();                     // the native engine finds the same table
         }
     }
@@ -378,7 +378,7 @@ class IcebergSpecInteropTest {
         OracleLake lake = OracleLake.of(Map.of("root", root.toString(), "domain", "desk"));
         Table t = OracleLayout.open(lake, "trades", Map.of("mtm", true), IcebergLayout.DEFAULT_ROW_GROUP_BYTES, 1000);
         t.updateSpec().addField(org.apache.iceberg.expressions.Expressions.bucket(IcebergLayout.ID, 8)).commit();
-        try (Catalog c = Catalogs.open(Map.of("root", root.toString(), "domain", "desk"))) {
+        try (Catalog c = Catalogs.open(com.ash.lake.LakeRuntime.fromProcess(), Map.of("root", root.toString(), "domain", "desk"))) {
             com.ash.lake.iceberg.Table d = c.load("trades").orElseThrow();
             assertThatThrownBy(() -> NativeLayout.writeDay(d, LocalDate.of(2026, 11, 6), Collections.emptyIterator(), 1000))
                     .hasMessageContaining("bucket[8]").hasMessageContaining("partitioned by business_date alone");

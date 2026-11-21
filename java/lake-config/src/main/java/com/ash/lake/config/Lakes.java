@@ -35,7 +35,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Every lake a server or a tool knows, read from the lake folder ({@code config/lakes/*.yaml}; {@link #dir()} says where) and checked as
+ * Every lake a server or a tool knows, read from the lake folder ({@code config/lakes/*.yaml}; {@link #dir(com.ash.lake.LakeRuntime)} says where) and checked as
  * a whole: an unknown key, a format that is not delta or iceberg, a partition column after {@code business_date} beyond the fourth or
  * {@code business_date} itself, a load mode that is not replace or append, a secret written as a value rather than {@code ${ENV}}, a
  * file whose {@code lake:} differs from its name: each refuses the file with the key named. Environment references
@@ -94,39 +94,31 @@ public final class Lakes {
         return "iceberg".equals(format) ? "${drishti.data.dir:./data}/iceberg/" + name : defaultRoot(name);
     }
 
-    /** The lake folder: {@value #PROPERTY}, else {@value #ENV}, else {@code <config>/lakes}; absolute (a relative value is under the install folder). */
-    public static Path dir() {
-        String p = com.ash.lake.LakeOptions.current().value(PROPERTY);
-        if (p == null || p.isBlank()) {
-            p = properties.apply(PROPERTY);
-        }
-        if (p == null || p.isBlank()) {
-            p = properties.apply(ENV);
-        }
-        return com.ash.lake.LakeRoots.anchored(p == null || p.isBlank() ? com.ash.lake.LakeRoots.config("lakes") : p.strip());
-    }
-
-    private static volatile Function<String, String> properties = com.ash.lake.Placeholders::process;
-
     /**
-     * How a lake file's references are resolved by {@link #current()}: the server installs its own settings (its environment, system
-     * properties and configuration, as it resolves a connector file's references), so {@code ${DRISHTI_DELTA_ROOT}} given as a server
-     * setting is seen; null: the process's environment.
+     * The lake folder of {@code runtime}: {@value #PROPERTY} (its options, then its settings), else {@value #ENV}, else
+     * {@code <config>/lakes}; absolute (a relative value is under the install folder).
      */
-    public static void useProperties(Function<String, String> lookup) {
-        properties = lookup == null ? com.ash.lake.Placeholders::process : lookup;
+    public static Path dir(com.ash.lake.LakeRuntime runtime) {
+        String p = runtime.options().value(PROPERTY);
+        if (p == null || p.isBlank()) {
+            p = runtime.setting(PROPERTY);
+        }
+        if (p == null || p.isBlank()) {
+            p = runtime.setting(ENV);
+        }
+        return runtime.roots().anchored(p == null || p.isBlank() ? runtime.roots().config("lakes") : p.strip());
     }
 
     private static final Pattern NAMED = Pattern.compile("\\$\\{([A-Za-z_][A-Za-z0-9_.-]*)");
 
     /**
-     * The settings the lake files refer to, with the values {@link #useProperties} gives them here: what a process started from this one
+     * The settings the lake files refer to, with the values {@code runtime}'s settings give them: what a process started from this one
      * (the data inbox's loader) is handed in its environment, so it resolves every lake file exactly as this process does, through the
      * same reader, whatever was a {@code --setting} here. Only the names the files use; unset ones are left out.
      */
-    public static Map<String, String> environment() {
+    public static Map<String, String> environment(com.ash.lake.LakeRuntime runtime) {
         java.util.Set<String> names = new java.util.TreeSet<>();
-        Path d = dir();
+        Path d = dir(runtime);
         if (Files.isDirectory(d)) {
             try {
                 for (Path f : files(d)) {
@@ -139,8 +131,8 @@ public final class Lakes {
                 throw new UncheckedIOException("cannot list the lake folder " + d + ": " + e.getMessage(), e);
             }
         }
-        for (String name : shipped()) {
-            try (java.io.InputStream in = shippedFile(name)) {
+        for (String name : shipped(runtime)) {
+            try (java.io.InputStream in = runtime.catalog().shippedLake(name)) {
                 if (in != null) {
                     Matcher m = NAMED.matcher(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
                     while (m.find()) {
@@ -153,26 +145,26 @@ public final class Lakes {
         }
         Map<String, String> out = new LinkedHashMap<>();
         for (String n : names) {
-            String v = properties.apply(n);
+            String v = runtime.setting(n);
             if (v != null && !v.isEmpty()) {
                 out.put(n, v);
             }
         }
-        out.putAll(NamedLakeSettings.all());   // the [lake.<name>] sections: root=, storage.<key>=
+        out.putAll(NamedLakeSettings.of(runtime).all());   // the [lake.<name>] sections: root=, storage.<key>=
         return out;
     }
 
-    /** The lakes of {@link #dir()} with the process's environment. */
-    public static Lakes load() {
-        return read(dir(), com.ash.lake.Placeholders::process);
+    /**
+     * The lakes of {@code runtime} as they are now: its lake folder's files and its catalog's shipped lakes, references resolved with its
+     * settings; read at every ask, so an edited lake file is seen at once (a few small files).
+     */
+    public static Lakes current(com.ash.lake.LakeRuntime runtime) {
+        return read(dir(runtime), runtime.settings(), runtime.catalog(), NamedLakeSettings.of(runtime));
     }
 
-    /**
-     * The lakes of {@link #dir()} as they are now, references resolved with the server's settings ({@link #useProperties}): read at
-     * every ask (a connector's start, Admin -> Lakes, the checks), so an edited lake file is seen at once; a few small files.
-     */
-    public static Lakes current() {
-        return read(dir(), properties);
+    /** The lakes of {@code dir} read with {@code runtime}'s settings and catalog. */
+    public static Lakes read(com.ash.lake.LakeRuntime runtime, Path dir) {
+        return read(dir, runtime.settings(), runtime.catalog(), NamedLakeSettings.of(runtime));
     }
 
     /**
@@ -210,25 +202,32 @@ public final class Lakes {
         return dir.resolve(name + ".yaml");
     }
 
-    /** Every {@code *.yaml} of {@code dir} and its domain folders (none when the folder does not exist: a server with no lake file). */
+    /**
+     * Every {@code *.yaml} of {@code dir} and its domain folders (none when the folder does not exist), references resolved with
+     * {@code env}; no host: no shipped lake, and a named lake's settings only as {@code env} gives them.
+     */
     public static Lakes read(Path dir, Function<String, String> env) {
+        return read(dir, env, com.ash.lake.spi.LakeCatalog.NONE, NamedLakeSettings.over(env));
+    }
+
+    private static Lakes read(Path dir, Function<String, String> env, com.ash.lake.spi.LakeCatalog catalog, NamedLakeSettings named) {
         Map<String, Lake> out = new TreeMap<>();
         if (dir != null && Files.isDirectory(dir)) {
             try {
                 for (Path f : files(dir)) {
-                    Lake l = readFile(f, env);
+                    Lake l = readFile(f, env, named);
                     out.put(l.name(), l);
                 }
             } catch (IOException e) {
                 throw new UncheckedIOException("cannot list the lake folder " + dir + ": " + e.getMessage(), e);
             }
         }
-        for (String name : shipped()) {                 // the shipped lakes (the demo lake, a live module's) when the folder has no file of
+        for (String name : catalog.shippedLakes()) {    // the shipped lakes (the demo lake, a live module's) when the folder has no file of
             if (!out.containsKey(name)) {               // theirs: a server started in another working folder, a container, a stack node
                 String res = "drishti/lakes/" + name + ".yaml";
-                try (java.io.InputStream in = shippedFile(name)) {
+                try (java.io.InputStream in = catalog.shippedLake(name)) {
                     if (in != null) {
-                        out.put(name, parse(new YAMLMapper().readTree(in), name, null, env));
+                        out.put(name, parse(new YAMLMapper().readTree(in), name, null, env, named));
                     }
                 } catch (IOException e) {
                     throw new UncheckedIOException("cannot read the shipped lake " + res + ": " + e.getMessage(), e);
@@ -238,17 +237,9 @@ public final class Lakes {
         return new Lakes(out, dir);
     }
 
-    /**
-     * The lakes the host ships now ({@link com.ash.lake.spi.LakeCatalog#shippedLakes()}): its own and each live module's, which leave with
-     * it. None with no host.
-     */
-    public static List<String> shipped() {
-        return com.ash.lake.spi.LakeCatalog.current().shippedLakes();
-    }
-
-    /** A shipped lake's file ({@link #shipped()}); null when none holds it. */
-    static java.io.InputStream shippedFile(String name) {
-        return com.ash.lake.spi.LakeCatalog.current().shippedLake(name);
+    /** The lakes {@code runtime}'s catalog ships ({@link com.ash.lake.spi.LakeCatalog#shippedLakes()}); none with no host. */
+    public static List<String> shipped(com.ash.lake.LakeRuntime runtime) {
+        return runtime.catalog().shippedLakes();
     }
 
     /**
@@ -289,9 +280,13 @@ public final class Lakes {
 
     /** One lake file, checked. */
     public static Lake readFile(Path file, Function<String, String> env) {
+        return readFile(file, env, NamedLakeSettings.over(env));
+    }
+
+    static Lake readFile(Path file, Function<String, String> env, NamedLakeSettings named) {
         String expected = file.getFileName().toString().replaceFirst("\\.yaml$", "");
         try {
-            return parse(new YAMLMapper().readTree(Files.readString(file)), expected, file, env);
+            return parse(new YAMLMapper().readTree(Files.readString(file)), expected, file, env, named);
         } catch (IOException e) {
             throw new IllegalArgumentException(file + ": not readable YAML: " + e.getMessage(), e);
         }
@@ -300,13 +295,13 @@ public final class Lakes {
     /** A lake from its YAML text ({@code expected}: the name its file gives it, or null to take the text's). */
     public static Lake parse(String yaml, String expected, Function<String, String> env) {
         try {
-            return parse(new YAMLMapper().readTree(yaml), expected, null, env);
+            return parse(new YAMLMapper().readTree(yaml), expected, null, env, NamedLakeSettings.over(env));
         } catch (IOException e) {
             throw new IllegalArgumentException("not readable YAML: " + e.getMessage(), e);
         }
     }
 
-    static Lake parse(JsonNode root, String expected, Path file, Function<String, String> env) {
+    static Lake parse(JsonNode root, String expected, Path file, Function<String, String> env, NamedLakeSettings named) {
         String where = file == null ? "lake" : file.toString();
         if (root == null || !root.isObject()) {
             throw new IllegalArgumentException(where + ": a lake file is a mapping (lake:, format:, root:, tables:)");
@@ -330,7 +325,7 @@ public final class Lakes {
         if (namedRoot != null && !namedRoot.isBlank()) {
             rootPath = v.resolve("lake." + name + ".root", namedRoot.strip());
         }
-        NamedLakeSettings.section(name).forEach((k, val) -> {
+        named.section(name).forEach((k, val) -> {
             if (k.startsWith("storage.") && k.length() > "storage.".length()) {
                 storage.put(k.substring("storage.".length()), val);
             }
@@ -539,16 +534,13 @@ public final class Lakes {
         }
 
         /**
-         * A variable: the environment; a dotted name ({@code drishti.data.dir}) also as a system property and as its environment form
-         * ({@code DRISHTI_DATA_DIR}), as the server resolves it.
+         * A variable through the settings given; a dotted name ({@code drishti.data.dir}) also in its environment form
+         * ({@code DRISHTI_DATA_DIR}).
          */
         String lookup(String name) {
             String v = env.apply(name);
             if ((v == null || v.isEmpty()) && (name.contains(".") || name.contains("-"))) {
-                v = System.getProperty(name);
-                if (v == null || v.isEmpty()) {
-                    v = env.apply(name.toUpperCase(java.util.Locale.ROOT).replace('.', '_').replace('-', '_'));
-                }
+                v = env.apply(name.toUpperCase(java.util.Locale.ROOT).replace('.', '_').replace('-', '_'));
             }
             return v;
         }

@@ -104,7 +104,7 @@ interface OracleLake extends Closeable {
         if (!catalog.isBlank() && !catalog.equalsIgnoreCase("hadoop")) {
             throw new IllegalArgumentException("catalog must be hadoop or rest, not " + catalog);
         }
-        String root = settings.getOrDefault("root", "").isBlank() ? com.ash.lake.LakeRoots.under("iceberg") : settings.get("root").trim();
+        String root = settings.getOrDefault("root", "").isBlank() ? com.ash.lake.LakeRuntime.fromProcess().roots().under("iceberg") : settings.get("root").trim();
         String base;
         if (root.matches("^[a-zA-Z][a-zA-Z0-9+.-]*://.*") && !root.startsWith("file:")) {
             base = root.replaceAll("/+$", "");

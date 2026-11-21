@@ -185,7 +185,7 @@ public final class Cycle {
             files.addAll(recovery.run());
             Routes routes;
             try {
-                routes = Routes.read(Path.of(settings.rulesFile()), settings.lake(), packs).with(settings.defaultMode(), settings.newTables());
+                routes = Routes.read(settings.runtime(), Path.of(settings.rulesFile()), settings.lake(), packs).with(settings.defaultMode(), settings.newTables());
             } catch (IOException | IllegalArgumentException e) {
                 return new Report(run, trigger, t0, clock.instant(), "skipped", "the routing rules cannot be read: " + e.getMessage(), files, notices, 0);
             }
@@ -285,7 +285,7 @@ public final class Cycle {
                 throw new Routes.Unrouted("the SHA-256 in its .ready file is not the file's (" + sha + "): it may have been cut short or changed");
             }
             if (FileDates.isTar(name)) {
-                List<String> tables = new ArrayList<>(LakeLoad.tarTables(file.toString()).keySet());
+                List<String> tables = new ArrayList<>(LakeLoad.tarTables(settings.runtime(), file.toString()).keySet());
                 if (tables.isEmpty()) {                          // an empty archive: ignored, nothing touched (DATA_LAKE_GUIDE.md)
                     String why = "empty: ignored (no file in <table>/<YYYY-MM-DD>/); nothing was written";
                     ledger.write(run, name, Ledger.IGNORED, JSON.createObjectNode().put("sha256", sha).put("size", size).put("reason", why));
@@ -310,7 +310,7 @@ public final class Cycle {
      * earlier load committed (a tar: each of its tables) is asked which dates still hold that load's rows ({@code _load_id}); a date the
      * load wrote that holds none of them now was replaced (or undone) by a later load, and the file loads again.
      */
-    static String replacedSince(JsonNode loaded) {
+    String replacedSince(JsonNode loaded) {
         List<JsonNode> parts = new ArrayList<>();
         parts.add(loaded);
         loaded.path("tables").forEach(t -> parts.add(t.path("load")));
@@ -323,7 +323,7 @@ public final class Cycle {
             java.util.Set<String> holding = new java.util.TreeSet<>();
             boolean known = true;
             for (var it = p.path("loads").fieldNames(); it.hasNext(); ) {
-                java.util.Set<String> h = LakeUndo.datesHolding(table, it.next());
+                java.util.Set<String> h = LakeUndo.datesHolding(settings.runtime(), table, it.next());
                 if (h == null) {
                     known = false;
                     break;
@@ -584,7 +584,7 @@ public final class Cycle {
                 String[] parts = p.split("/");
                 return parts.length >= 2 ? parts[parts.length - 2] + "/" + parts[parts.length - 1] : p;
             }).toList();
-            LakeUndo.undoAll(lakeRoot(tar.route().lake()), loadId, names, false);
+            LakeUndo.undoAll(settings.runtime(), lakeRoot(settings.runtime(), tar.route().lake()), loadId, names, false);
             return "rolled back: " + String.join(", ", names) + " (load " + loadId + " undone)";
         } catch (Exception e) {
             LOG.warn("data inbox: the rollback of load {} failed: {}", loadId, e.toString());
@@ -603,7 +603,7 @@ public final class Cycle {
         Path summary = dir.resolve(base + ".summary.json");
         Routes.Route r = files.get(0).route();
         String batch = "inbox:" + run + "#" + n;
-        LoaderProcess.writeConfig(config, r, files.stream().map(Claimed::file).toList(), summary, dir.resolve(base + ".rejects.jsonl"),
+        LoaderProcess.writeConfig(settings.runtime(), config, r, files.stream().map(Claimed::file).toList(), summary, dir.resolve(base + ".rejects.jsonl"),
                 settings.rejectMaxPercent(), null);
         if (what.isEmpty()) {
             Files.writeString(dir.resolve(base + ".route.json"), routeNode(r, batch).toPrettyString());
@@ -686,10 +686,10 @@ public final class Cycle {
     }
 
     /** The folder of a lake for an undo: a lake of config/lakes/ by its root, else the folder given (the old form). */
-    static String lakeRoot(String lake) {
+    static String lakeRoot(com.ash.lake.LakeRuntime runtime, String lake) {
         if (lake != null && com.ash.lake.config.Lakes.validName(lake)) {
             try {
-                return com.ash.lake.config.Lakes.current().get(lake).root();
+                return com.ash.lake.config.Lakes.current(runtime).get(lake).root();
             } catch (IllegalArgumentException | java.io.UncheckedIOException e) {
                 LOG.warn("data inbox: the lake {} cannot be read for the rollback: {}", lake, e.getMessage());
             }

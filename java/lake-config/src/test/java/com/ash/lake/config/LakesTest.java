@@ -36,6 +36,9 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class LakesTest {
 
+    /** A runtime with no host and no settings. */
+    private static final com.ash.lake.LakeRuntime RT = com.ash.lake.LakeRuntime.builder().build();
+
     @TempDir
     Path tmp;
 
@@ -134,7 +137,7 @@ class LakesTest {
     }
 
     @Test
-    void referencesNestAndADottedNameIsReadAsTheServerReadsIt() {
+    void referencesNestAndADottedNameIsReadThroughTheSettingsGiven() {
         // the build's surefire sets drishti.data.dir (target/test-data), and a system property comes before the environment's form
         String before = System.clearProperty("drishti.data.dir");
         try {
@@ -144,8 +147,10 @@ class LakesTest {
             assertEquals("./data/delta", Lakes.parse("lake: main\nroot: ${DRISHTI_DELTA_ROOT:${drishti.data.dir:./data}/delta}\n", "main",
                     k -> null).root());
             System.setProperty("drishti.data.dir", "/opt/drishti");
+            assertEquals("/srv/drishti/delta", Lakes.parse("lake: main\nroot: ${DRISHTI_DELTA_ROOT:${drishti.data.dir:./data}/delta}\n",
+                    "main", env).root(), "a lookup given is the only one read: no system property behind it (LK-6)");
             assertEquals("/opt/drishti/delta", Lakes.parse("lake: main\nroot: ${DRISHTI_DELTA_ROOT:${drishti.data.dir:./data}/delta}\n",
-                    "main", env).root());
+                    "main", com.ash.lake.LakeRuntime.fromProcess().settings()).root(), "the process's settings: the property first");
         } finally {
             if (before == null) {
                 System.clearProperty("drishti.data.dir");
@@ -171,17 +176,12 @@ class LakesTest {
     void aChildProcessIsHandedTheSettingsTheLakeFilesUse() throws Exception {
         Path lakes = Files.createDirectories(tmp.resolve("env-lakes"));
         Files.writeString(lakes.resolve("main.yaml"), "lake: main\nroot: ${SITE_LAKE_ROOT:/x}/delta\n");
-        System.setProperty(Lakes.PROPERTY, lakes.toString());
-        Lakes.useProperties(Map.of("SITE_LAKE_ROOT", "/srv/lake", "UNRELATED", "y")::get);     // as a --setting of the server
-        try {
-            Map<String, String> env = Lakes.environment();
-            assertEquals("/srv/lake", env.get("SITE_LAKE_ROOT"));
-            assertFalse(env.containsKey("UNRELATED"));
-            assertEquals("/srv/lake/delta", Lakes.read(lakes, env::get).get("main").root());   // the child resolves it the same way
-        } finally {
-            Lakes.useProperties(null);
-            System.clearProperty(Lakes.PROPERTY);
-        }
+        com.ash.lake.LakeRuntime host = com.ash.lake.LakeRuntime.builder()                     // as a --setting of the server
+                .settings(Map.of(Lakes.PROPERTY, lakes.toString(), "SITE_LAKE_ROOT", "/srv/lake", "UNRELATED", "y")).build();
+        Map<String, String> env = Lakes.environment(host);
+        assertEquals("/srv/lake", env.get("SITE_LAKE_ROOT"));
+        assertFalse(env.containsKey("UNRELATED"));
+        assertEquals("/srv/lake/delta", Lakes.read(lakes, env::get).get("main").root());   // the child resolves it the same way
     }
 
     @Test
@@ -262,13 +262,8 @@ class LakesTest {
         Files.writeString(conns.resolve("vendor.yaml"), "plugin: delta\nkinds: [trade]\nsettings:\n  root: s3://vendor/delta\n  domain: trading\n");
         Path lakesDir = Files.createDirectories(tmp.resolve("demo-lakes"));
         Files.writeString(lakesDir.resolve("demo.yaml"), "lake: demo\nroot: /x/demo\ntables:\n  trading.trade_endur: {kind: trade}\n");
-        com.ash.lake.spi.LakeCatalog before = com.ash.lake.spi.LakeCatalog.use(TestCatalog.WRITERS);   // a host whose domain names a lake writer
-        LakeFiles.Migration m;
-        try {
-            m = LakeFiles.adoptDemo(conns, lakesDir, true);
-        } finally {
-            com.ash.lake.spi.LakeCatalog.use(before);
-        }
+        com.ash.lake.LakeRuntime host = com.ash.lake.LakeRuntime.builder().catalog(TestCatalog.WRITERS).build();   // a host whose domain names a lake writer
+        LakeFiles.Migration m = LakeFiles.adoptDemo(host, conns, lakesDir, true);
         assertEquals(3, m.connectorFiles().size(), m.notes().toString());
         String t = Files.readString(conns.resolve("trading-store.yaml"));
         assertTrue(t.startsWith("# generated") && t.contains("lake: demo") && t.contains("lake-tables: trading.trade_endur") && t.contains("union:")
@@ -280,7 +275,7 @@ class LakesTest {
         try (var files = Files.list(conns)) {
             assertEquals(3, files.filter(f -> f.getFileName().toString().contains(".before-lake-")).count());
         }
-        assertTrue(LakeFiles.adoptDemo(conns, lakesDir, true).connectorFiles().isEmpty(), "once");
+        assertTrue(LakeFiles.adoptDemo(host, conns, lakesDir, true).connectorFiles().isEmpty(), "once");
         assertTrue(LakeFiles.demoRoot("${DRISHTI_DELTA_ROOT:./data/delta}") && LakeFiles.demoRoot("./data/delta") && !LakeFiles.demoRoot("/srv/lake"));
     }
 
@@ -311,10 +306,10 @@ class LakesTest {
                 """);
         Files.writeString(conns.resolve("files.yaml"), "plugin: file\nkinds: [x]\nsettings:\n  root: /files\n");
         Path lakesDir = tmp.resolve("lakes");
-        LakeFiles.Migration dry = LakeFiles.migrate(conns, lakesDir, false);
+        LakeFiles.Migration dry = LakeFiles.migrate(RT, conns, lakesDir, false);
         assertFalse(Files.exists(lakesDir));
         assertEquals(1, dry.lakeFiles().size());
-        LakeFiles.migrate(conns, lakesDir, true);
+        LakeFiles.migrate(RT, conns, lakesDir, true);
         Lakes lakes = Lakes.read(lakesDir, ENV);
         Lake l = lakes.get("delta");
         assertEquals("/lake/delta", l.root());
@@ -360,7 +355,7 @@ class LakesTest {
                 """);
         Path lakes = Files.createDirectories(tmp.resolve("lakes"));
         Files.writeString(lakes.resolve("main.yaml"), "# header\nlake: main\nroot: /x\ntables:\n  risk.pnl-vector: {}\n");
-        LakeTable entry = PackEntry.read(pack, "desk-pnl", null).toTable("desk-pnl");
+        LakeTable entry = PackEntry.read(RT, pack, "desk-pnl", null).toTable("desk-pnl");
         assertTrue(LakeFiles.addTable(lakes.resolve("main.yaml"), entry));
         assertFalse(LakeFiles.addTable(lakes.resolve("main.yaml"), entry));
         Lake l = Lakes.read(lakes, ENV).get("main");
@@ -376,7 +371,7 @@ class LakesTest {
         Path empty = Files.createDirectories(tmp.resolve("none"));
         try (java.net.URLClassLoader loader = new java.net.URLClassLoader(new java.net.URL[] {tmp.resolve("module").toUri().toURL()}, null)) {
             assertFalse(Lakes.read(empty, ENV).find("mod-official").isPresent());
-            com.ash.lake.spi.LakeCatalog before = com.ash.lake.spi.LakeCatalog.use(new com.ash.lake.spi.LakeCatalog() {   // a host's catalog
+            com.ash.lake.LakeRuntime host = com.ash.lake.LakeRuntime.builder().settings(ENV, null).catalog(new com.ash.lake.spi.LakeCatalog() {   // a host's catalog
                 @Override
                 public List<String> shippedLakes() {
                     return Lakes.shippedIn(loader, "drishti/lakes/shipped.txt");
@@ -386,13 +381,9 @@ class LakesTest {
                 public java.io.InputStream shippedLake(String name) {
                     return loader.getResourceAsStream("drishti/lakes/" + name + ".yaml");
                 }
-            });
-            try {
-                assertTrue(Lakes.shipped().contains("mod-official"));
-                assertEquals("/m", Lakes.read(empty, ENV).get("mod-official").root());
-            } finally {
-                com.ash.lake.spi.LakeCatalog.use(before);
-            }
+            }).build();
+            assertTrue(Lakes.shipped(host).contains("mod-official"));
+            assertEquals("/m", Lakes.read(host, empty).get("mod-official").root());
             assertFalse(Lakes.read(empty, ENV).find("mod-official").isPresent());
         }
     }

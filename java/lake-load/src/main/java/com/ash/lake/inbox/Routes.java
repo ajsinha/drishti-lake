@@ -144,8 +144,10 @@ public final class Routes {
     private final String defaultLake;
     private final Packs packs;
     private final String source;
+    private final com.ash.lake.LakeRuntime runtime;
 
-    private Routes(List<Rule> rules, String unmatched, String defaultLake, Packs packs, String source) {
+    private Routes(com.ash.lake.LakeRuntime runtime, List<Rule> rules, String unmatched, String defaultLake, Packs packs, String source) {
+        this.runtime = runtime;
         this.rules = rules;
         this.unmatched = unmatched;
         this.defaultLake = defaultLake;
@@ -154,7 +156,7 @@ public final class Routes {
     }
 
     /** The rules of {@code file} (an absent file: no rules, every file needs its {@code .ready} to name its pack and kind). */
-    public static Routes read(Path file, String defaultLake, Packs packs) throws IOException {
+    public static Routes read(com.ash.lake.LakeRuntime runtime, Path file, String defaultLake, Packs packs) throws IOException {
         String where = file.toString();
         JsonNode d = null;
         if (!Files.isRegularFile(file)) {
@@ -177,7 +179,7 @@ public final class Routes {
                 out.addAll(parseRules(md, "module " + m.module() + ": dataload", m.module()));
             }
         }
-        return new Routes(List.copyOf(out), unmatched, defaultLake, packs, where);
+        return new Routes(runtime, List.copyOf(out), unmatched, defaultLake, packs, where);
     }
 
     /** The rules of one {@code dataload:} block; {@code origin} is the module they come from (null: the site's own file). */
@@ -446,7 +448,7 @@ public final class Routes {
         }
         String domain;
         try {
-            domain = LakeLoad.packDomain(info.dir());
+            domain = LakeLoad.packDomain(runtime, info.dir());
         } catch (java.io.IOException e) {
             throw new Unrouted(pack + ": its pack.yaml cannot be read (" + e.getMessage() + ")");
         }
@@ -583,7 +585,7 @@ public final class Routes {
             if (hit != null && hit.getKey() == stamp) {
                 return hit.getValue();
             }
-            List<com.ash.lake.config.PackEntry.PackTable> ts = com.ash.lake.config.PackEntry.tables(f);
+            List<com.ash.lake.config.PackEntry.PackTable> ts = com.ash.lake.config.PackEntry.tables(runtime, f);
             packTables.put(f, Map.entry(stamp, ts));
             return ts;
         } catch (IOException | RuntimeException e) {

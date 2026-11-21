@@ -95,7 +95,7 @@ final class Fixture {
                   unmatched: fail
                 """);
         settings = new DataLoadSettings(true, root.toString(), Duration.ofMinutes(10), 30, null, null, "256m", Duration.ofMinutes(5), 0.0, false, 30,
-                lake.toString(), rules.toString(), false, null, null);
+                lake.toString(), rules.toString(), false, null, null, com.ash.lake.LakeRuntime.fromProcess());
     }
 
     Path inbox() {

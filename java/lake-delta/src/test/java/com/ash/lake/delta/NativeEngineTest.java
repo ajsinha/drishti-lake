@@ -58,7 +58,7 @@ class NativeEngineTest {
     static void setUp() throws Exception {
         lake = copy(Path.of(TestRoots.module(), "src", "test", "resources", "lake"));
         layout = copy(Path.of(TestRoots.module(), "src", "test", "resources", "lake-layout"));
-        engine = NativeEngine.create();
+        engine = NativeEngine.create(com.ash.lake.LakeRuntime.builder().build());
         hadoop = DefaultEngine.create(new Configuration());
     }
 

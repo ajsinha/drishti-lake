@@ -47,15 +47,16 @@ public final class IcebergAppender {
      * creating it with {@code properties} when it does not exist (they are set on an existing table too). Returns the snapshot's sequence
      * number after the commit (it grows with every commit).
      *
+     * @param runtime the runtime the table is written with
      * @param settings the connector settings that name the lake ({@code root}, or {@code catalog: rest} and {@code uri}; {@code s3.*})
      * @param promoted the promoted paths and whether each is a number
      * @param vectors the paths written as {@code list<double>}
      */
-    public static long append(Map<String, String> settings, String domain, String table, LocalDate date, List<Row> rows,
+    public static long append(com.ash.lake.LakeRuntime runtime, Map<String, String> settings, String domain, String table, LocalDate date, List<Row> rows,
             Map<String, Boolean> promoted, Set<String> vectors, Map<String, String> properties) throws IOException {
         Map<String, String> s = new HashMap<>(settings);
         s.put("domain", domain);
-        try (LayoutLake lake = LayoutLake.of(s)) {
+        try (LayoutLake lake = LayoutLake.of(runtime, s)) {
             LayoutLake.LayoutTable t = lake.open(table, new LinkedHashMap<>(promoted), vectors, IcebergLayout.DEFAULT_ROW_GROUP_BYTES,
                     IcebergLayout.DEFAULT_FILE_ROWS);
             if (!properties.isEmpty()) {

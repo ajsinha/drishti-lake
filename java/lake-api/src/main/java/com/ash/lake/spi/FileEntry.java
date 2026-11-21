@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.io;
+package com.ash.lake.spi;
 
 /**
  * One file as a listing or a status call sees it: its canonical path (a {@code file:} or {@code s3a://} URI string, as

@@ -16,7 +16,7 @@
 package com.ash.lake.load;
 
 import com.ash.lake.iceberg.io.FileAccess;
-import com.ash.lake.io.RangeReader;
+import com.ash.lake.spi.RangeReader;
 import com.ash.lake.load.Inputs.Compression;
 import com.ash.lake.load.Inputs.Split;
 import java.io.IOException;

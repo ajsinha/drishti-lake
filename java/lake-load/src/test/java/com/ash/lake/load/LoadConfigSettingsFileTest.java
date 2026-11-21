@@ -53,7 +53,7 @@ class LoadConfigSettingsFileTest {
                 target:
                   path: ${site.cold-lake}/risk/pv
                 """);
-        LoadConfig c = LoadConfig.read(file, List.of());
+        LoadConfig c = LoadConfig.read(com.ash.lake.LakeRuntime.fromProcess(), file, List.of());
         assertThat(c.tablePath()).isEqualTo("/lakes/cold/risk/pv");
         assertThat(c.source().files()).containsExactly("/srv/inbox/pv.jsonl");
     }
