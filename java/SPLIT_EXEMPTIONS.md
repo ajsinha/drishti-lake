@@ -9,9 +9,9 @@ go down from its value at the move. **This list only shrinks**; at `v1.0.0` it i
 
 ## Counts (read by the guards)
 
-- hostcompat types: 18
+- hostcompat types: 6
 - host-word files: 73
-- parked checks: 2
+- parked checks: 1
 
 ## Dependencies
 
@@ -31,18 +31,6 @@ two edits: `ModuleLoaders` lost the static block that joined the host's `DatesIn
 
 | Type | Host type | Removed by |
 |---|---|---|
-| `ConnectorSecrets` | `com.ash.drishti.common.ConnectorSecrets` | L5: with `NamedResources` (the connector half leaves for the host's `LakeCatalog`) |
-| `ModuleHomes` | `com.ash.drishti.api.resolution.ModuleHomes` | L5: the pack and module half leaves for the host's `LakeCatalog` (the loader's child process forwards the module boot's result until then) |
-| `Extensions` | `com.ash.drishti.common.Extensions` | L5: with `Vocabularies` (the pack and module half leaves for the host's `LakeCatalog`) |
-| `ConfigResolution` | `com.ash.drishti.api.resolution.ConfigResolution` | L5: the pack and module half leaves for the host's `LakeCatalog` |
-| `DomainVocabulary` | `com.ash.drishti.kernel.api.vocabulary.DomainVocabulary` | L5: the pack and module half leaves for the host's `LakeCatalog` |
-| `ModuleLoaders` | `com.ash.drishti.common.ModuleLoaders` | L5: the pack and module half leaves for the host's `LakeCatalog` |
-| `ModuleTemplates` | `com.ash.drishti.api.resolution.ModuleTemplates` | L5: the pack and module half leaves for the host's `LakeCatalog` |
-| `NamedResources` | `com.ash.drishti.common.NamedResources` | L5: the pack and module half leaves for the host's `LakeCatalog` |
-| `PackFolders` | `com.ash.drishti.api.PackFolders` | L5: the pack and module half leaves for the host's `LakeCatalog` |
-| `PackResolver` | `com.ash.drishti.api.resolution.PackResolver` | L5: the pack and module half leaves for the host's `LakeCatalog` |
-| `ResolutionSettings` | `com.ash.drishti.api.resolution.ResolutionSettings` | L5: the pack and module half leaves for the host's `LakeCatalog` |
-| `Vocabularies` | `com.ash.drishti.kernel.api.vocabulary.Vocabularies` | L5: the pack and module half leaves for the host's `LakeCatalog` |
 | `ColumnSet` | `com.ash.drishti.api.ColumnSet` | L7: the product's own row, column and vector types (`TableStore`) |
 | `IdText` | `com.ash.drishti.api.IdText` | L7: the product's own row, column and vector types (`TableStore`) |
 | `ListValues` | `com.ash.drishti.api.ListValues` | L7: the product's own row, column and vector types (`TableStore`) |
@@ -53,13 +41,13 @@ two edits: `ModuleLoaders` lost the static block that joined the host's `DatesIn
 ## Setting names and host words (read by `NamesNoHostTest`)
 
 The product reads its own settings only, through `LakeOptions` (`lake.*` names, `LAKE_*` variables; the surefire configuration in
-`java/pom.xml` sets `lake.home`, `lake.data.dir`, `lake.repo.root`, `lake.module.root`, absolute). What still carries a host word:
-the pack and module types above (they read `drishti.packs.*`, `drishti.modules.*`, the module boot's `drishti.module.*`, which the
-loader's child process forwards: L5); the lake files' placeholder text `${drishti.data.dir:./data}` (configuration, L5); the
+`java/pom.xml` sets `lake.home`, `lake.data.dir`, `lake.repo.root`, `lake.module.root`, absolute). What still carries a host word: the lake
+files' placeholder text `${drishti.data.dir:./data}` and the demo root `DRISHTI_DELTA_ROOT` (configuration the host writes and sets,
+read as text; the connector-migration helpers name the host's connector files: L12 decides whether they stay in the product); the
 **persisted names** written into tables (Iceberg snapshot summaries and table properties `drishti.business-dates`, `drishti.load-ids`,
 `drishti.layout.*`, `drishti.parquet.*`, the Delta commit's engine info): kept so the lakes written before the split read the same, decided
 with the table layer (L7: read both, write the product's); `DRS-` codes in messages, source-system names (`trade_endur`) and the host's
-name in comments (L5 the pack and source-system words, L13 the prose). The count of such files is the "host-word files" line above.
+name in comments (L13 the prose). The count of such files is the "host-word files" line above.
 
 ## Parked checks
 
@@ -68,8 +56,7 @@ A test, or an assertion inside one, that reads the host's own data (its shipped 
 
 | Check | Reads | Returns at |
 |---|---|---|
-| `LakesTest.aCatalogLakeNeedsNoRootAndTheDemoLakeIsShipped` (its last two lines) | the host's shipped demo lake file | L5: the host's adapter checks its shipped lakes; this repository's catalog test covers the rest |
-| `CodecsTest.aPackGivesTheDomainTableLayoutKeyAndFlattenedFieldsAsLakeBuildReadsThem` | the host's shipped packs `market-risk` and `trading` | L5: a pack of the kit's own through `LakeCatalog` |
+| `CodecsTest.aPackGivesTheDomainTableLayoutKeyAndFlattenedFieldsAsLakeBuildReadsThem` | the host's shipped packs `market-risk` and `trading` | L9: a pack of the kit's own (the parity kit's pack cases) |
 
 Tests that stayed in the host whole (they test its adapters, or read through its `SourcePlugin`s) are listed in
 [MOVE_ALLOWLIST](../docs/MOVE_ALLOWLIST.md) section 4.

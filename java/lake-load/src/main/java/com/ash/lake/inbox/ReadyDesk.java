@@ -184,7 +184,13 @@ public final class ReadyDesk {
     }
 
     List<ReadyRule> rules() {
-        return com.ash.lake.hostcompat.Extensions.with(rules, ReadyRule.class);     // a loaded module's too
+        List<ReadyRule> host = com.ash.lake.spi.LakeCatalog.current().extensions(ReadyRule.class);     // a loaded module's too
+        if (host.isEmpty()) {
+            return rules == null ? List.of() : List.copyOf(rules);
+        }
+        List<ReadyRule> out = new java.util.ArrayList<>(rules == null ? List.of() : rules);
+        out.addAll(host);
+        return out;
     }
 
     Routes routes() throws IOException {

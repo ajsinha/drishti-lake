@@ -3,7 +3,6 @@
 # A dependency not listed fails the build; a listed one no longer declared fails too, so the list stays true and only shrinks.
 # Lines marked "until" are the move's leftovers (java/SPLIT_EXEMPTIONS.md says which step removes them).
 lake-config com.ash.lake:lake-api
-lake-config com.ash.lake:lake-hostcompat            until L5
 lake-config com.fasterxml.jackson.core:jackson-databind
 lake-config com.fasterxml.jackson.dataformat:jackson-dataformat-yaml
 lake-delta com.ash.lake:lake-io
@@ -14,9 +13,6 @@ lake-delta org.apache.hadoop:hadoop-client-runtime  until L7
 lake-delta com.github.ben-manes.caffeine:caffeine
 lake-delta com.fasterxml.jackson.core:jackson-databind
 lake-delta org.slf4j:slf4j-api
-lake-hostcompat com.ash.lake:lake-api
-lake-hostcompat com.fasterxml.jackson.core:jackson-databind                 until L5
-lake-hostcompat com.fasterxml.jackson.dataformat:jackson-dataformat-yaml    until L5
 lake-iceberg com.ash.lake:lake-io
 lake-iceberg org.apache.iceberg:iceberg-core
 lake-iceberg org.apache.iceberg:iceberg-aws
@@ -29,8 +25,9 @@ lake-iceberg software.amazon.awssdk:auth
 lake-iceberg software.amazon.awssdk:http-auth-aws
 lake-iceberg org.slf4j:slf4j-api
 lake-io com.ash.lake:lake-api
-lake-io com.ash.lake:lake-hostcompat                until L5
+lake-io com.ash.lake:lake-hostcompat                until L7 (lake-delta and lake-iceberg reach the row and vector types through it)
 lake-io com.fasterxml.jackson.core:jackson-databind
+lake-io com.fasterxml.jackson.dataformat:jackson-dataformat-yaml
 lake-io com.github.ben-manes.caffeine:caffeine
 lake-io org.apache.parquet:parquet-hadoop
 lake-io org.apache.parquet:parquet-column

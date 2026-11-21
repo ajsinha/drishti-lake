@@ -113,16 +113,15 @@ class CodecsTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("SPLIT EXEMPTION (parked, SPLIT_EXEMPTIONS.md): reads the host's shipped packs; L5 (LakeCatalog) gives it a pack of the kit's own")
+    @org.junit.jupiter.api.Disabled("SPLIT EXEMPTION (parked, SPLIT_EXEMPTIONS.md): reads the host's shipped packs; L9 gives it a pack of the kit's own (the parity kit's pack cases)")
     void aPackGivesTheDomainTableLayoutKeyAndFlattenedFieldsAsLakeBuildReadsThem() throws IOException {
-        com.ash.lake.hostcompat.ConfigResolution packs = com.ash.lake.hostcompat.ConfigResolution.repository(
-                java.nio.file.Path.of(TestRoots.module()).getParent().getParent());   // where each shipped pack is (its module's folder)
-        LoadConfig risk = LoadConfig.read(null, List.of("source.files=x.jsonl", "source.pack=" + packs.packDir("market-risk"), "source.date=BUSINESS_DATE",
+        java.nio.file.Path packs = java.nio.file.Path.of(TestRoots.module(), "host-packs");     // the host's shipped packs: not in this repository
+        LoadConfig risk = LoadConfig.read(null, List.of("source.files=x.jsonl", "source.pack=" + packs.resolve("market-risk"), "source.date=BUSINESS_DATE",
                 "target.lake=/l", "target.kind=scenario-pv"));
         assertThat(risk.target().domain()).isEqualTo("risk");
         assertThat(risk.source().vectors()).containsExactly("SCENARIO_PV");
         assertThat(risk.source().promote()).contains("LEGAL_ENTITY", "DESK", "TT_BOOK");
-        LoadConfig trades = LoadConfig.read(null, List.of("source.files=x.jsonl", "source.pack=" + packs.packDir("trading"), "source.connector=trade-endur",
+        LoadConfig trades = LoadConfig.read(null, List.of("source.files=x.jsonl", "source.pack=" + packs.resolve("trading"), "source.connector=trade-endur",
                 "source.as-of=2026-10-15", "target.lake=/l", "target.kind=trade"));
         assertThat(trades.tablePath()).isEqualTo("/l/trading/trade_endur");
         assertThat(trades.source().id()).isEqualTo("TRADE_ID");

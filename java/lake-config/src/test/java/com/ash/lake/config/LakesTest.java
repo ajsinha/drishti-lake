@@ -164,8 +164,7 @@ class LakesTest {
         assertEquals("rest", s.get("catalog"));
         assertEquals("http://c:8181", s.get("uri"));
         assertEquals("risk", s.get("domain"));
-        // SPLIT EXEMPTION (parked check, SPLIT_EXEMPTIONS.md): the host's shipped demo lake (drishti/lakes/demo.yaml) stayed in the
-        // host; its check goes to the host's adapter at L5 (LakeCatalog).
+        // a lake the host ships comes through its LakeCatalog (aLiveModulesShippedLakesAreReadAndLeaveWithIt); its demo lake is its own check
     }
 
     @Test
@@ -263,7 +262,13 @@ class LakesTest {
         Files.writeString(conns.resolve("vendor.yaml"), "plugin: delta\nkinds: [trade]\nsettings:\n  root: s3://vendor/delta\n  domain: trading\n");
         Path lakesDir = Files.createDirectories(tmp.resolve("demo-lakes"));
         Files.writeString(lakesDir.resolve("demo.yaml"), "lake: demo\nroot: /x/demo\ntables:\n  trading.trade_endur: {kind: trade}\n");
-        LakeFiles.Migration m = LakeFiles.adoptDemo(conns, lakesDir, true);
+        com.ash.lake.spi.LakeCatalog before = com.ash.lake.spi.LakeCatalog.use(TestCatalog.WRITERS);   // a host whose domain names a lake writer
+        LakeFiles.Migration m;
+        try {
+            m = LakeFiles.adoptDemo(conns, lakesDir, true);
+        } finally {
+            com.ash.lake.spi.LakeCatalog.use(before);
+        }
         assertEquals(3, m.connectorFiles().size(), m.notes().toString());
         String t = Files.readString(conns.resolve("trading-store.yaml"));
         assertTrue(t.startsWith("# generated") && t.contains("lake: demo") && t.contains("lake-tables: trading.trade_endur") && t.contains("union:")
@@ -371,12 +376,22 @@ class LakesTest {
         Path empty = Files.createDirectories(tmp.resolve("none"));
         try (java.net.URLClassLoader loader = new java.net.URLClassLoader(new java.net.URL[] {tmp.resolve("module").toUri().toURL()}, null)) {
             assertFalse(Lakes.read(empty, ENV).find("mod-official").isPresent());
-            Runnable leave = com.ash.lake.hostcompat.ModuleLoaders.add(loader);
+            com.ash.lake.spi.LakeCatalog before = com.ash.lake.spi.LakeCatalog.use(new com.ash.lake.spi.LakeCatalog() {   // a host's catalog
+                @Override
+                public List<String> shippedLakes() {
+                    return Lakes.shippedIn(loader, "drishti/lakes/shipped.txt");
+                }
+
+                @Override
+                public java.io.InputStream shippedLake(String name) {
+                    return loader.getResourceAsStream("drishti/lakes/" + name + ".yaml");
+                }
+            });
             try {
                 assertTrue(Lakes.shipped().contains("mod-official"));
                 assertEquals("/m", Lakes.read(empty, ENV).get("mod-official").root());
             } finally {
-                leave.run();
+                com.ash.lake.spi.LakeCatalog.use(before);
             }
             assertFalse(Lakes.read(empty, ENV).find("mod-official").isPresent());
         }

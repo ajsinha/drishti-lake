@@ -15,11 +15,14 @@
  */
 package com.ash.lake.config;
 
-import com.ash.lake.hostcompat.DomainVocabulary;
+import com.ash.lake.spi.LakeCatalog;
 import java.util.Set;
 
-/** A module's lake writers for this module's tests, which have no module on the class path. */
-public final class TestVocabulary implements DomainVocabulary {
+/** A host's catalog for the tests: its domain names a lake writer of its own name ({@code var-pv-stream}). */
+public final class TestCatalog implements LakeCatalog {
+
+    /** The catalog with the writer. */
+    static final LakeCatalog WRITERS = new TestCatalog();
 
     @Override
     public Set<String> namedLakeWriters() {

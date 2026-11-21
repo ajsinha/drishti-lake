@@ -209,18 +209,11 @@ public final class LoaderProcess implements LoadRunner {
             cmd.add("-Djava.io.tmpdir=" + tmp.toAbsolutePath());
             cmd.add("-D" + com.ash.lake.LakeOptions.TMP_DIR + "=" + tmp.toAbsolutePath());
             cmd.add("-D" + com.ash.lake.config.Lakes.PROPERTY + "=" + com.ash.lake.config.Lakes.dir().toAbsolutePath());
-            // the launch roots this process resolved (LaunchRoots, the settings file): the loader takes no folder from its working folder.
-            // The data folder is not among them: the lake files' settings (Lakes.environment(), below) give it, as this process reads it
-            // and the module boot's result (KERNEL_AND_MODULES.md section 4.2.1): every module's folder and, after a boot on packages, the
-            // whole value; the loader never boots or unpacks itself
-            // the product's own settings (LakeOptions: lake.home, lake.config.dir, lake.settings.file, ...; not the temp folder, set above)
+            // the settings this process reads (LakeOptions: lake.home, lake.config.dir, lake.settings.file, ...; the named lakes'
+            // lake.<name>.*; not the temp folder, set above): the loader takes no folder from its working folder
             List<String> keys = new ArrayList<>();
             System.getProperties().stringPropertyNames().stream()
                     .filter(k -> k.startsWith("lake.") && !k.equals(com.ash.lake.LakeOptions.TMP_DIR) && !k.equals(com.ash.lake.config.Lakes.PROPERTY))
-                    .sorted().forEach(keys::add);
-            // SPLIT EXEMPTION (L5): the module boot's result, until the pack half leaves for the host's LakeCatalog
-            keys.addAll(List.of(com.ash.lake.hostcompat.ModuleHomes.PROPERTY, "drishti.modules.dev"));
-            System.getProperties().stringPropertyNames().stream().filter(k -> k.startsWith(com.ash.lake.hostcompat.ModuleHomes.DIR_PROPERTY))
                     .sorted().forEach(keys::add);
             for (String key : keys) {
                 String v = System.getProperty(key);
@@ -228,6 +221,8 @@ public final class LoaderProcess implements LoadRunner {
                     cmd.add("-D" + key + "=" + v);
                 }
             }
+            // what the host's catalog needs its child to see (its module boot's result, say)
+            com.ash.lake.spi.LakeCatalog.current().childProcessSettings().forEach((k, v) -> cmd.add("-D" + k + "=" + v));
             cmd.addAll(launch);
             cmd.add("--config");
             cmd.add(config.toAbsolutePath().toString());

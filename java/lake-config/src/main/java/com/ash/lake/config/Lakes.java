@@ -15,7 +15,6 @@
  */
 package com.ash.lake.config;
 
-import com.ash.lake.hostcompat.ModuleLoaders;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import java.io.IOException;
@@ -159,7 +158,7 @@ public final class Lakes {
                 out.put(n, v);
             }
         }
-        out.putAll(com.ash.lake.hostcompat.NamedResources.all("lake"));   // the [lake.<name>] sections: root=, storage.<key>=
+        out.putAll(NamedLakeSettings.all());   // the [lake.<name>] sections: root=, storage.<key>=
         return out;
     }
 
@@ -239,46 +238,31 @@ public final class Lakes {
         return new Lakes(out, dir);
     }
 
-    /** The index each jar that ships lakes carries: one lake name per line ({@code #} comments). */
-    public static final String SHIPPED_INDEX = "drishti/lakes/shipped.txt";
-
-    /** The lakes the kernel's own jars ship (the demo lake). */
-    private static final List<String> CORE = shipped(Lakes.class.getClassLoader());
-
-    /** Each live module loader's index, read once per loader (a module's loader is new at every load). */
-    private static final Map<ClassLoader, List<String>> MODULES = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
-
     /**
-     * The lakes shipped now ({@code drishti/lakes/<name>.yaml}, each a copy of the repository's lake file): the kernel's (the demo lake)
-     * and each live module's own (the banking module's official results), whether its jar is on the class path or it was loaded from a
-     * {@code .dmod} by its own loader ({@link ModuleLoaders#live()}); a module's lakes leave with it. Each jar lists its lakes in
-     * {@value #SHIPPED_INDEX}.
+     * The lakes the host ships now ({@link com.ash.lake.spi.LakeCatalog#shippedLakes()}): its own and each live module's, which leave with
+     * it. None with no host.
      */
     public static List<String> shipped() {
-        java.util.Set<String> out = new java.util.LinkedHashSet<>(CORE);
-        for (ClassLoader l : ModuleLoaders.live()) {
-            out.addAll(MODULES.computeIfAbsent(l, Lakes::shipped));
-        }
-        return List.copyOf(out);
+        return com.ash.lake.spi.LakeCatalog.current().shippedLakes();
     }
 
-    /** A shipped lake's file ({@link #shipped()}): from the kernel's jars, else a live module's; null when none holds it. */
+    /** A shipped lake's file ({@link #shipped()}); null when none holds it. */
     static java.io.InputStream shippedFile(String name) {
-        String res = "drishti/lakes/" + name + ".yaml";
-        java.io.InputStream in = Lakes.class.getClassLoader().getResourceAsStream(res);
-        for (ClassLoader l : ModuleLoaders.live()) {
-            if (in != null) {
-                break;
-            }
-            in = l.getResourceAsStream(res);
-        }
-        return in;
+        return com.ash.lake.spi.LakeCatalog.current().shippedLake(name);
     }
 
-    static List<String> shipped(ClassLoader loader) {
+    /**
+     * The lake names a class loader's index files list, one per line ({@code #} comments): for a host's catalog whose jars carry an
+     * index ({@code index}, a resource path) beside their lake files.
+     */
+    public static List<String> shippedIn(ClassLoader loader, String index) {
+        return shipped(loader, index);
+    }
+
+    static List<String> shipped(ClassLoader loader, String index) {
         java.util.Set<String> out = new java.util.LinkedHashSet<>();
         try {
-            for (java.net.URL u : java.util.Collections.list(loader.getResources(SHIPPED_INDEX))) {
+            for (java.net.URL u : java.util.Collections.list(loader.getResources(index))) {
                 try (java.io.InputStream in = u.openStream()) {
                     for (String line : new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).split("\\R")) {
                         String n = line.replaceFirst("#.*", "").strip();
@@ -289,7 +273,7 @@ public final class Lakes {
                 }
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("cannot read " + SHIPPED_INDEX, e);
+            throw new UncheckedIOException("cannot read " + index, e);
         }
         return List.copyOf(out);
     }
@@ -346,7 +330,7 @@ public final class Lakes {
         if (namedRoot != null && !namedRoot.isBlank()) {
             rootPath = v.resolve("lake." + name + ".root", namedRoot.strip());
         }
-        com.ash.lake.hostcompat.NamedResources.section("lake", name).forEach((k, val) -> {
+        NamedLakeSettings.section(name).forEach((k, val) -> {
             if (k.startsWith("storage.") && k.length() > "storage.".length()) {
                 storage.put(k.substring("storage.".length()), val);
             }

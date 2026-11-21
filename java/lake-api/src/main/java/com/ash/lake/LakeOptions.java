@@ -67,7 +67,17 @@ public final class LakeOptions {
     public static final String ARCHIVE_MAX_RATIO = "lake.archive.max-ratio";
     public static final String ARCHIVE_MAX_MEMBERS = "lake.archive.max-members";
 
+    /** Every key above (a named lake's settings, {@code lake.<name>.*}, are not options). */
+    private static final java.util.Set<String> KEYS = java.util.Set.of(HOME, CONFIG_DIR, DATA_DIR, CONNECTORS_DIR, LAKES_DIR, TMP_DIR,
+            ROW_GROUP_KB, ROW_GROUP_MB, PAGE_KB, PAGE_INDEX, FOOTER_CACHE_MB, DELETE_CACHE_ROWS, MANIFEST_CACHE_BYTES, LOADER_TRACE,
+            ARCHIVE_MAX_MB, ARCHIVE_MAX_RATIO, ARCHIVE_MAX_MEMBERS, "lake.settings.file", "lake.repo.root", "lake.module.root");
+
     private static volatile LakeOptions current;
+
+    /** Whether a key is one of the product's options (not a named lake's setting). */
+    public static boolean isOption(String key) {
+        return KEYS.contains(key);
+    }
 
     private final Function<String, String> source;
     private final boolean process;

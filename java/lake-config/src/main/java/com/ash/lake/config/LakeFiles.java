@@ -15,7 +15,6 @@
  */
 package com.ash.lake.config;
 
-import com.ash.lake.hostcompat.DomainVocabulary;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -238,7 +237,6 @@ public final class LakeFiles {
         return scalar(n.asText());
     }
 
-    private static final java.util.Set<String> LAKE_WRITERS = DomainVocabulary.union(DomainVocabulary::namedLakeWriters);
 
     private static final java.util.Set<String> RESERVED = java.util.Set.of("true", "false", "null", "yes", "no", "on", "off", "y", "n");
 
@@ -304,12 +302,7 @@ public final class LakeFiles {
             if (!Files.isDirectory(root)) {
                 continue;
             }
-            com.ash.lake.hostcompat.ConfigResolution r = com.ash.lake.hostcompat.ConfigResolution.currentOrOffline();
-            if (root.toAbsolutePath().normalize().equals(r.settings().siteDir())) {   // the site's packs folder: every pack the resolution finds
-                r.packs().packs().values().forEach(l -> out.add(l.dir().resolve("pack.yaml")));
-                continue;
-            }
-            com.ash.lake.hostcompat.PackFolders.list(root).stream().map(d -> d.resolve("pack.yaml")).forEach(out::add);   // a given folder and its domain folders
+            out.addAll(com.ash.lake.spi.LakeCatalog.current().packFiles(root.toAbsolutePath().normalize()));   // its packs, its domain folders'
         }
         return out;
     }
@@ -553,7 +546,7 @@ public final class LakeFiles {
      * Moves the connectors that read the demo lake by its old default root ({@link #demoRoot}: generated from a pack's template before the
      * lake form) to {@code lake: demo}, so they follow the demo lake into its own folder ({@code <data>/delta/demo}): each one's tables named
      * by {@code lake-tables:} (its {@code domain} and {@code table.<kind>}, else its kinds), a table the demo lake file lacks added to it from
-     * the connector's layout, every reading setting kept. A named lake writer's ({@link DomainVocabulary#namedLakeWriters()}) {@code lake:} folder in that form becomes the
+     * the connector's layout, every reading setting kept. A named lake writer's ({@link com.ash.lake.spi.LakeCatalog#namedLakeWriters()}) {@code lake:} folder in that form becomes the
      * name {@code demo}. A connector that names its root otherwise (a path or URI of its own) is left as it is: that form is permanent.
      * With {@code write}, each file is kept beside it first ({@code <name>.yaml.before-lake-<time>.bak}).
      */
@@ -599,7 +592,7 @@ public final class LakeFiles {
             String plugin = c.path("plugin").asText();
             Map<String, String> flat = flat(settings);
             ObjectNode rewritten = ((ObjectNode) c).deepCopy();
-            if (LAKE_WRITERS.contains(plugin) && demoRoot(flat.get(ConnectorLake.LAKE))) {
+            if (com.ash.lake.spi.LakeCatalog.current().namedLakeWriters().contains(plugin) && demoRoot(flat.get(ConnectorLake.LAKE))) {
                 ((ObjectNode) rewritten.get("settings")).put(ConnectorLake.LAKE, "demo");
                 connectors.put(f, restamp.apply(Files.readString(f), comments(f) + YAML.writeValueAsString(rewritten)));
                 notes.add(f.getFileName() + ": writes into the demo lake by name now (lake: demo)");

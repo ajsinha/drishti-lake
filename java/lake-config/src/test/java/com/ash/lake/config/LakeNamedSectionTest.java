@@ -17,7 +17,6 @@ package com.ash.lake.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ash.lake.hostcompat.NamedResources;
 import com.ash.lake.Placeholders;
 import com.ash.lake.SettingsFile;
 import java.nio.file.Files;
@@ -43,7 +42,7 @@ class LakeNamedSectionTest {
 
     @BeforeEach
     void processView() {
-        NamedResources.useView(null, null);
+        NamedLakeSettings.useView(null, null);
     }
 
     @AfterEach

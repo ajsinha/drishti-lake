@@ -43,5 +43,10 @@ Entries are written per release; unreleased work is listed first.
   `com.ash.lake.common`; `DataDir` folded into `LakeRoots`. The loader's child process gets the `lake.*` settings. `StartOnFewCoresTest`:
   eight loads at once, Delta and Iceberg, on one carrier thread. Names persisted into tables keep the host's prefix until L7.
   hostcompat 23 → 18, host-word files 79 → 73. Parity kit equal to the reference (30/30).
+- **L5: the configuration divided.** `LakeCatalog` (`com.ash.lake.spi`): what a host adds to the lake configuration (shipped lake
+  files, pack files, connector templates, named lake writers, extensions such as a `ReadyRule`, the child loader's settings); with no
+  host, `LakeCatalog.NONE` (a pack folder read as it lies). The named `[lake.<name>]` settings are the product's (`NamedLakeSettings`).
+  The 12 pack and module types leave hostcompat (18 → 6); one parked check returns (2 → 1). `tools/split/lake_models.py`: the host's
+  lake files read to the same model here and in the reference (15 of 15). Parity kit equal to the reference (30/30).
 - Not moved yet, on purpose (each with its step): the memory lake (L8), the Delta lake opener that chooses the Hadoop engine (L7;
   the engine itself stays in Drishti, LK-9), the files store (L8), the Python path (L10), the contracts tool (L11).
