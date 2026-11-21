@@ -1,0 +1,12 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# from: FileDatesTest (a .ready file beside a dateless file gives its business date; the command line's --as-of wins over it)
+inputs:
+  pv.jsonl: {pv: {n: 15, scenarios: 2, seed: 3}}
+  pv.ready: "business-date: 2026-10-23\n"
+configs:
+  main: |
+    source: {files: '${in}/pv.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+steps:
+  - load: []
+  - load: {config: main, args: [--as-of, '2026-10-22']}

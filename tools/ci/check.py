@@ -3,7 +3,7 @@
 # Drishti Lake. Proprietary: see the LICENSE file at the root of this repository.
 """The repository's one check (the CI entry point, run locally; there is no hosted CI): delta-rs at hand (uv with the pins of
 tools/ci/interop-pins.txt), the build with every test and guard, the Delta interop tests ran with none skipped (both directions with
-delta-rs), then the parity kit twice (its results must be stable) and against the reference results of the freeze commit (the split's
+delta-rs), then the parity kit twice (its results must be stable), its coverage and additive gates (tools/ci/coverage.py), and against the reference results of the freeze commit (the split's
 proof).
 
     python3 tools/ci/check.py [--skip-build] [--reference tck/results/reference-9ce7c3170.jsonl.gz] [--scratch DIR]
@@ -92,6 +92,9 @@ def main(argv=None):
             stable = one.read_bytes() == two.read_bytes()
             print("== parity kit stable over two runs: " + ("yes" if stable else "NO"))
             ok &= stable
+        if ok:
+            ok &= step("coverage (only shrinks) and additive (cases only added) gates",
+                       [sys.executable, str(ROOT / "tools" / "ci" / "coverage.py"), str(one)])
         if ok and Path(a.reference).exists():
             ok &= step("equal to the reference (" + Path(a.reference).name + ")",
                        [sys.executable, str(ROOT / "tools" / "split" / "compare_results.py"), a.reference, str(one)])

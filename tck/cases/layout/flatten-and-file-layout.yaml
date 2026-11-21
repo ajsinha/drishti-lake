@@ -1,0 +1,26 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# from: LakeLoadTest (flatten, the file layout, the loader's resources): two flattened fields from a list of objects, the layout's
+# sort, sizes and codecs, the readers, queue and sort buffer set; every store gives the same rows. Not here: partition-by beside
+# the date, which Iceberg refuses (a parity gap found 2026-11-21; its case comes with the fix)
+inputs:
+  day/pv.2026-10-27.jsonl: {pv: {n: 60, scenarios: 4, seed: 7}}
+config: |
+  source:
+    files: '${in}/day'
+    recursive: true
+    id: POSITION_ID
+    promote: [LEGAL_ENTITY, DESK, BASE_PV]
+    vectors: [SCENARIO_PV]
+    flatten: {LEG1_RATE: 'LEGS[0].RATE', LEG2_NOTIONAL: 'LEGS[1].NOTIONAL'}
+  target:
+    format: ${store}
+    lake: '${lake}'
+    domain: risk
+    kind: scenario-pv
+    layout: {sort-by: [DESK, POSITION_ID], file-size-mb: 1, row-group-mb: 1, compression: zstd, vector-compression: zstd, byte-stream-split: true}
+  parallel: {readers: 2, parsers: 2, writers: 2, queue-mb: 16, split-mb: 1}
+  memory: {budget-mb: 64, sort-buffer-mb: 8, check-spill-space: false}
+  rejects: {max-pct: 50, keep: 5}
+  lock: true
+steps:
+  - load: []

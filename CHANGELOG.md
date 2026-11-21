@@ -168,4 +168,10 @@ Entries are written per release; unreleased work is listed first.
   uses exactly it; test support's libraries (S3Mock and its Spring Boot, JUnit, AssertJ, Logback) stay pinned in the reactor and never
   reach a host. Resolved dependencies of every module unchanged (dependency:list before and after); no Spring Boot bill of materials is
   needed by the product.
+- **L9, fifth part: the kit's coverage and additive gates.** `tools/ci/coverage.py` (run by `check.py`): every loader setting,
+  command-line flag, `.ready` key and `LK-` code is used or shown by a case, measured from the cases and a run; what none covers is in
+  `tck/coverage-baseline.txt`, which only shrinks; `tck/cases.txt` lists every case, and cases are only added. New cases: file layout
+  and flatten, dry run / date-from / mode / progress, a `.ready` file's date: 59 of 103 items covered. Found: Iceberg refuses
+  `partition-by` beside the business date (a parity gap; its case comes with the fix). The host's read API needs written in
+  SPLIT_STATUS (G4 rehearsal).
 - Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).

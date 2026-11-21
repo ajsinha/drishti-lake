@@ -1,0 +1,27 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# Every parity case (tools/ci/coverage.py): cases are only added, never removed or renamed.
+concurrent/two-writers-two-dates
+delete/whole-dates
+inputs/gzip-zstd-and-members
+inputs/tar-by-table-and-date
+inputs/tar-one-folder-deep-refused
+inputs/threads-and-budget
+inputs/zip
+layout/flatten-and-file-layout
+load/append-batch-once
+load/append-without-batch
+load/future-date-refused
+load/loader-rows
+load/rerun-replaces-the-date
+load/two-dates
+load/vector-nulls-and-text
+modes/dry-run-date-from-and-mode
+modes/key-override
+names/ready-file-business-date
+names/special-characters
+rejects/counted-and-named
+rejects/too-many-stop-the-load
+retention/max-rows
+time-travel/versions-and-earlier-rows
+undo/undo-a-replace-restores-the-date
+undo/unknown-load-id

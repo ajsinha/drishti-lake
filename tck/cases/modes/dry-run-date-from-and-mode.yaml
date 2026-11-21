@@ -1,0 +1,21 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# from: LakeLoadTest and FileDatesTest: a dry run writes nothing (--dry-run, --plan); date-from: name refuses a name without a date
+# (--date-from); the date given in the configuration (source.as-of) files a dateless name; --mode replace over a lake's default mode;
+# the run log and the progress file off and on (report.run-log, --no-run-log, --progress)
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 20, scenarios: 2, seed: 1}}
+  plain/pv.jsonl: {pv: {n: 10, scenarios: 2, seed: 2}}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, default-mode: append}
+    report: {run-log: false}
+  plain: |
+    source: {files: '${in}/plain/pv.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV], as-of: '2026-10-26', date-from: auto}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+steps:
+  - load: {config: main, args: [--dry-run]}
+  - load: {config: main, args: [--plan, --json]}
+  - load: {config: plain, args: [--date-from, name, --no-run-log]}
+  - load: {config: main, args: [--mode, replace, --progress, '${work}/progress.json']}
+  - load: {config: plain, args: [--no-run-log]}

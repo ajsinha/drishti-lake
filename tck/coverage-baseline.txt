@@ -1,0 +1,47 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# What no parity case covers yet (tools/ci/coverage.py): a loader setting, flag, .ready key or LK- code. This list ONLY SHRINKS: a
+# case that covers an item takes it out (the gate says which); nothing new is ever added.
+code:LK-1001
+code:LK-1002
+code:LK-1003
+code:LK-1004
+code:LK-1005
+config:datasets
+config:memory.spill-dir
+config:rejects.file
+config:report.dry-run
+config:report.manifest
+config:report.progress
+config:source.archive
+config:source.archive.max-mb
+config:source.archive.max-members
+config:source.archive.max-ratio
+config:source.archive.validate
+config:source.connector
+config:source.dataset
+config:source.latest-by
+config:source.pack
+config:source.storage-options
+config:source.vector
+config:target.iceberg
+config:target.layout.shard-aligned
+config:target.path
+config:target.properties
+config:target.storage-options
+config:target.table
+flag:--dataset
+flag:--kind
+flag:--pack
+ready:connector
+ready:folders
+ready:hold
+ready:key
+ready:kind
+ready:lake
+ready:mode
+ready:new-table
+ready:pack
+ready:rows
+ready:sha256
+ready:table
+config:source.partition-by
