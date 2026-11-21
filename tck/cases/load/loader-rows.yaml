@@ -1,0 +1,27 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# rows already wrapped with their table ({domain, kind, id, date, doc, columns}) load through the one loader on every store
+# (source.format: loader-rows): the document is doc (JSON text or an object), the id is the wrapper's, a promoted value the document
+# lacks comes from columns; a row of another table, or without its document, is rejected with its reason; the file's date decides
+inputs:
+  rows.2026-10-27.jsonl: |
+    {"domain":"risk","kind":"scenario-pv","id":"P-1","date":"2026-10-27","doc":"{\"POSITION_ID\":\"P-1\",\"DESK\":\"DESK-FX\",\"NOTE\":\"café \\\"q\\\"\"}","columns":{"DESK":"DESK-FX","QUANTITY":5}}
+    {"domain":"risk","kind":"scenario-pv","id":"P-2","date":"2026-10-27","doc":{"POSITION_ID":"P-2","DESK":"DESK-RATES","QUANTITY":7,"SCENARIO_PV":[1.5,null,-2]},"columns":{}}
+    {"domain":"risk","kind":"other","id":"X-1","date":"2026-10-27","doc":"{}","columns":{}}
+    {"domain":"risk","kind":"scenario-pv","id":"P-3","date":"2026-10-28","doc":"{\"POSITION_ID\":\"P-3\"}","columns":{"DESK":"DESK-COMM","QUANTITY":-1.5}}
+    {"domain":"risk","kind":"scenario-pv","id":"P-4","date":"2026-10-27","doc":null}
+    {"domain":"risk","kind":"scenario-pv","id":"P-5","doc":"{\"POSITION_ID\":\"P-5\",\"QUANTITY\":3}","columns":{"DESK":"DESK-CREDIT"}}
+config: |
+  source:
+    files: '${in}/*'
+    format: loader-rows
+    promote: [DESK, QUANTITY]
+    vectors: [SCENARIO_PV]
+  target:
+    format: ${store}
+    lake: '${lake}'
+    domain: risk
+    kind: scenario-pv
+  rejects:
+    max-pct: 50
+steps:
+  - load: []

@@ -62,16 +62,19 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
     /** The input files and what a row is. */
     record Source(List<String> files, boolean recursive, Map<String, String> storage, String id, String date, LocalDate asOf,
             List<String> promote, List<String> vectors, Map<String, String> flatten, List<String> partitionBy, String latestBy, String dateFrom,
-            Map<String, String> set, Map<String, String> slice) {
+            Map<String, String> set, Map<String, String> slice, String loaderRowsOf) {
         Source(List<String> files, boolean recursive, Map<String, String> storage, String id, String date, LocalDate asOf, List<String> promote,
                 List<String> vectors, Map<String, String> flatten, List<String> partitionBy, String latestBy, String dateFrom) {
-            this(files, recursive, storage, id, date, asOf, promote, vectors, flatten, partitionBy, latestBy, dateFrom, Map.of(), Map.of());
+            this(files, recursive, storage, id, date, asOf, promote, vectors, flatten, partitionBy, latestBy, dateFrom, Map.of(), Map.of(), null);
         }
 
         /**
          * {@code set}: the connector's constants, stamped into rows that lack the field; {@code slice}: those of them that split a table
          * several connectors write (by column), so a replace takes out only this load's slice of a date ({@link #withSlice}); empty: the
-         * table is the load's alone and a replace takes the whole date.
+         * table is the load's alone and a replace takes the whole date. {@code loaderRowsOf}: null for documents (one entity a line); for
+         * {@code format: loader-rows}, the {@code <domain>/<kind>} the rows must name (each line {@code {domain, kind, id, date, doc,
+         * columns}}: the document is {@code doc}, the id {@code id}, the row's own date {@code date}, a promoted value missing from the
+         * document taken from {@code columns}).
          */
         Source {
             slice = slice == null ? Map.of() : Map.copyOf(slice);
@@ -127,6 +130,8 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
 
     /** The timestamp field that decides which of an id's records on one date is kept (CLI_REFERENCE.md section 4.13); blank: the last read. */
     static final String DEFAULT_LATEST_BY = "COMPUTED_AT";
+    /** {@code source.format} of rows already wrapped with their table: {@code {domain, kind, id, date, doc, columns}} a line. */
+    static final String LOADER_ROWS = "loader-rows";
     static final List<String> DEFAULT_SORT = List.of("LEGAL_ENTITY", "DESK", "id");
     private static final Set<String> SECRETS = Set.of("access-key", "secret-key", "s3.access-key", "s3.secret-key", "session-token",
             "s3.session-token", "credential", "token");
@@ -330,7 +335,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
                     + " in the lake file's entry), or give each connector its own table (DATA_LAKE_GUIDE.md section 16.2)");
         }
         return new Source(src.files(), src.recursive(), src.storage(), src.id(), src.date(), src.asOf(), src.promote(), src.vectors(), src.flatten(),
-                src.partitionBy(), src.latestBy(), src.dateFrom(), src.set(), slice);
+                src.partitionBy(), src.latestBy(), src.dateFrom(), src.set(), slice, src.loaderRowsOf());
     }
 
     /** A connector's table as the site's own connector file names it ({@code settings.lake-tables}, its first entry's table), else the template's. */
@@ -366,9 +371,18 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         check("report", rp);
         check("source.archive", s.path("archive"));
         String format = r.text(s, "format", "jsonl").toLowerCase(Locale.ROOT);
-        if (!format.equals("jsonl") && !format.equals("ndjson")) {
-            throw new IllegalArgumentException("source.format " + format + ": the loader reads JSON Lines (jsonl); a JSON array goes through "
-                    + "drishti.py lake build's Python path");
+        if (!format.equals("jsonl") && !format.equals("ndjson") && !format.equals(LOADER_ROWS)) {
+            throw new IllegalArgumentException("source.format " + format + ": the loader reads JSON Lines (jsonl: a document a line), or "
+                    + "loader rows (loader-rows: {domain, kind, id, date, doc, columns} a line)");
+        }
+        String loaderRowsOf = null;
+        if (format.equals(LOADER_ROWS)) {
+            String d = r.text(t, "domain", null);
+            String k = r.text(t, "kind", null);
+            if (d == null || k == null) {
+                throw new IllegalArgumentException("source.format loader-rows: name target.domain and target.kind (the rows of other tables are rejected)");
+            }
+            loaderRowsOf = d + "/" + k;
         }
         List<String> files = r.list(s, "files");
         if (files.isEmpty()) {
@@ -464,7 +478,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         Map<String, String> sourceStorage = storage(r, s.path("storage-options"), "source.storage-options");
         Source src = new Source(files, r.bool(s, "recursive", false), sourceStorage, id == null ? "id" : id, date, asOf, promote, vectors, flatten,
                 entry != null ? entry.partitionBy() : r.list(s, "partition-by"), latestBy == null ? DEFAULT_LATEST_BY : latestBy.strip(), dateFrom,
-                constants, Map.of());
+                constants, Map.of(), loaderRowsOf);
 
         String tf =r.text(t, "format", entry != null ? entry.format() : "delta").toLowerCase(Locale.ROOT);
         if (entry != null) {

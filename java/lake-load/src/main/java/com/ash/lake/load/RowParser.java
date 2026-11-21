@@ -77,6 +77,12 @@ final class RowParser {
     private final Node root = new Node();
     private final Cap[] caps;
     private final int keySlot;
+    /** A loader row's own values (no document field has these names): its id and its date. */
+    private static final String WRAP_ID = "\u0000id";
+    private static final String WRAP_DATE = "\u0000date";
+    private static final com.fasterxml.jackson.databind.ObjectMapper TREE = new com.fasterxml.jackson.databind.ObjectMapper();
+    /** Loader rows: per promoted column, the wrapper's {@code columns} value (used when the document has none); null for documents. */
+    private final Cap[] wrapColumns;
     private final int dateSlot;
     private final int latestSlot;
     private final int[] promotedSlots;
@@ -133,8 +139,10 @@ final class RowParser {
     RowParser(RowPlan plan) {
         this.plan = plan;
         Map<String, Integer> slots = new HashMap<>();
-        keySlot = slot(slots, plan.key, false);
-        dateSlot = plan.date == null ? -1 : slot(slots, plan.date, false);
+        boolean wrapped = plan.loaderRowsOf != null;              // loader rows: the id and the row's date are the wrapper's, never a document field
+        keySlot = slot(slots, wrapped ? WRAP_ID : plan.key, false);
+        dateSlot = wrapped ? slot(slots, WRAP_DATE, false) : plan.date == null ? -1 : slot(slots, plan.date, false);
+        wrapColumns = wrapped ? new Cap[plan.promoted.size()] : null;
         latestSlot = plan.latestBy == null ? -1 : slot(slots, plan.latestBy, false);
         promotedSlots = new int[plan.promoted.size()];
         for (int i = 0; i < promotedSlots.length; i++) {
@@ -228,6 +236,89 @@ final class RowParser {
      * else the reason it is rejected.
      */
     String parse(byte[] a, int off, int len) {
+        if (wrapColumns != null) {
+            return loaderRow(a, off, len);
+        }
+        String bad = document(a, off, len);
+        return bad != null ? bad : row();
+    }
+
+    /**
+     * A loader row ({@code {domain, kind, id, date, doc, columns}}): the document is {@code doc} (JSON text or an object), the id the
+     * wrapper's {@code id}, the row's own date its {@code date} (only counted against its file's date, as a document's), and a promoted
+     * value the document lacks is the wrapper's {@code columns} value (a scalar). A row of another table is rejected.
+     */
+    private String loaderRow(byte[] a, int off, int len) {
+        com.fasterxml.jackson.databind.JsonNode w;
+        try {
+            w = TREE.readTree(a, off, len);
+        } catch (IOException e) {
+            String m = e.getMessage();
+            int nl = m == null ? -1 : m.indexOf('\n');
+            return "not JSON (" + (m == null ? e.getClass().getSimpleName() : nl < 0 ? m : m.substring(0, nl)) + ")";
+        }
+        if (w == null || !w.isObject()) {
+            return "not a JSON object";
+        }
+        String table = w.path("domain").asText("") + "/" + w.path("kind").asText("");
+        if (!table.equals(plan.loaderRowsOf)) {
+            return "a loader row of " + table + ", not this load's " + plan.loaderRowsOf;
+        }
+        com.fasterxml.jackson.databind.JsonNode d = w.get("doc");
+        byte[] doc;
+        try {
+            doc = d == null || d.isNull() ? null : d.isTextual() ? d.asText().getBytes(StandardCharsets.UTF_8) : TREE.writeValueAsBytes(d);
+        } catch (IOException e) {
+            return "not JSON (" + e.getMessage() + ")";
+        }
+        if (doc == null) {
+            return "a loader row without its document (doc)";
+        }
+        String bad = document(doc, 0, doc.length);
+        if (bad != null) {
+            return bad;
+        }
+        wrapped(caps[keySlot], w.get("id"));
+        wrapped(caps[dateSlot], w.get("date"));
+        com.fasterxml.jackson.databind.JsonNode cols = w.path("columns");
+        for (int i = 0; i < wrapColumns.length; i++) {
+            com.fasterxml.jackson.databind.JsonNode v = cols.get(plan.promoted.get(i).column());
+            if (v == null) {
+                v = cols.get(plan.promoted.get(i).path());
+            }
+            if (wrapColumns[i] == null) {
+                wrapColumns[i] = new Cap();
+            }
+            wrapped(wrapColumns[i], v != null && v.isContainerNode() ? null : v);
+        }
+        return row();
+    }
+
+    /** A wrapper's scalar value as a caught one (missing for none). */
+    private static void wrapped(Cap c, com.fasterxml.jackson.databind.JsonNode v) {
+        if (v == null || v.isMissingNode()) {
+            c.kind = Cap.MISSING;
+        } else if (v.isNull()) {
+            c.kind = Cap.NULLV;
+        } else if (v.isIntegralNumber()) {
+            c.kind = Cap.INT;
+            c.text = PyJson.intText(v.asText());
+            c.num = v.asDouble();
+        } else if (v.isNumber()) {
+            c.kind = Cap.FLOAT;
+            c.num = v.asDouble();
+            c.text = PyJson.floatRepr(c.num);
+        } else if (v.isBoolean()) {
+            c.kind = Cap.BOOL;
+            c.text = v.asText();
+        } else {
+            c.kind = Cap.STRING;
+            c.text = v.asText();
+        }
+    }
+
+    /** Parses one document into {@link #caps}, the vectors and the document written again; null when it reads, else the reason. */
+    private String document(byte[] a, int off, int len) {
         for (Cap c : caps) {
             c.kind = Cap.MISSING;
         }
@@ -260,7 +351,7 @@ final class RowParser {
         } catch (IOException e) {
             return "not JSON (" + e.getMessage() + ")";
         }
-        return row();
+        return null;
     }
 
     // ------------------------------------------------------------------------------------------------ the document, written again
@@ -657,7 +748,7 @@ final class RowParser {
                 return caps[flattenSlots[f]];
             }
         }
-        return c;
+        return wrapColumns != null && wrapColumns[i] != null ? wrapColumns[i] : c;
     }
 
     private void sortComponent(Cap c, int promotedIndex) {

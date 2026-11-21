@@ -49,9 +49,10 @@ runtime to every call (`LakeLoad.run(runtime, ..)`, `DataLoadSettings`, `Catalog
    published from it), its lines carry the typed columns (promoted, `list<string>`, vectors, load columns; one rule with Delta's,
    `PromotedValues`), an append's batch is committed once, undo goes through the store (`LakeUndo` finds files tables), deletes and row
    retention commit to the log; every parity case runs on all three stores and the files line must equal the Delta line
-   (`compare_results.py`). `JsonlLoader`
-   (rows already wrapped with domain and kind) is a second writer of the files store beside the loader's `FilesWriter`: L10 folds it
-   into the loader (one way per job).
+   (`compare_results.py`). `JsonlLoader` is folded into the loader (`source.format: loader-rows`; parity case `load/loader-rows`).
+   Delta interop with delta-rs runs both ways in every check (`DeltaInteropTest`, pins in `tools/ci/interop-pins.txt`). Left of the
+   same kind: `IcebergLoader` (lake-iceberg) is a second writer of loader rows into Iceberg (external sort, `--keep-days`); fold it into
+   the loader the same way.
 2. The parity kit grows toward the 60% harvest as each step goes (child tables, list columns, promoted columns, flatten, latest-by,
    `.ready`, relocate, maintenance).
 3. The owner names when `v0.9.0` may be tagged.

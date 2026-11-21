@@ -57,7 +57,7 @@ import java.util.Optional;
  * index is kept until the file changes, so a bad file is read once, not on every request.
  *
  * <p>The index holds the file it read open, so a read always uses offsets into the file they came from: a file
- * replaced by a rename (as {@link JsonlLoader} does) stays the old file to this index until a newer index replaces
+ * replaced by a rename (as the files store publishes a day) stays the old file to this index until a newer index replaces
  * it, and {@link #close()} releases it. A file rewritten in place is caught by checking the id of the line read.
  */
 final class JsonlDay implements AutoCloseable {

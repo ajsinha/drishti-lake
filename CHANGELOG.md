@@ -111,4 +111,11 @@ Entries are written per release; unreleased work is listed first.
   value recorded as `""` as an empty string; the protocol (and Spark, delta-rs) read it as null. The memory lake's delete and retention
   parity tests read through delta-rs the same way (they skipped before). `tools/ci/check.py`: delta-rs at hand first, then the interop
   tests' reports must show them run with none skipped.
+- **One loader: `JsonlLoader` folded in.** The loader reads rows already wrapped with their table (`source.format: loader-rows`,
+  `{domain, kind, id, date, doc, columns}` a line, into `target.domain`/`target.kind`, on every store): the document is `doc` (JSON
+  text or an object), the id the wrapper's, the row's own date only counted against its file's date, a promoted value the document
+  lacks taken from `columns`; a row of another table or without its document is rejected with its reason. `JsonlLoader` (the files
+  store's second writer) is deleted; parity case `load/loader-rows` equal on Delta, Iceberg, files and the memory row. For the host's
+  adapter (G4): `data load --store files` becomes the loader with `format: loader-rows`, one table a load (a tar's
+  `<kind>/<date>/` members as the loader's archives).
 - Not moved yet, on purpose (each with its step): the memory lake (L8, part 2), the Python path (L10), the contracts tool (L11).

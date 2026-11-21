@@ -10,7 +10,7 @@ go down from its value at the move. **This list only shrinks**; at `v1.0.0` it i
 ## Counts (read by the guards)
 
 - hostcompat types: 0
-- host-word files: 70
+- host-word files: 68
 - parked checks: 1
 
 ## Dependencies

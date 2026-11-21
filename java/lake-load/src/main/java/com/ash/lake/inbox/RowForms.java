@@ -30,8 +30,8 @@ import java.util.zip.GZIPInputStream;
 /**
  * The self-describing row forms (DATA_LAKE_GUIDE.md section 5.1; DATA_GUIDE.md section 2.2): <i>loader rows</i>
  * {@code {domain, kind, id, date, doc, columns}} and <i>lake rows</i> {@code {domain, kind, table, id, date, doc}}. The parallel lake loader
- * reads documents (one entity a line) and has no reader for these forms, and the inbox writes no second one: a file whose first line is
- * such a row is refused with the reason and the tool that loads it. Only the first line of a plain, gzip or zstd file is looked at (an
+ * reads documents (one entity a line), loader rows only when a load says so ({@code source.format: loader-rows}), and the inbox writes no
+ * second reader: a file whose first line is such a row is refused with the reason and the way to load it. Only the first line of a plain, gzip or zstd file is looked at (an
  * archive's members are the loader's to read; rows of these forms there are rejected by the load for want of the pack's id field).
  */
 public final class RowForms {
@@ -57,9 +57,8 @@ public final class RowForms {
                     + "and has no reader for lake rows, so the inbox does not load them; load them with tools/samplegen/load_rows.py, or drop "
                     + "the documents themselves";
         }
-        return name + " holds loader rows ({domain, kind, id, date, doc, columns}): the parallel lake loader reads documents (one entity a "
-                + "line) and has no reader for loader rows, so the inbox does not load them; load them with the store's own loader "
-                + "(drishti.py data load), or drop the documents themselves";
+        return name + " holds loader rows ({domain, kind, id, date, doc, columns}): the inbox loads documents (one entity a line), so it "
+                + "does not load them; load them with the loader's source.format: loader-rows (one table a load), or drop the documents themselves";
     }
 
     /** The first non-blank line as JSON (null: none, or not JSON), through gzip or zstd when the file's first bytes say so. */

@@ -52,6 +52,8 @@ final class RowPlan {
 
     final String key;
     final boolean keyTop;
+    /** Null for documents; for loader rows, the {@code <domain>/<kind>} each row must name ({@link LoadConfig.Source#loaderRowsOf}). */
+    final String loaderRowsOf;
     final String date;
     final java.time.LocalDate asOf;
     /** {@code auto} or {@code name}: how a file without {@code as-of} gets its business date ({@link FileDates#decide}). */
@@ -88,6 +90,7 @@ final class RowPlan {
     final List<String> sortNames = new ArrayList<>();
 
     RowPlan(LoadConfig.Source s, List<String> sortBy) {
+        this.loaderRowsOf = s.loaderRowsOf();
         this.key = s.id();
         this.keyTop = !key.contains(".");
         this.date = s.date();
