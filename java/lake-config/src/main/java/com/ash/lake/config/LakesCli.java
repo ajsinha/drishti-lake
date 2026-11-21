@@ -53,9 +53,18 @@ public final class LakesCli {
         System.exit(run(args, System.out));
     }
 
-    static int run(String[] args, PrintStream out) {
+    /** A command line: the process's settings, no host ({@link com.ash.lake.LakeRuntime#fromProcess}). */
+    public static int run(String[] args, PrintStream out) {
+        return run(com.ash.lake.LakeRuntime.fromProcess(), args, out);
+    }
+
+    /**
+     * The commands with {@code runtime}: a host's main runs them with its own runtime (its catalog: shipped lakes, its pack resolution),
+     * as {@code LakeLoad.run(runtime, args, out)} does the loader. Exit 0, or 2 with {@code {"error": ...}}.
+     */
+    public static int run(com.ash.lake.LakeRuntime runtime, String[] args, PrintStream out) {
         try {
-            out.println(JSON.writeValueAsString(command(args)));
+            out.println(JSON.writeValueAsString(command(runtime, args)));
             return 0;
         } catch (IllegalArgumentException | java.io.IOException | java.io.UncheckedIOException e) {
             try {
@@ -67,12 +76,11 @@ public final class LakesCli {
         }
     }
 
-    static Object command(String[] args) throws java.io.IOException {
+    static Object command(com.ash.lake.LakeRuntime rt, String[] args) throws java.io.IOException {
         if (args.length == 0) {
             throw new IllegalArgumentException("give a command: dump, table, migrate-config, add-entry or pack-tables (check: com.ash.lake.load.LakeCheck)");
         }
         Map<String, String> o = options(args);
-        com.ash.lake.LakeRuntime rt = com.ash.lake.LakeRuntime.fromProcess();   // a command line: the process's settings, no host
         Path dir = o.containsKey("dir") ? Path.of(o.get("dir")) : Lakes.dir(rt);
         switch (args[0]) {
             case "dump" -> {

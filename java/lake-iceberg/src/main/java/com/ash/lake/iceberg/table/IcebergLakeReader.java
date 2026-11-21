@@ -44,8 +44,14 @@ public final class IcebergLakeReader implements LakeReader {
     final String root;
     final ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<String, IcebergTableReader> tables = new ConcurrentHashMap<>();
+    private final Map<String, com.ash.lake.io.read.ForeignTableReader> foreign = new ConcurrentHashMap<>();
+    private final Map<List<String>, com.ash.lake.iceberg.catalog.Catalog> namespaces = new ConcurrentHashMap<>();
+    private final com.ash.lake.LakeRuntime runtime;
+    private final Map<String, String> settings;
 
-    private IcebergLakeReader(LakeTables lake, LakeAddress address) {
+    private IcebergLakeReader(com.ash.lake.LakeRuntime runtime, Map<String, String> settings, LakeTables lake, LakeAddress address) {
+        this.runtime = runtime;
+        this.settings = settings;
         this.lake = lake;
         this.root = address.root();
         this.problems = new Problems(lake.describe(), IcebergLakeReader::reason);
@@ -57,7 +63,7 @@ public final class IcebergLakeReader implements LakeReader {
         settings.put("root", address.root());
         settings.put("domain", address.domain());
         address.tableNames().forEach((k, v) -> settings.put("table." + k, v));
-        return new IcebergLakeReader(LakeTables.open(runtime, settings), address);
+        return new IcebergLakeReader(runtime, settings, LakeTables.open(runtime, settings), address);
     }
 
     static String reason(Throwable e) {
@@ -90,6 +96,26 @@ public final class IcebergLakeReader implements LakeReader {
         return tables.computeIfAbsent(name, n -> new IcebergTableReader(this, n));
     }
 
+    /**
+     * A table other engines wrote, in the reader's domain or (a {@code namespace.table}) under that namespace: a REST catalog's namespace,
+     * or the folder {@code <root>/<levels…>}.
+     */
+    @Override
+    public TableReader foreign(String name, com.ash.lake.read.TableShape shape) {
+        com.ash.lake.iceberg.catalog.Catalog catalog = shape.namespace().isEmpty() ? lake.catalog()
+                : namespaces.computeIfAbsent(shape.namespace(), ns -> {
+                    Map<String, String> s = new java.util.LinkedHashMap<>(settings);
+                    if ("rest".equalsIgnoreCase(s.getOrDefault("catalog", "")) || com.ash.lake.iceberg.catalog.S3Tables.named(s)) {
+                        s.put("namespace", String.join(".", ns));
+                    } else {
+                        s.put("domain", String.join("/", ns));
+                    }
+                    return com.ash.lake.iceberg.catalog.Catalogs.open(runtime, s);
+                });
+        return foreign.computeIfAbsent(name + "\u001f" + shape, k -> new com.ash.lake.io.read.ForeignTableReader(name, shape,
+                new IcebergForeign(catalog, shape.tableName(), pool), pool, problems));
+    }
+
     @Override
     public LakeHealth health(Instant now) {
         List<String> notes = new ArrayList<>();
@@ -112,11 +138,13 @@ public final class IcebergLakeReader implements LakeReader {
     @Override
     public void refresh() {
         tables.values().forEach(IcebergTableReader::refresh);
+        foreign.values().forEach(com.ash.lake.io.read.ForeignTableReader::forget);
     }
 
     @Override
     public void purge() {
         tables.values().forEach(IcebergTableReader::forget);
+        foreign.values().forEach(com.ash.lake.io.read.ForeignTableReader::forget);
     }
 
     @Override
@@ -127,6 +155,9 @@ public final class IcebergLakeReader implements LakeReader {
     @Override
     public void close() {
         try {
+            for (var c : namespaces.values()) {
+                c.close();
+            }
             lake.close();
         } catch (IOException e) {
             throw new java.io.UncheckedIOException(e);

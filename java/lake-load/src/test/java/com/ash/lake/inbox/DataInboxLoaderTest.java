@@ -258,6 +258,17 @@ class DataInboxLoaderTest {
             z.closeEntry();
         }
         assertThat(LoaderProcess.launch(boot.toString())).containsExactly("-Dloader.main=com.ash.lake.load.LakeLoad", "-jar", boot.toString());
+        // a host's catalog names its own main (it reads with the host's catalog, then runs LakeLoad.run with that runtime)
+        assertThat(LoaderProcess.launch(boot.toString(), "host.LoadMain")).containsExactly("-Dloader.main=host.LoadMain", "-jar", boot.toString());
+        assertThat(LoaderProcess.launch("/a/x.jar", "host.LoadMain")).containsExactly("-cp", "/a/x.jar", "host.LoadMain");
+        com.ash.lake.LakeRuntime host = com.ash.lake.LakeRuntime.builder().catalog(new com.ash.lake.spi.LakeCatalog() {
+            @Override
+            public String loaderMain() {
+                return "host.LoadMain";
+            }
+        }).build();
+        assertThat(host.catalog().loaderMain()).isEqualTo("host.LoadMain");
+        assertThat(com.ash.lake.spi.LakeCatalog.NONE.loaderMain()).isNull();
     }
 
     @Test

@@ -23,11 +23,13 @@ modes/key-override
 names/ready-file-business-date
 names/special-characters
 read/all-rows-in-file-order
+read/as-of-before-first-commit
 read/as-of-version-and-time
 read/by-id-and-all
 read/days-files-and-counts
 read/deleted-rows-not-read
 read/float32-and-null-vector
+read/foreign-table-shaped
 read/ids-and-file-of-id
 read/keep-prunes-files
 read/mapped-equals-heap

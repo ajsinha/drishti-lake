@@ -454,6 +454,21 @@ S8b: Delta. S8c: files. S8d: the case on every store and row; the plugin's mappi
 `ExternalTable`, `JsonValues` replaced by `TableShape` and the API; `IdIndex`, caches and refresh stay in the adapter). About two
 days of an Opus builder; RA-9 stands (last; if it slips past G4, the plugin is an exemption with an end date).
 
+**As built (2026-11-21).** `com.ash.lake.read.TableShape` (record; `of(kind, settings)`, `all(settings)`, `kindOf`) and
+`LakeReader.foreign(name, shape)` on every store; `DataFile.exact` (false for a foreign file listed under a date it may share). The rule
+is `lake-io` `com.ash.lake.io.read`: `ShapedTable` (resolve, dates, ids, pruning by bounds), `ShapedDocument` (the JSON of a row, the
+rendering Iceberg's `JsonValues` had: deleted, its interop test now checks `ShapedDocument` against the fixtures), `ShapedSnapshot` (every
+`TableSnapshot` read once), `ForeignTableReader`; each store gives a `ForeignSource` only (`IcebergForeign`: planning, bounds, delete
+files, row groups pruned by an id; `DeltaForeign`: the Kernel, partition values and statistics, deletion vectors; `FilesForeign`:
+`<domain>/<table>/*.jsonl[.gz]`, the date in the name by the loader's rule, column kinds from the values, no earlier versions). A shape the
+table cannot answer is `LK-1001` in the plugin's words. Where it applies: tables on local disk and object stores through each store's
+reader (Delta, Iceberg: catalogs and S3 Tables through the reader's settings; a `namespace.table` opens that namespace); a memory lake
+holds no other engine's tables, so the case runs on the local rows only (`local-only`); the files store reads local disk only (as its
+layout reader). Differences, stated: the files store's version is its folder's present state (no time travel), and its text values that
+are ISO dates or instants with a zone read as dates and timestamps (rendered back in the one form: `...Z`, UTC). `IcebergExternalPlugin`'s
+`Shape`, `KindConfig`, `ExternalTable` (and the moved copies in `lake-iceberg`, deleted) map to `TableShape`, `LakeReader.foreign` and
+`TableSnapshot`; its `IdIndex`, caches, refresh and links stay in the adapter (G4).
+
 ## 9. Decisions RA-1 to RA-12
 
 | # | Decision | Recommendation |

@@ -74,6 +74,24 @@ def write_input(work, name, spec):
     p.write_bytes(b)
 
 
+def write_foreign(store, lake, domain, spec):
+    """Tables other engines wrote (a case's `foreign:` list, READ_API.md RA-S8): tools/ci/foreign_tables.py writes the spec's tables by the
+    store's own other writer (delta-rs, pyiceberg, plain JSON Lines) under uv with the pins of interop-pins.txt and foreign-pins.txt,
+    offline first. Never skipped: without uv the case fails, naming it."""
+    uv = shutil.which("uv") or str(Path.home() / ".local" / "bin" / "uv")
+    pins = [l.strip() for f in ("interop-pins.txt", "foreign-pins.txt") for l in (ROOT / "tools" / "ci" / f).read_text().splitlines()
+            if l.strip() and not l.startswith("#")]
+    cmd = [x for p in pins for x in ("--with", p)] + ["python", "-I", str(ROOT / "tools" / "ci" / "foreign_tables.py"), store, lake, domain,
+                                                      str(spec)]
+    err = ""
+    for offline in (["--offline"], []):
+        p = subprocess.run([uv, "run", "--quiet", "--no-project"] + offline + cmd, capture_output=True, text=True, timeout=300)
+        if p.returncode == 0:
+            return
+        err = p.stderr[-2000:]
+    raise SystemExit(f"foreign tables for {store} at {lake} not written: {err}")
+
+
 def subst(x, env):
     if isinstance(x, str):
         for k, v in env.items():
@@ -139,7 +157,9 @@ def jobs(cases, scratch, stores=None, storages=("local",), loaders=("java",)):
             env = {"work": str(work), "lake": lake, "in": str(work / "in"), "store": store}
             for n, spec in (c.get("inputs") or {}).items():
                 write_input(work / "in", n, spec)
-            configs = c.get("configs") or {"main": c["config"]}
+            for f in c.get("foreign") or []:
+                write_foreign(store, lake, f["domain"], work / "in" / f["spec"])
+            configs = c.get("configs") or ({"main": c["config"]} if "config" in c else {})
             for k, y in configs.items():
                 (work / f"{k}.yaml").write_text(subst(y, env), encoding="utf-8")
             steps = [step(s, work, env, loader) for s in c["steps"]]

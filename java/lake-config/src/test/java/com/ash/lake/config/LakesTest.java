@@ -371,6 +371,10 @@ class LakesTest {
             assertTrue(Lakes.shipped(host).contains("mod-official"));
             assertEquals("/m", Lakes.read(host, empty).get("mod-official").root());
             assertFalse(Lakes.read(empty, ENV).find("mod-official").isPresent());
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();   // the command line with the host's runtime sees it too
+            assertEquals(0, LakesCli.run(host, new String[] {"table", "--dir", empty.toString(), "--lake", "mod-official", "--kind", "x"},
+                    new java.io.PrintStream(out, true, java.nio.charset.StandardCharsets.UTF_8)));
+            assertTrue(out.toString(java.nio.charset.StandardCharsets.UTF_8).contains("\"root\" : \"/m\""), out.toString());
         }
     }
 

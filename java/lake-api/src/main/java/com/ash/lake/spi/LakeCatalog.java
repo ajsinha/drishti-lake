@@ -96,4 +96,14 @@ public interface LakeCatalog {
     default Map<String, String> childProcessSettings() {
         return Map.of();
     }
+
+    /**
+     * The main class a load's child process starts (the data inbox's loader): null, the product's {@code com.ash.lake.load.LakeLoad}.
+     * A host names its own main when the child must read with this catalog too (its shipped lakes, its packs): that main builds the
+     * child's runtime with the host's catalog and runs {@code LakeLoad.run(runtime, args, out)}; it takes the same arguments and gives the
+     * same exit codes. The child gets {@link #childProcessSettings} as system properties.
+     */
+    default String loaderMain() {
+        return null;
+    }
 }

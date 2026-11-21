@@ -91,8 +91,22 @@ final class DeltaTableReader implements TableReader {
             long ms = asOf.time().toEpochMilli();
             return Optional.of(ms >= latest.getTimestamp(t.engine()) ? latest : table.getSnapshotAsOfTimestamp(t.engine(), ms));
         } catch (io.delta.kernel.exceptions.KernelException | IllegalArgumentException e) {
+            if (asOf.time() != null && beforeFirstCommit(e)) {
+                return Optional.empty();                          // a time before the first commit: no table then
+            }
             throw new IOException(asOf.missing(t.path()), e);
         }
+    }
+
+    private static final java.util.regex.Pattern EARLIEST = java.util.regex.Pattern.compile("before the earliest available version (\\d+)\\.");
+
+    /**
+     * Whether the Kernel refused a time for being before the table's first commit (its earliest version is 0), not before a log the
+     * retention truncated (an earlier state that existed and cannot be read: still refused).
+     */
+    static boolean beforeFirstCommit(Exception e) {
+        java.util.regex.Matcher m = EARLIEST.matcher(String.valueOf(e.getMessage()));
+        return m.find() && m.group(1).equals("0");
     }
 
     @Override

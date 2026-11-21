@@ -52,6 +52,8 @@ final class FilesLakeReader implements LakeReader {
     final Map<String, String> names;
     final Problems problems;
     private final Map<String, Table> tables = new ConcurrentHashMap<>();
+    private final Map<String, com.ash.lake.io.read.ForeignTableReader> foreign = new ConcurrentHashMap<>();
+    private final java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
 
     FilesLakeReader(LakeAddress address) {
         this.root = address.root();
@@ -110,6 +112,18 @@ final class FilesLakeReader implements LakeReader {
         return tables.computeIfAbsent(name, n -> new Table(n));
     }
 
+    /**
+     * A folder of JSON Lines other systems wrote: {@code <domain>/<table>/}, or (a {@code namespace.table}) {@code <levels…>/<table>/}
+     * under the lake's root (local disk).
+     */
+    @Override
+    public TableReader foreign(String name, com.ash.lake.read.TableShape shape) {
+        Path base = shape.namespace().isEmpty() ? domainDir : FilesStore.local(root).resolve(String.join("/", shape.namespace()));
+        Path dir = base.resolve(shape.tableName());
+        return foreign.computeIfAbsent(name + "\u001f" + shape, k -> new com.ash.lake.io.read.ForeignTableReader(name, shape,
+                new FilesForeign(dir), pool, problems));
+    }
+
     @Override
     public LakeHealth health(Instant now) {
         return new LakeHealth(Files.isDirectory(domainDir), false, domainDir.toString(), "files", List.of());
@@ -123,6 +137,7 @@ final class FilesLakeReader implements LakeReader {
     @Override
     public void refresh() {
         tables.values().forEach(Table::forget);
+        foreign.values().forEach(com.ash.lake.io.read.ForeignTableReader::forget);
     }
 
     @Override
@@ -138,6 +153,7 @@ final class FilesLakeReader implements LakeReader {
     @Override
     public void close() {
         refresh();                                               // the snapshots' indexes hold their files open
+        pool.close();
     }
 
     /** One table: its snapshots per version (the newest four). */
@@ -203,6 +219,9 @@ final class FilesLakeReader implements LakeReader {
                     List<TableVersion> versions = new ArrayList<>();
                     commits.forEach(c -> versions.add(new TableVersion(c.version(), Instant.ofEpochMilli(c.at()))));
                     TableVersion at = asOf.latest() ? versions.get(versions.size() - 1) : asOf.resolve(versions);
+                    if (at == null && asOf.time() != null) {
+                        return Optional.<TableSnapshot>empty();          // a time before the first commit: no table then
+                    }
                     if (at == null) {
                         throw new IOException(asOf.missing(domainDir + "/" + stored(name)));
                     }

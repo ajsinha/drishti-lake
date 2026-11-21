@@ -28,6 +28,9 @@ public interface TableReader {
     /** What the table is, the same on every replica and after a reopen. */
     TableIdentity identity() throws IOException;
 
-    /** The table at {@code asOf} ({@link AsOf#LATEST}, a version, a time); empty: no table then. Snapshots are kept per version. */
+    /**
+     * The table at {@code asOf} ({@link AsOf#LATEST}, a version, a time); empty: no table then (none yet, or a time before its first
+     * commit, on every store). A version the table does not hold is an {@link IOException}. Snapshots are kept per version.
+     */
     Optional<TableSnapshot> snapshot(AsOf asOf) throws IOException;
 }

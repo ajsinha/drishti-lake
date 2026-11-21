@@ -39,6 +39,14 @@ public interface LakeReader extends AutoCloseable {
     /** A table; cheap: nothing is read until a snapshot is asked for. */
     TableReader table(String name);
 
+    /**
+     * A table not in the layout (written by another engine: Spark, Flink, Trino, pyiceberg, delta-rs, or a folder of JSON Lines), read
+     * through {@code shape}: its rows as the documents of a kind. {@code name} is the host's name of it (problems are recorded under it);
+     * {@link TableShape#table} is where it is: within this reader's domain, or under the namespace it names. Nothing is read until a
+     * snapshot is asked for; the snapshot refuses a shape the table cannot answer ({@code LK-1001}, in words).
+     */
+    TableReader foreign(String name, TableShape shape);
+
     /** Whether the lake answers, where it is, the reading engine, notes (TLS expiry, proxy in force). */
     LakeHealth health(Instant now);
 

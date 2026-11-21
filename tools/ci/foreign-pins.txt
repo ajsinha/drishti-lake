@@ -1,0 +1,4 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# pyiceberg, the other Iceberg writer of the foreign tables the shaped-read case reads (tools/ci/foreign_tables.py), pinned as the
+# interop pins are (interop-pins.txt: delta-rs and pyarrow); com.ash.lake.tck.DeltaRs.foreign adds these to them.
+pyiceberg[sql-sqlite]==0.12.0

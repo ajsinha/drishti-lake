@@ -50,6 +50,9 @@ interface LakeTables extends Closeable {
     @Override
     void close() throws IOException;
 
+    /** The catalog the domain's tables are in (foreign tables are found there too). */
+    Catalog catalog();
+
     static LakeTables open(com.ash.lake.LakeRuntime runtime, Map<String, String> settings) {
         LakeTables lake = new Native(Catalogs.open(runtime, settings), settings);
         Map<String, String> names = Named.of(settings);
@@ -77,6 +80,11 @@ interface LakeTables extends Closeable {
                 }
             });
             return out;
+        }
+
+        @Override
+        public Catalog catalog() {
+            return lake.catalog();
         }
 
         /** The table a kind is read from. */
@@ -142,7 +150,8 @@ interface LakeTables extends Closeable {
                     : ProxySettings.resolve(settings, endpoint.isBlank() ? "https://s3.amazonaws.com" : endpoint);
         }
 
-        Catalog catalog() {
+        @Override
+        public Catalog catalog() {
             return catalog;
         }
 

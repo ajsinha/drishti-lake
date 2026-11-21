@@ -1,7 +1,6 @@
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
 # What no parity case covers yet (tools/ci/coverage.py): a loader setting, flag, .ready key or LK- code. This list ONLY SHRINKS: a
 # case that covers an item takes it out (the gate says which); nothing new is ever added.
-code:LK-1001
 code:LK-1002
 code:LK-1003
 code:LK-1004

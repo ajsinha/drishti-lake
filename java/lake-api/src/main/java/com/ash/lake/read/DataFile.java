@@ -21,14 +21,27 @@ import java.util.Optional;
 
 /**
  * One data file. {@code rows}: {@code -1} when not stated; {@code deletes}: rows of it are deleted; {@code partition}: the file's constant
- * columns (logical names, values as text); {@code bounds}: per column (logical names), where the store states them.
+ * columns (logical names, values as text); {@code bounds}: per column (logical names), where the store states them; {@code exact}: every row
+ * of the file is of the date it is listed under (false only for a foreign table's file that may hold rows of other dates: its rows are
+ * checked, {@link LakeReader#foreign}).
  */
 public record DataFile(String path, long size, FileFormat format, long rows, boolean deletes, Map<String, String> partition,
-        Map<String, Bounds> bounds) {
+        Map<String, Bounds> bounds, boolean exact) {
 
     public DataFile {
         partition = Map.copyOf(partition);
         bounds = Map.copyOf(bounds);
+    }
+
+    /** A file whose rows are all of its date (every table in the layout). */
+    public DataFile(String path, long size, FileFormat format, long rows, boolean deletes, Map<String, String> partition,
+            Map<String, Bounds> bounds) {
+        this(path, size, format, rows, deletes, partition, bounds, true);
+    }
+
+    /** This file listed under a date it may share with others. */
+    public DataFile inexact() {
+        return new DataFile(path, size, format, rows, deletes, partition, bounds, false);
     }
 
     /** The file on this machine's disk, for a host engine that reads it directly; empty for object stores and memory. */

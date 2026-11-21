@@ -1,0 +1,45 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# RA-S8 (READ_API.md): tables other engines wrote, in their own layout (delta-rs, pyiceberg, a folder of plain JSON Lines), read through a
+# shape: a date partition (the files store: the date in each file's name), a timestamptz's day in a zone from an unpartitioned file that
+# spans two days (inexact), a composite id, a renamed and an excluded column, a nested struct at depth 2, a deleted row, a vector; the
+# answer is the same JSON on every store. Then the three refusals (no id, a date column that is not a date, a timestamp without date-from).
+# Local disk only: a foreign table is another engine's folder (no memory or S3 row of it).
+stores: [delta, iceberg, files]
+local-only: true
+tables: []
+foreign:
+  - {domain: mart, spec: tables.json}
+inputs:
+  tables.json: |
+    {"tables": {
+     "trades": {
+      "columns": [["desk", "string"], ["trade_no", "long"], ["trade_date", "date"], ["notional", "double"], ["booked_at", "timestamptz"],
+                  ["cpty_ref", "string"], ["internal_note", "string"],
+                  ["counterparty", {"struct": [["name", "string"], ["rating", {"struct": [["agency", "string"], ["grade", "string"]]}]]}]],
+      "partition": ["trade_date"],
+      "appends": [
+       [{"desk": "RATES", "trade_no": 1, "trade_date": "2026-11-19", "notional": 2500000.5, "booked_at": "2026-11-19T14:05:00Z", "cpty_ref": "CP-7", "internal_note": "keep out", "counterparty": {"name": "Acme Bank", "rating": {"agency": "SP", "grade": "A+"}}},
+        {"desk": "FX", "trade_no": 1, "trade_date": "2026-11-19", "notional": 125.25, "booked_at": "2026-11-19T23:59:59.250000Z", "cpty_ref": "CP-9", "internal_note": null, "counterparty": {"name": "Zeta AG", "rating": null}},
+        {"desk": "RATES", "trade_no": 2, "trade_date": "2026-11-20", "notional": -40000.0, "booked_at": "2026-11-20T09:00:00Z", "cpty_ref": null, "internal_note": "x", "counterparty": null}],
+       [{"desk": "RATES", "trade_no": 3, "trade_date": "2026-11-20", "notional": 7.5, "booked_at": "2026-11-20T10:30:00Z", "cpty_ref": "CP-7", "internal_note": "y", "counterparty": {"name": "Acme Bank", "rating": {"agency": "MO", "grade": "A1"}}},
+        {"desk": "FX", "trade_no": 5, "trade_date": "2026-11-20", "notional": 99.0, "booked_at": "2026-11-20T11:00:00Z", "cpty_ref": "CP-1", "internal_note": "z", "counterparty": {"name": "Gone Ltd", "rating": null}}]],
+      "delete": {"column": "trade_no", "equals": 5}},
+     "events": {
+      "columns": [["event_id", "string"], ["at", "timestamptz"], ["desk", "string"], ["pnl", {"list": "double"}]],
+      "appends": [
+       [{"event_id": "E1", "at": "2026-11-20T15:00:00Z", "desk": "RATES", "pnl": [1.5, -2.0, 3.25]},
+        {"event_id": "E2", "at": "2026-11-21T02:30:00Z", "desk": "FX", "pnl": [0.5, null, 4.0]},
+        {"event_id": "E3", "at": "2026-11-21T14:00:00Z", "desk": "RATES", "pnl": null}]]}
+    }}
+steps:
+  - store: [read-foreign, '${store}', '${lake}', mart, trades, trade, 'table=trades', 'id=[desk, trade_no]', 'columns.rename.cpty_ref=counterparty_id',
+            'columns.exclude=internal_note', 'links.counterparty_id=counterparty', 'col:notional:n', 'col:counterparty.name', 'col:counterparty_id',
+            'col:trade_no:n']
+  - store: [read-foreign, '${store}', '${lake}', mart, events, event, 'table=events', 'id=event_id', 'date=at', 'date-from=day',
+            'date-zone=America/New_York', 'col:desk', 'vec:pnl']
+  - store: [read-foreign, '${store}', '${lake}', mart, trades, trade, 'table=trades', 'id-separator=/', 'id=[trade_no, desk]', 'depth=1',
+            'date=trade_date']
+  - store: [read-foreign, '${store}', '${lake}', mart, trades, trade, 'table=trades']
+  - store: [read-foreign, '${store}', '${lake}', mart, trades, trade, 'table=trades', 'id=[desk, trade_no]', 'date=desk']
+  - store: [read-foreign, '${store}', '${lake}', mart, events, event, 'table=events', 'id=event_id', 'date=at']
+  - store: [read-foreign, '${store}', '${lake}', mart, events, event, 'table=events', 'id=event_id']

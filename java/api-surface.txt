@@ -97,6 +97,7 @@ class public final record com.ash.lake.read.LakeAddress
 class public final record com.ash.lake.read.LakeHealth
 class public final record com.ash.lake.read.ReadProblem
 class public final record com.ash.lake.read.TableIdentity
+class public final record com.ash.lake.read.TableShape
 class public final record com.ash.lake.read.VectorRequest
 class public final record com.ash.lake.spi.AsOf
 class public final record com.ash.lake.spi.Column
@@ -351,6 +352,8 @@ com.ash.lake.config.Lakes :: public static java.util.List<java.lang.String> com.
 com.ash.lake.config.Lakes :: public static java.util.List<java.lang.String> com.ash.lake.config.Lakes.shippedIn(java.lang.ClassLoader,java.lang.String)
 com.ash.lake.config.Lakes :: public static java.util.List<java.nio.file.Path> com.ash.lake.config.Lakes.files(java.nio.file.Path) throws java.io.IOException
 com.ash.lake.config.Lakes :: public static java.util.Map<java.lang.String, java.lang.String> com.ash.lake.config.Lakes.environment(com.ash.lake.LakeRuntime)
+com.ash.lake.config.LakesCli :: public static int com.ash.lake.config.LakesCli.run(com.ash.lake.LakeRuntime,java.lang.String[],java.io.PrintStream)
+com.ash.lake.config.LakesCli :: public static int com.ash.lake.config.LakesCli.run(java.lang.String[],java.io.PrintStream)
 com.ash.lake.config.LakesCli :: public static java.util.Map<java.lang.String, java.util.Map$Entry<java.lang.String, java.util.Map<java.lang.String, java.lang.String>>> com.ash.lake.config.LakesCli.connectors(java.nio.file.Path) throws java.io.IOException
 com.ash.lake.config.LakesCli :: public static void com.ash.lake.config.LakesCli.main(java.lang.String[])
 com.ash.lake.config.ModuleConnectors :: public static final java.lang.String com.ash.lake.config.ModuleConnectors.FROM_MODULE
@@ -1058,7 +1061,10 @@ com.ash.lake.read.ColumnBlock :: public java.lang.String[] com.ash.lake.read.Col
 com.ash.lake.read.ColumnBlock :: public java.util.Map<java.lang.String, double[]> com.ash.lake.read.ColumnBlock.numbers()
 com.ash.lake.read.ColumnBlock :: public java.util.Map<java.lang.String, java.lang.String[]> com.ash.lake.read.ColumnBlock.texts()
 com.ash.lake.read.DataFile :: public boolean com.ash.lake.read.DataFile.deletes()
+com.ash.lake.read.DataFile :: public boolean com.ash.lake.read.DataFile.exact()
+com.ash.lake.read.DataFile :: public com.ash.lake.read.DataFile com.ash.lake.read.DataFile.inexact()
 com.ash.lake.read.DataFile :: public com.ash.lake.read.DataFile(java.lang.String,long,com.ash.lake.read.FileFormat,long,boolean,java.util.Map<java.lang.String, java.lang.String>,java.util.Map<java.lang.String, com.ash.lake.read.Bounds>)
+com.ash.lake.read.DataFile :: public com.ash.lake.read.DataFile(java.lang.String,long,com.ash.lake.read.FileFormat,long,boolean,java.util.Map<java.lang.String, java.lang.String>,java.util.Map<java.lang.String, com.ash.lake.read.Bounds>,boolean)
 com.ash.lake.read.DataFile :: public com.ash.lake.read.FileFormat com.ash.lake.read.DataFile.format()
 com.ash.lake.read.DataFile :: public final boolean com.ash.lake.read.DataFile.equals(java.lang.Object)
 com.ash.lake.read.DataFile :: public final int com.ash.lake.read.DataFile.hashCode()
@@ -1118,6 +1124,7 @@ com.ash.lake.read.LakeHealth :: public java.lang.String com.ash.lake.read.LakeHe
 com.ash.lake.read.LakeHealth :: public java.util.List<java.lang.String> com.ash.lake.read.LakeHealth.notes()
 com.ash.lake.read.LakeReader :: public abstract com.ash.lake.read.LakeHealth com.ash.lake.read.LakeReader.health(java.time.Instant)
 com.ash.lake.read.LakeReader :: public abstract com.ash.lake.read.ReadProblems com.ash.lake.read.LakeReader.problems()
+com.ash.lake.read.LakeReader :: public abstract com.ash.lake.read.TableReader com.ash.lake.read.LakeReader.foreign(java.lang.String,com.ash.lake.read.TableShape)
 com.ash.lake.read.LakeReader :: public abstract com.ash.lake.read.TableReader com.ash.lake.read.LakeReader.table(java.lang.String)
 com.ash.lake.read.LakeReader :: public abstract java.lang.String com.ash.lake.read.LakeReader.format()
 com.ash.lake.read.LakeReader :: public abstract java.util.List<java.lang.String> com.ash.lake.read.LakeReader.newTables(java.util.Set<java.lang.String>) throws java.io.IOException
@@ -1154,6 +1161,31 @@ com.ash.lake.read.TableIdentity :: public java.lang.String com.ash.lake.read.Tab
 com.ash.lake.read.TableReader :: public abstract com.ash.lake.read.TableIdentity com.ash.lake.read.TableReader.identity() throws java.io.IOException
 com.ash.lake.read.TableReader :: public abstract java.lang.String com.ash.lake.read.TableReader.name()
 com.ash.lake.read.TableReader :: public abstract java.util.Optional<com.ash.lake.read.TableSnapshot> com.ash.lake.read.TableReader.snapshot(com.ash.lake.spi.AsOf) throws java.io.IOException
+com.ash.lake.read.TableShape :: public boolean com.ash.lake.read.TableShape.dateFromDay()
+com.ash.lake.read.TableShape :: public boolean com.ash.lake.read.TableShape.decimalsAsText()
+com.ash.lake.read.TableShape :: public boolean com.ash.lake.read.TableShape.omitBinary()
+com.ash.lake.read.TableShape :: public com.ash.lake.read.TableShape(java.lang.String,java.lang.String,java.util.List<java.lang.String>,java.lang.String,java.lang.String,boolean,java.time.ZoneId,java.lang.String,java.util.Set<java.lang.String>,java.util.Map<java.lang.String, java.lang.String>,java.util.Map<java.lang.String, java.lang.String>,int,boolean,boolean)
+com.ash.lake.read.TableShape :: public final boolean com.ash.lake.read.TableShape.equals(java.lang.Object)
+com.ash.lake.read.TableShape :: public final int com.ash.lake.read.TableShape.hashCode()
+com.ash.lake.read.TableShape :: public final java.lang.String com.ash.lake.read.TableShape.toString()
+com.ash.lake.read.TableShape :: public int com.ash.lake.read.TableShape.depth()
+com.ash.lake.read.TableShape :: public java.lang.String com.ash.lake.read.TableShape.date()
+com.ash.lake.read.TableShape :: public java.lang.String com.ash.lake.read.TableShape.documentColumn()
+com.ash.lake.read.TableShape :: public java.lang.String com.ash.lake.read.TableShape.idSeparator()
+com.ash.lake.read.TableShape :: public java.lang.String com.ash.lake.read.TableShape.kind()
+com.ash.lake.read.TableShape :: public java.lang.String com.ash.lake.read.TableShape.nameOf(java.lang.String)
+com.ash.lake.read.TableShape :: public java.lang.String com.ash.lake.read.TableShape.table()
+com.ash.lake.read.TableShape :: public java.lang.String com.ash.lake.read.TableShape.tableName()
+com.ash.lake.read.TableShape :: public java.time.ZoneId com.ash.lake.read.TableShape.dateZone()
+com.ash.lake.read.TableShape :: public java.util.List<java.lang.String> com.ash.lake.read.TableShape.id()
+com.ash.lake.read.TableShape :: public java.util.List<java.lang.String> com.ash.lake.read.TableShape.namespace()
+com.ash.lake.read.TableShape :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.read.TableShape.links()
+com.ash.lake.read.TableShape :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.read.TableShape.rename()
+com.ash.lake.read.TableShape :: public java.util.Set<java.lang.String> com.ash.lake.read.TableShape.exclude()
+com.ash.lake.read.TableShape :: public static com.ash.lake.read.TableShape com.ash.lake.read.TableShape.of(java.lang.String,java.util.Map<java.lang.String, java.lang.String>)
+com.ash.lake.read.TableShape :: public static com.ash.lake.read.TableShape com.ash.lake.read.TableShape.of(java.lang.String,java.util.Map<java.lang.String, java.lang.String>,java.lang.String)
+com.ash.lake.read.TableShape :: public static java.lang.String com.ash.lake.read.TableShape.kindOf(java.lang.String)
+com.ash.lake.read.TableShape :: public static java.util.List<com.ash.lake.read.TableShape> com.ash.lake.read.TableShape.all(java.util.Map<java.lang.String, java.lang.String>)
 com.ash.lake.read.TableSnapshot :: public abstract boolean com.ash.lake.read.TableSnapshot.deletes()
 com.ash.lake.read.TableSnapshot :: public abstract com.ash.lake.read.ColumnBlock com.ash.lake.read.TableSnapshot.columns(java.time.LocalDate,java.util.List<com.ash.lake.read.ColumnAsk>) throws java.io.IOException
 com.ash.lake.read.TableSnapshot :: public abstract com.ash.lake.read.IdMap com.ash.lake.read.TableSnapshot.ids(java.time.LocalDate) throws java.io.IOException
@@ -1328,6 +1360,7 @@ com.ash.lake.spi.FileEntry :: public long com.ash.lake.spi.FileEntry.modified()
 com.ash.lake.spi.FileEntry :: public long com.ash.lake.spi.FileEntry.size()
 com.ash.lake.spi.LakeCatalog :: public default <T> java.util.List<T> com.ash.lake.spi.LakeCatalog.extensions(java.lang.Class<T>)
 com.ash.lake.spi.LakeCatalog :: public default java.io.InputStream com.ash.lake.spi.LakeCatalog.shippedLake(java.lang.String)
+com.ash.lake.spi.LakeCatalog :: public default java.lang.String com.ash.lake.spi.LakeCatalog.loaderMain()
 com.ash.lake.spi.LakeCatalog :: public default java.util.List<java.lang.String> com.ash.lake.spi.LakeCatalog.shippedLakes()
 com.ash.lake.spi.LakeCatalog :: public default java.util.List<java.nio.file.Path> com.ash.lake.spi.LakeCatalog.packFiles(java.nio.file.Path)
 com.ash.lake.spi.LakeCatalog :: public default java.util.Map<java.lang.String, java.lang.String> com.ash.lake.spi.LakeCatalog.childProcessSettings()

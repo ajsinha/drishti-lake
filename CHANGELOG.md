@@ -5,6 +5,15 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **Shaped reads of foreign tables (RA-S8)**: `TableShape` (from a connector's `tables.<kind>.*` settings) and `LakeReader.foreign`
+  read a table other engines wrote (Spark, delta-rs, pyiceberg, a folder of JSON Lines) as a kind's documents, through the same
+  `TableSnapshot` on Delta, Iceberg and files; the shape rule (dates from partitions, a zone's day, bounds or the column; ids; documents;
+  refusals `LK-1001`) is written once in `lake-io`. Case `read/foreign-table-shaped` (tables written by each format's other writer, the
+  same JSON on every store). The moved `iceberg.external` copies and `JsonValues` are deleted.
+- **G4 rehearsal items R1, R3, R4**: `TableReader.snapshot` at a time before the first commit is empty on every store (no problem
+  recorded; a version the table does not hold is still refused), case `read/as-of-before-first-commit`; the data inbox starts the main
+  the runtime's catalog names (`LakeCatalog.loaderMain`, default `LakeLoad`), so a host's child loads read with its catalog;
+  `LakesCli.run(runtime, args, out)` is public (a host's main runs the lake-file commands with its runtime).
 - **The Python path, L10 rest**: the archive rule with the Java loader's guards, caps and words (`drishti_lake.archives`; the shared
   fixtures in `test_archives.py`; case `inputs/archive-guards-and-dataset`, `--dataset` picking a tar's one table); the Java tools from
   Python (`python -m drishti_lake undo|retention|relocate|check|maintain|lakes`, class path `LAKE_CLASSPATH`): one implementation per

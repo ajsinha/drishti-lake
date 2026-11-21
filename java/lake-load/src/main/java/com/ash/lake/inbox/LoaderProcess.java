@@ -38,7 +38,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The load itself (DATA_LAKE_GUIDE.md): the parallel lake loader, {@code com.ash.lake.load.LakeLoad}, started as a child
+ * The load itself (DATA_LAKE_GUIDE.md): the parallel lake loader, {@code com.ash.lake.load.LakeLoad} (or the main the runtime's
+ * catalog names, {@link com.ash.lake.spi.LakeCatalog#loaderMain}: a host's, reading with its catalog), started as a child
  * Java process of the server with its own heap ({@code loader-heap}), at a lower priority ({@code nice}) and the server's temp folder, on a
  * load file this class writes (the loader's own keys: CLI_REFERENCE.md section 4.13). A large or malformed file can never take the server's heap;
  * the loader's exit code says what happened (0 loaded, 2 loaded with rejects, 1 failed, 3 the table locked); a load past
@@ -55,7 +56,8 @@ public final class LoaderProcess implements LoadRunner {
 
     public LoaderProcess(DataLoadSettings settings) {
         this.settings = settings;
-        this.launch = launch(System.getProperty("java.class.path", ""));
+        String main = settings.runtime() == null ? null : settings.runtime().catalog().loaderMain();
+        this.launch = launch(System.getProperty("java.class.path", ""), main == null || main.isBlank() ? MAIN : main.strip());
     }
 
     /**
@@ -63,11 +65,16 @@ public final class LoaderProcess implements LoadRunner {
      * loader: {@code -Dloader.main}), or the plain class path (a development run, the tests).
      */
     static List<String> launch(String classPath) {
+        return launch(classPath, MAIN);
+    }
+
+    /** As {@link #launch(String)}, starting {@code main} (the host catalog's {@link com.ash.lake.spi.LakeCatalog#loaderMain}). */
+    static List<String> launch(String classPath, String main) {
         String[] parts = classPath.split(File.pathSeparator);
         if (parts.length == 1 && parts[0].endsWith(".jar") && bootJar(Path.of(parts[0]))) {
-            return List.of("-Dloader.main=" + MAIN, "-jar", parts[0]);
+            return List.of("-Dloader.main=" + main, "-jar", parts[0]);
         }
-        return List.of("-cp", classPath, MAIN);
+        return List.of("-cp", classPath, main);
     }
 
     private static boolean bootJar(Path jar) {

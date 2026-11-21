@@ -1,0 +1,12 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# the read API at a time before the table's first commit: no table then (empty, no problem recorded), on every store; the first
+# version by its own time still reads (the read API's contract, TableReader.snapshot; G4 rehearsal R1)
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 6, scenarios: 2, seed: 4}}
+config: |
+  source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+  target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+steps:
+  - load: []
+  - store: [read-at, '${store}', '${lake}', risk, scenario-pv, '0', before]
+  - store: [read-at, '${store}', '${lake}', risk, scenario-pv, '0', time]

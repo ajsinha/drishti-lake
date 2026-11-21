@@ -45,11 +45,15 @@ public final class DeltaLakeReader implements LakeReader {
     final String docColumn;
     final String dateColumn;
     private final Map<String, DeltaTableReader> tables = new ConcurrentHashMap<>();
+    private final Map<String, com.ash.lake.io.read.ForeignTableReader> foreign = new ConcurrentHashMap<>();
+    private final java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
+    private final String domain;
 
     private DeltaLakeReader(LakeRuntime runtime, LakeStore lake, LakeAddress address) {
         this.runtime = runtime;
         this.lake = lake;
         this.root = address.root();
+        this.domain = address.domain();
         this.idColumn = address.settings().getOrDefault("id-column", "id");
         this.docColumn = address.settings().getOrDefault("doc-column", "doc");
         this.dateColumn = address.settings().getOrDefault("date-column", "business_date");
@@ -99,6 +103,27 @@ public final class DeltaLakeReader implements LakeReader {
         return tables.computeIfAbsent(name, n -> new DeltaTableReader(this, n));
     }
 
+    /**
+     * A Delta table other engines wrote (Spark, delta-rs): {@code <domain>/<table>}, or (a {@code namespace.table}) the folder
+     * {@code <levels…>/<table>} under the lake's root.
+     */
+    @Override
+    public TableReader foreign(String name, com.ash.lake.read.TableShape shape) {
+        String path;
+        if (shape.namespace().isEmpty()) {
+            path = lake.table(shape.tableName());
+        } else {
+            String base = lake.table("x");
+            base = base.substring(0, base.length() - 2);
+            if (!domain.isBlank()) {
+                base = base.substring(0, base.length() - domain.replaceAll("^/+|/+$", "").length() - 1);
+            }
+            path = base + "/" + String.join("/", shape.namespace()) + "/" + shape.tableName();
+        }
+        return foreign.computeIfAbsent(name + "\u001f" + shape, k -> new com.ash.lake.io.read.ForeignTableReader(name, shape,
+                new DeltaForeign(lake.engine(), path), pool, problems));
+    }
+
     @Override
     public LakeHealth health(Instant now) {
         List<String> notes = new ArrayList<>();
@@ -121,11 +146,13 @@ public final class DeltaLakeReader implements LakeReader {
     @Override
     public void refresh() {
         tables.values().forEach(DeltaTableReader::forget);
+        foreign.values().forEach(com.ash.lake.io.read.ForeignTableReader::forget);
     }
 
     @Override
     public void purge() {
         tables.values().forEach(DeltaTableReader::forget);
+        foreign.values().forEach(com.ash.lake.io.read.ForeignTableReader::forget);
         com.ash.lake.delta.NativeEngine.purgeFooterCache(runtime);
     }
 
@@ -136,6 +163,7 @@ public final class DeltaLakeReader implements LakeReader {
 
     @Override
     public void close() {
+        pool.close();
         lake.close();
     }
 }

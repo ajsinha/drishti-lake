@@ -87,11 +87,7 @@ final class IcebergTableReader implements TableReader {
                 }
                 return Optional.of(asOf.version());
             }
-            Optional<Long> at = t.snapshotAt(asOf.time());
-            if (at.isEmpty()) {
-                throw new IOException(asOf.missing(name));
-            }
-            return at;
+            return t.snapshotAt(asOf.time());                // empty: a time before the first snapshot, no table then
         });
         if (id.isEmpty()) {
             return Optional.empty();

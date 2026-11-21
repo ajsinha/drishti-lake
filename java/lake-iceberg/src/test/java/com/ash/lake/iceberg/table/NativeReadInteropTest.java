@@ -23,7 +23,6 @@ import com.ash.lake.iceberg.catalog.Catalog;
 import com.ash.lake.iceberg.catalog.Catalogs;
 import com.ash.lake.iceberg.expr.Expr;
 import com.ash.lake.iceberg.meta.Snapshot;
-import com.ash.lake.iceberg.read.JsonValues;
 import com.ash.lake.iceberg.read.TaskReader;
 import com.ash.lake.iceberg.scan.FileTask;
 import com.ash.lake.iceberg.types.NestedField;
@@ -74,7 +73,17 @@ class NativeReadInteropTest {
         for (FileTask task : t.plan(s, Expr.TRUE, pool)) {
             try (TaskReader r = t.rows(task, schema, ids, Expr.TRUE, false)) {
                 while (r.hasNext()) {
-                    out.add(Fixtures.canonical(JsonValues.row(schema.columns(), r.next(), new JsonValues.Options(true, false))));
+                    Object[] v = r.next();
+                    var n = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+                    for (int i = 0; i < schema.columns().size(); i++) {         // the shape rule's rendering (RA-S8), one for every store
+                        NestedField c = schema.columns().get(i);
+                        JsonNode x = com.ash.lake.io.read.ShapedDocument.value(IcebergForeign.field(c.name(), c.type()), v[i],
+                                new com.ash.lake.io.read.ShapedDocument.Options(true, false));
+                        if (x != null) {
+                            n.set(c.name(), x);
+                        }
+                    }
+                    out.add(Fixtures.canonical(n));
                 }
             }
         }
