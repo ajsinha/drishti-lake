@@ -5,6 +5,11 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **The read API, designed** ([docs/design/READ_API.md](docs/design/READ_API.md); nothing built): `com.ash.lake.read` entered through
+  `TableStore.open`, own types only, the same on Delta, Iceberg, files and `mem://`; every call of the host's source adapters mapped;
+  the stores' defects to close (deletes in column and vector reads, files statistics and identity, Iceberg `partition-by`); 20 parity
+  cases; the performance proof; steps RA-S0 to RA-S10; decisions RA-1 to RA-12 open.
+
 - **IDE launchers**: `java/run-configs/` (build all, test, install release for a tag only, the loader and check programs), `tools/run-configs/` (the TCK, the repository check) and `drishti-lake.code-workspace` for VS Code; README, Build and run in the IDE.
 
 - **L0, the allow-list.** [docs/MOVE_ALLOWLIST.md](docs/MOVE_ALLOWLIST.md): every file of the lake modules, the three table plug-ins,

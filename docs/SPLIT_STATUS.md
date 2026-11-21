@@ -44,6 +44,9 @@ runtime to every call (`LakeLoad.run(runtime, ..)`, `DataLoadSettings`, `Catalog
 
 ## The host's read API (G4 rehearsal L1; written 2026-11-21, not built)
 
+Designed in [READ_API](design/READ_API.md): the API, every host call mapped to it, the defects each store closes, the cases, the
+performance proof, the steps RA-S0 to RA-S10 and the decisions RA-1 to RA-12 (open, for the owner).
+
 Drishti's Delta and Iceberg source adapters read through the table layer's internal types (`DeltaTable`, `TableProblems`,
 `VectorBatches`, `LakeStore`, `NewTables`, `LakeTables`, `KindTable`, `IcebergVectors`, Kernel's `Row`/`StructType`/`Engine`,
 Iceberg's `FileScanTask`). The public read SPI (`TableStore`: `exists`, `columns`, `dates`, `versions`, `scan` with `ScanRequest` of
