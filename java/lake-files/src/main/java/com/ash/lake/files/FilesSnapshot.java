@@ -60,7 +60,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * One version of a files table behind the read API: each date is one content file of the log (immutable once committed), read line by
- * line; "the newest load wins" is the last line of an id (an append adds lines after the earlier ones). Speed is not held to Parquet's
+ * line; "the newest load wins" in the one load order (LoadOrder; an append adds lines after the earlier ones). Speed is not held to Parquet's
  * (RA-10): the answers and the calls are the same.
  */
 final class FilesSnapshot implements TableSnapshot {
@@ -173,40 +173,66 @@ final class FilesSnapshot implements TableSnapshot {
         }
     }
 
-    private static String idOf(String line) throws IOException {
-        try (JsonParser p = FACTORY.createParser(line)) {
-            if (p.nextToken() != JsonToken.START_OBJECT) {
-                return null;
-            }
-            while (p.nextToken() == JsonToken.FIELD_NAME) {
-                String f = p.currentName();
-                JsonToken t = p.nextToken();
-                if (f.equals("id") && t.isScalarValue() && t != JsonToken.VALUE_NULL) {
-                    return p.getText();
-                }
-                p.skipChildren();
-            }
-        }
-        return null;
-    }
-
-    /** The ids written more than once on the date, each with its last line (the newest load's copy). */
+    /**
+     * The ids written more than once on the date, each with the line readers see: the newest load's copy in the one load order
+     * ({@link com.ash.lake.rows.LoadOrder}: the run's time, then the commit, here the line's place, as an append adds lines after the
+     * earlier ones).
+     */
     private Map<String, Integer> shadow(LocalDate date) throws IOException {
         Map<String, Integer> s = shadows.get(date);
         if (s != null) {
             return s;
         }
-        Map<String, Integer> last = new HashMap<>();
+        Map<String, Integer> best = new HashMap<>();
+        Map<String, String> bestLoad = new HashMap<>();
         Set<String> twice = new java.util.HashSet<>();
         lines(date, (i, line) -> {
-            String id = idOf(line);
-            if (id != null && last.put(id, i) != null) {
-                twice.add(id);
+            String[] il = idAndLoadOf(line);
+            if (il[0] == null) {
+                return;
+            }
+            Integer was = best.get(il[0]);
+            if (was != null) {
+                twice.add(il[0]);
+            }
+            if (was == null || com.ash.lake.rows.LoadOrder.compare(il[1], i, bestLoad.get(il[0]), was) >= 0) {
+                best.put(il[0], i);
+                bestLoad.put(il[0], il[1]);
             }
         });
-        last.keySet().retainAll(twice);
-        shadows.put(date, Map.copyOf(last));
+        best.keySet().retainAll(twice);
+        shadows.put(date, Map.copyOf(best));
         return shadows.get(date);
+    }
+
+    /** A line's {id, _load_id} (either null when absent). */
+    private static String[] idAndLoadOf(String line) throws IOException {
+        String[] out = new String[2];
+        try (JsonParser p = FACTORY.createParser(line)) {
+            if (p.nextToken() != JsonToken.START_OBJECT) {
+                return out;
+            }
+            while (p.nextToken() == JsonToken.FIELD_NAME) {
+                String f = p.currentName();
+                JsonToken t = p.nextToken();
+                if (f.equals("id") && t.isScalarValue() && t != JsonToken.VALUE_NULL) {
+                    out[0] = p.getText();
+                } else if (f.equals("columns") && t == JsonToken.START_OBJECT) {
+                    while (p.nextToken() == JsonToken.FIELD_NAME) {
+                        String c = p.currentName();
+                        JsonToken v = p.nextToken();
+                        if (c.equals(FilesWriter.LOAD_ID) && v.isScalarValue() && v != JsonToken.VALUE_NULL) {
+                            out[1] = p.getText();
+                        } else {
+                            p.skipChildren();
+                        }
+                    }
+                } else {
+                    p.skipChildren();
+                }
+            }
+        }
+        return out;
     }
 
     private static boolean live(Map<String, Integer> shadow, String id, int line) {

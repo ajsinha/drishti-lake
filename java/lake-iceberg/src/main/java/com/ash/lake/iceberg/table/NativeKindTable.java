@@ -87,6 +87,11 @@ final class NativeKindTable extends KindTable {
     }
 
     @Override
+    long sequence(Day day, int file) {
+        return tasks(day).get(file).dataSequenceNumber();
+    }
+
+    @Override
     Optional<Long> refresh() {
         Optional<Table> t = table();
         if (t.isEmpty()) {

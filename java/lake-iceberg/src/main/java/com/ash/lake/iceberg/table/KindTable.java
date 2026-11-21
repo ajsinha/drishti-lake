@@ -226,6 +226,11 @@ abstract class KindTable {
         return out;
     }
 
+    /** The commit order of the day's file {@code file} (its data sequence number); the file's place in the day by default. */
+    long sequence(Day day, int file) {
+        return file;
+    }
+
     /** The column every row carries: the load that wrote it ({@code <run>.<file>}, in time order; DATA_LAKE_GUIDE.md). */
     static final String LOAD_ID = "_load_id";
 
@@ -330,7 +335,16 @@ abstract class KindTable {
         for (int i = 0; i < idx.length; i++) {
             idx[i] = i;
         }
-        Arrays.sort(idx, Comparator.comparing((Integer i) -> ids.get(i)).thenComparing(lids::get).thenComparing(fileOf::get));
+        // the one load order (LoadOrder): the run's time, the commit (the file's data sequence number) for runs of one millisecond, the id
+        long[] seq = new long[perFile.size()];
+        if (com.ash.lake.rows.LoadOrder.needsCommits(lids)) {
+            for (int f = 0; f < seq.length; f++) {
+                seq[f] = sequence(day, f);
+            }
+        }
+        Arrays.sort(idx, Comparator.comparing((Integer i) -> ids.get(i))
+                .thenComparing((x, y) -> com.ash.lake.rows.LoadOrder.compare(lids.get(x), seq[fileOf.get(x)], lids.get(y), seq[fileOf.get(y)]))
+                .thenComparing(fileOf::get));
         List<String> outIds = new ArrayList<>();
         List<Integer> outFiles = new ArrayList<>();
         Map<String, Integer> shadow = new HashMap<>();

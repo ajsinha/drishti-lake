@@ -5,6 +5,12 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **The newest load, one rule (`com.ash.lake.rows.LoadOrder`)**: two loads are ordered by their run's time; runs that started in the
+  same millisecond by their commit (Delta: the version that added the file, read through the Kernel's commit range only then; Iceberg:
+  the file's data sequence number; files: the line's place), never by the process id's text (`-77-9` sorted after `-77-10`); then by
+  the id. Delta, Iceberg and the files store follow it (the files store took the last line whatever the run's time). Case
+  `read/newest-wins-same-millisecond` (three runs of one millisecond, text order the reverse of the commits'), 30 runs on every row
+  identical; `LoadOrderTest`.
 - **Drishti Tools adopted (G3)**: Lake's copies of the shared utilities are deleted (21 files: the 13 TLS and proxy classes of
   `com.ash.lake.io.net`, `Placeholders`, `SettingsFile`, `SingleFlight`, `LoadGuard`, `FakeProxy`, `TlsFixture`, `TestPki`) and
   `com.ash.tools.{settings,net,concurrent,time,testkit}` used instead, at one version through `lake-bom` (`drishti.tools.version`,

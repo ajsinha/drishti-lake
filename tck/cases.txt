@@ -29,6 +29,7 @@ read/ids-and-file-of-id
 read/keep-prunes-files
 read/mapped-equals-heap
 read/newest-wins-long-load-ids
+read/newest-wins-same-millisecond
 read/numbers-texts-nulls
 read/of-ids-in-one-file
 read/partition-column-filled

@@ -396,20 +396,84 @@ final class DeltaTable {
     }
 
     /**
-     * A date's files in load order, the newest last: by the largest {@code _load_id} each holds (its statistics), then the time the file
-     * was added (commit order), then the path. A reader that keeps the last copy of an id keeps the newest load's.
+     * A date's files in load order, the newest last: by the largest {@code _load_id} each holds (its statistics) in the one load order
+     * ({@link com.ash.lake.rows.LoadOrder}: the run's time, then the commit for runs of one millisecond, then the id), then the time
+     * the file was added, then the path. A reader that keeps the last copy of an id keeps the newest load's. {@code loadColumn} is the load
+     * id column's name in the statistics (its physical name on a column-mapped table); {@code commits}
+     * gives the version that added each of the files when two runs of the date started in the same millisecond (null: none known).
      */
-    static void newestLast(List<Row> files) {
-        newestLast(files, LOAD_ID);
+    static void newestLast(List<Row> files, String loadColumn, java.util.function.Function<List<Row>, Map<String, Long>> commits) {
+        Map<Row, String> max = new java.util.IdentityHashMap<>();
+        for (Row f : files) {
+            String m = textBounds(f, loadColumn, Integer.MAX_VALUE)[1];
+            max.put(f, m == null ? "" : m);
+        }
+        Map<String, Long> version = commits != null && com.ash.lake.rows.LoadOrder.needsCommits(max.values()) ? commits.apply(files) : Map.of();
+        java.util.function.ToLongFunction<Row> v = f -> version.getOrDefault(fileName(f), 0L);
+        files.sort(((java.util.Comparator<Row>) (a, b) -> com.ash.lake.rows.LoadOrder.compare(max.get(a), v.applyAsLong(a), max.get(b), v.applyAsLong(b)))
+                .thenComparingLong(f -> InternalScanFileUtils.getAddFileStatus(f).getModificationTime())
+                .thenComparing(f -> InternalScanFileUtils.getAddFileStatus(f).getPath()));
     }
 
-    /** As above, the load id column named {@code loadColumn} in the statistics (its physical name on a column-mapped table). */
-    static void newestLast(List<Row> files, String loadColumn) {
-        files.sort(java.util.Comparator.comparing((Row f) -> {
-            String max = textBounds(f, loadColumn, Integer.MAX_VALUE)[1];
-            return max == null ? "" : max;
-        }).thenComparingLong(f -> InternalScanFileUtils.getAddFileStatus(f).getModificationTime())
-                .thenComparing(f -> InternalScanFileUtils.getAddFileStatus(f).getPath()));
+    /** A data file's name (the last part of its path, decoded): unique in a table, the same in the log's add action and a scan file. */
+    private static String fileName(Row scanFile) {
+        return fileName(InternalScanFileUtils.getAddFileStatus(scanFile).getPath());
+    }
+
+    private static String fileName(String path) {
+        String last = path.substring(path.lastIndexOf('/') + 1);
+        return java.net.URLDecoder.decode(last.replace("+", "%2B"), java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /** The commits a commit-range read takes at a time, newest first. */
+    private static final int COMMITS_PER_READ = 64;
+
+    /**
+     * The version that added each of {@code files} (by file name): the table's commits read newest first through the Kernel's commit
+     * range (add actions only), until every file is found or the log holds no older commit (a file not found: 0, the oldest).
+     */
+    private Map<String, Long> addedAt(Snapshot s, List<Row> files) {
+        java.util.Set<String> wanted = new java.util.HashSet<>();
+        files.forEach(f -> wanted.add(fileName(f)));
+        Map<String, Long> out = new java.util.HashMap<>();
+        for (long end = s.getVersion(); end >= 0 && out.size() < wanted.size(); end -= COMMITS_PER_READ) {
+            long start = Math.max(0, end - COMMITS_PER_READ + 1);
+            try {
+                io.delta.kernel.CommitRange range = io.delta.kernel.TableManager.loadCommitRange(path,
+                        io.delta.kernel.CommitRangeBuilder.CommitBoundary.atVersion(start))
+                        .withEndBoundary(io.delta.kernel.CommitRangeBuilder.CommitBoundary.atVersion(end)).build(engine);
+                try (CloseableIterator<io.delta.kernel.CommitActions> commits = range.getCommitActions(engine,
+                        java.util.Set.of(io.delta.kernel.internal.DeltaLogActionUtils.DeltaAction.ADD))) {
+                    while (commits.hasNext()) {
+                        try (io.delta.kernel.CommitActions c = commits.next();
+                             CloseableIterator<ColumnarBatch> batches = c.getActions()) {
+                            while (batches.hasNext()) {
+                                ColumnarBatch b = batches.next();
+                                int addAt = b.getSchema().indexOf("add");
+                                try (CloseableIterator<Row> rows = b.getRows()) {
+                                    while (rows.hasNext()) {
+                                        Row r = rows.next();
+                                        if (addAt >= 0 && !r.isNullAt(addAt)) {
+                                            String name = fileName(r.getStruct(addAt).getString(r.getStruct(addAt).getSchema().indexOf("path")));
+                                            if (wanted.contains(name)) {
+                                                out.merge(name, c.getVersion(), Math::max);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (io.delta.kernel.exceptions.KernelException | IllegalArgumentException gone) {
+                break;                                           // the log no longer holds older commits (retention)
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            } catch (Exception e) {
+                throw new IllegalStateException(e.getMessage(), e);
+            }
+        }
+        return out;
     }
 
     /**
@@ -519,7 +583,7 @@ final class DeltaTable {
             throw new UncheckedIOException(e);
         }
         String loadPhys = names.getOrDefault(LOAD_ID, LOAD_ID);
-        byDate.values().forEach(files -> newestLast(files, loadPhys));
+        byDate.values().forEach(files -> newestLast(files, loadPhys, f -> addedAt(s, f)));
         Row idScanState = s.getScanBuilder().withReadSchema(new StructType().add(idColumn, StringType.STRING)).build().getScanState(engine);
         return new Layout(s.getVersion(), s.getTimestamp(engine), scan.getScanState(engine), byDate, s.getSchema(), dvs,
                 idScanState, names, s);

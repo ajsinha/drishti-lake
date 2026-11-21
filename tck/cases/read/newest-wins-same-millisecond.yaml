@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# three loads of one date (append) whose runs started in the same millisecond: the process id and run number are not an order
+# ("-77-9" sorts after "-77-10", "-77-..." after "-100"), so the newest load is the one committed last (LoadOrder), on every store
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 15, scenarios: 2, seed: 6}}
+  more/pv.2026-10-27.jsonl: {pv: {n: 8, scenarios: 2, seed: 7}}
+  last/pv.2026-10-27.jsonl: {pv: {n: 4, scenarios: 2, seed: 8}}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  more: |
+    source: {files: '${in}/more/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: append}
+  last: |
+    source: {files: '${in}/last/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: append}
+steps:
+  - load: {args: [--run-id, 20261121T131500.123-77-9]}
+  - load: {config: more, args: [--run-id, 20261121T131500.123-77-10]}
+  - load: {config: last, args: [--run-id, 20261121T131500.123-100]}
+  - store: [read-ids, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t']
+  - store: [read-vectors, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', SCENARIO_PV, DESK]
