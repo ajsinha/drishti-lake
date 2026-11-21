@@ -1,0 +1,6 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# Official libraries only (design 7.1, guard ModuleRulesTest): a main source that names a table format's files or entries by hand
+# (a Delta log file name or action, a Parquet magic number, an Iceberg metadata key) fails, unless listed here with its step.
+# The list only shrinks; a listed file that no longer matches fails too.
+lake-config/src/main/java/com/ash/lake/config/LakeCheck.java   L7: reads the last metaData action of a Delta log by hand (the check moves onto the Kernel's snapshot)
+lake-load/src/main/java/com/ash/lake/load/LakeUndo.java        L7: reads the Delta log's add and remove actions by hand to find a replace (onto the Kernel's change feed)

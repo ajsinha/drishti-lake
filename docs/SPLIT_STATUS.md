@@ -3,13 +3,14 @@
 
 The steps of the design's section 7 ([DRISHTI_LAKE_DESIGN](design/DRISHTI_LAKE_DESIGN.md)), with their state and proof. Method as
 Drishti Rachana's re-order of 2026-11-19: **move first, untangle here; Drishti is not modified until G4.** Freeze commit: Drishti
-`main` `9ce7c3170` (2026-11-21). Decisions LK-1 to LK-16 accepted (LK-9 provisional: the Delta `hadoop` engine stays in Drishti).
+`main` `9ce7c3170` (2026-11-21). Decisions LK-1 to LK-16 accepted; LK-9 confirmed by the owner (2026-11-21): the Delta `hadoop` engine is not in the product and is
+retired from Drishti in G4, so `LakeStore` comes here with the native path only (L7).
 
 | Step | What | State | Proof |
 |---|---|---|---|
 | L0 | allow-list, file by file | **done** | [MOVE_ALLOWLIST](MOVE_ALLOWLIST.md); size and private-data scan of all history of the listed paths |
-| L1 | bootstrap: reactor, headers, licence, guards | **done, in part** | reactor, `mvnw`, licence, headers and guards (names no host, exemptions only shrink, header, file cap); not yet: dependency allow-list per module, public surface, official-libraries-only, explicit-paths and writes-no-configuration guards, CI entry, release script |
-| L2 | bridge and first TCK cases | not started | |
+| L1 | bootstrap: reactor, headers, licence, guards | **done** | guards: names no host, exemptions only shrink, header, file cap, dependency allow-list, official libraries only (failing); public surface, relative paths, configuration writes (report mode); `tools/ci/check.py` (local, no hosted CI); `tools/release/release.py` skeleton |
+| L2 | bridge and first TCK cases | **done** | `make_reference.py` over Drishti's jars at `9ce7c3170`; 15 cases × Delta, Iceberg = 30 results, stable over two runs; this code's results equal the reference (30/30) |
 | L3 | move with history, rename, hostcompat | **done** (untagged: no tag before the owner says) | 283 commits, 587 files; `./mvnw clean verify` green: 348 tests, 0 failures, 1 skipped (parked); the guards green |
 | L4 to L14 | untangle, TCK, Python, contracts, API, docs, release | not started | |
 

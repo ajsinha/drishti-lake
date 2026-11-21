@@ -1,0 +1,24 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# from: LakeLoadTest.rejectsAreCountedNamedAndWrittenAndTooManyStopTheLoad
+inputs:
+  scenario-pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","BUSINESS_DATE":"2026-10-27","DESK":"D1","BASE_PV":1.5,"SCENARIO_PV":[1,2]}
+    {"POSITION_ID":"X1","BUSINESS_DATE":"not a date"}
+    {"BUSINESS_DATE":"2026-10-27"}
+    {"POSITION_ID":"X2","BUSINESS_DATE":"2026-10-27","SCENARIO_PV":[1,"two"]}
+    {not json
+    [1,2]
+    {"POSITION_ID":"P-2","BUSINESS_DATE":"2026-10-27","DESK":"D2","BASE_PV":-3,"SCENARIO_PV":[null,4]}
+config: |
+  source:
+    files: '${in}/*'
+    id: POSITION_ID
+    promote: [LEGAL_ENTITY, DESK, TT_BOOK, TRADE_ID, QUANTITY, BASE_PV, CCY, POSITION_ID]
+    vectors: [SCENARIO_PV]
+  target:
+    format: ${store}
+    lake: '${lake}'
+    domain: risk
+    kind: scenario-pv
+steps:
+  - load: []

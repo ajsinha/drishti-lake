@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# from: LakeLoadTest.theInputsFormThreadsAndMemoryBudgetGiveIdenticalTables (variants)
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 300, scenarios: 8, seed: 5}}
+config: |
+  source:
+    files: '${in}/*'
+    id: POSITION_ID
+    promote: [LEGAL_ENTITY, DESK, TT_BOOK, TRADE_ID, QUANTITY, BASE_PV, CCY, POSITION_ID]
+    vectors: [SCENARIO_PV]
+  target:
+    format: ${store}
+    lake: '${lake}'
+    domain: risk
+    kind: scenario-pv
+steps:
+  - load: [--set, parallel.parsers=3, --set, parallel.writers=2, --set, parallel.split-mb=0.01, --set, memory.budget-mb=1]

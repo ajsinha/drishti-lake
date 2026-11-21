@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# from: SourceShapeParityTest, Delta interop (special characters in values)
+inputs:
+  scenario-pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P/1 a=b","BUSINESS_DATE":"2026-10-27","DESK":"D%20 é ü 東京","BASE_PV":1e-300,"SCENARIO_PV":[]}
+    {"POSITION_ID":"P:2","BUSINESS_DATE":"2026-10-27","DESK":"tab\\there \"q\"","BASE_PV":1.7976931348623157E308}
+    {"POSITION_ID":"P#3","BUSINESS_DATE":"2026-10-27","DESK":null,"BASE_PV":null,"SCENARIO_PV":null}
+config: |
+  source:
+    files: '${in}/*'
+    id: POSITION_ID
+    promote: [LEGAL_ENTITY, DESK, TT_BOOK, TRADE_ID, QUANTITY, BASE_PV, CCY, POSITION_ID]
+    vectors: [SCENARIO_PV]
+  target:
+    format: ${store}
+    lake: '${lake}'
+    domain: risk
+    kind: scenario-pv
+steps:
+  - load: []

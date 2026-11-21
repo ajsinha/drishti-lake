@@ -1,0 +1,18 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# from: LakeUndo (a load id the table never had)
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 10, scenarios: 2, seed: 1}}
+config: |
+  source:
+    files: '${in}/*'
+    id: POSITION_ID
+    promote: [LEGAL_ENTITY, DESK, TT_BOOK, TRADE_ID, QUANTITY, BASE_PV, CCY, POSITION_ID]
+    vectors: [SCENARIO_PV]
+  target:
+    format: ${store}
+    lake: '${lake}'
+    domain: risk
+    kind: scenario-pv
+steps:
+  - load: []
+  - undo: [--lake, '${lake}', --load-id, no-such-load, --table, risk/scenario-pv]

@@ -20,5 +20,14 @@ Entries are written per release; unreleased work is listed first.
   down), exemptions only shrink (host types and parked checks listed, each still needed), header, the 2,500-line cap.
 - **Green on its own.** `./mvnw clean verify`: 348 tests, 0 failures, 1 skipped (a host-reading check parked); two host-reading checks
   parked in all, each listed with the step that brings it back.
+- **L1, the rest of the guards and the local CI.** `ModuleRulesTest`: the per-module dependency allow-list and official libraries only
+  (no Delta log, Parquet footer or Iceberg metadata handled by hand; two listed leftovers, L7) fail the build; the public surface,
+  relative paths and configuration writes are reported (`lake-guards/target/guard-reports`). `tools/ci/check.py` (build, guards, the
+  parity kit twice and against the reference); `tools/release/release.py`, a skeleton that changes nothing and tags nothing.
+- **L2, the bridge and the first parity cases.** `tools/tck/TckRunner.java` + `tck.py` run `tck/cases` (15 cases, Delta and Iceberg:
+  load modes, two dates, input forms, archives, rejects, special characters, delete dates, retention, undo); `tools/split/make_reference.py`
+  runs the same runner, imports mapped back, over Drishti's own jars at `9ce7c3170` (a scratch clone, `./mvnw clean package`); the
+  reference results are stored (`tck/results/reference-9ce7c3170.jsonl.gz`), stable over two runs, and this code's results equal them
+  (`compare_results.py`: 30 of 30 identical).
 - Not moved yet, on purpose (each with its step): the memory lake (L8), the Delta lake opener that chooses the Hadoop engine (L7;
   the engine itself stays in Drishti, LK-9), the files store (L8), the Python path (L10), the contracts tool (L11).

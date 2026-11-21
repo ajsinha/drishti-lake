@@ -1,0 +1,3 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# Cases whose result here may differ from the reference (the host's jars at the freeze commit): "<case@store> <step>: <why>".
+# Empty: every case gives the reference's line, byte for byte.
