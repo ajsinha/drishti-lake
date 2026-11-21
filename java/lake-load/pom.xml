@@ -19,7 +19,7 @@
   <parent>
     <groupId>com.ash.lake</groupId>
     <artifactId>lake-parent</artifactId>
-    <version>0.9.0-SNAPSHOT</version>
+    <version>0.9.0</version>
   </parent>
   <artifactId>lake-load</artifactId>
   <name>Drishti Lake: the loader, archives, retention, undo, relocate, and the inbox (.ready hand-over)</name>

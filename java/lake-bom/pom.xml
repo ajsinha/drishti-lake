@@ -21,7 +21,7 @@
        Test support's own libraries (the S3 simulator, JUnit) are pinned in the reactor, never here. -->
   <groupId>com.ash.lake</groupId>
   <artifactId>lake-bom</artifactId>
-  <version>0.9.0-SNAPSHOT</version>
+  <version>0.9.0</version>
   <packaging>pom</packaging>
   <name>Drishti Lake: bill of materials</name>
 
@@ -39,7 +39,7 @@
     <zstd-jni.version>1.5.7-6</zstd-jni.version>
     <caffeine.version>3.2.4</caffeine.version>
     <!-- Drishti Tools (settings, net, concurrent, time, codec, files, testkit): one version for every module, through its tools-bom. -->
-    <drishti.tools.version>1.0.0-SNAPSHOT</drishti.tools.version>
+    <drishti.tools.version>1.0.0</drishti.tools.version>
   </properties>
 
   <dependencyManagement>

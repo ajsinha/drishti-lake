@@ -19,7 +19,7 @@
   <parent>
     <groupId>com.ash.lake</groupId>
     <artifactId>lake-parent</artifactId>
-    <version>0.9.0-SNAPSHOT</version>
+    <version>0.9.0</version>
   </parent>
   <artifactId>lake-guards</artifactId>
   <name>Drishti Lake: the repository's guards (names no host, exemptions only shrink, header, file cap, API surface)</name>

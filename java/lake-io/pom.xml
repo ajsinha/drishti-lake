@@ -19,7 +19,7 @@
   <parent>
     <groupId>com.ash.lake</groupId>
     <artifactId>lake-parent</artifactId>
-    <version>0.9.0-SNAPSHOT</version>
+    <version>0.9.0</version>
   </parent>
   <artifactId>lake-io</artifactId>
   <name>Drishti Lake: storage (local, S3), ranged reads, Parquet footers, codecs</name>
