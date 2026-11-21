@@ -2,6 +2,7 @@
 # Every parity case (tools/ci/coverage.py): cases are only added, never removed or renamed.
 concurrent/two-writers-two-dates
 delete/whole-dates
+inputs/archive-guards-and-dataset
 inputs/gzip-zstd-and-members
 inputs/tar-by-table-and-date
 inputs/tar-one-folder-deep-refused

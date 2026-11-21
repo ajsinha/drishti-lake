@@ -48,8 +48,8 @@ runtime to every call (`LakeLoad.run(runtime, ..)`, `DataLoadSettings`, `Catalog
 `python/drishti_lake` (wheel `drishti-lake`, built by `uv build`; pins deltalake 1.6.6, pyarrow 26.0.1, PyYAML; Polars 2.1.0 optional:
 used when installed, the plain writer otherwise, the same table either way). One command, the Java loader's:
 `python -m drishti_lake load --config FILE [the LakeLoad flags]`, the same configuration file, the same summary keys and exit codes.
-Today it writes Delta on the local disk (a lake folder or `target.path`); a named lake (lake file), Iceberg, files, `s3://`/`mem://`,
-`datasets:`, `source.pack` and loader rows are refused before a row is read, naming the Java loader. Its proof is the kit's Python row
+Today it writes Delta on the local disk (a lake folder, `target.path`, or a named lake's Delta entry read through the Java tools); Iceberg, files, `s3://`/`mem://`,
+`datasets:` and `source.pack` are refused before a row is read, naming the Java loader. Its proof is the kit's Python row
 (`<case>@delta^python`, every Delta case, equal to the Java line of the same run; `tck/python-differences.txt` only shrinks).
 
 The host's callers (about 66 Python files outside `tools/lake` import it at the freeze commit) switch by import:
@@ -59,9 +59,10 @@ The host's callers (about 66 Python files outside `tools/lake` import it at the 
 | `filedate` | 9 | `drishti_lake.filedate` | same names and arguments (`parse`, `of`, `decide`, `words`, `tar_layout`, `business_today`, `date_error`, `base_name`, `is_tar`, `other_date_note`); today is the business zone's (`LAKE_BUSINESS_ZONE`), and a date given after today is refused as in Java; `local_day` and `of_input` stay host |
 | `build`, `javaload`, `writers`, `icebergwrite`, `stage` | 5 + 3 + 2 + 1 | `drishti_lake.load.main([...])` / `python -m drishti_lake load` | the host's front writes the loader configuration (javaload's `loader.json` is that document) and calls the one command; Iceberg, S3 and the memory lake: the Java loader (`lake-cli`) |
 | `jsonstream` | 2 | `drishti_lake.inputs` (`resolve`, `lines`) | JSON Lines only (`jsonl-only`); a JSON array is the host's to convert |
-| `archives` | 6 | `drishti_lake.inputs` (zip and tar members, the tar layout) | the archive guards (size, ratio, members, slips) of `archives.plan` come with a later part (fixture `tck/fixtures/archives/expected.json`) |
-| `lakeconfig` | 16 | not yet | the lake-file reader is Java's (`LakesCli`): reached through the `lake-cli` jar, a later part |
-| `laketables`, `maintain*`, `delete`, `undo`, `relocate`, `scan`, `deltaread`, `ownership`, `compare_lakes`, `memory_*` | few | not yet | later parts, through the `lake-cli` jar (design 3.3) |
+| `archives` | 6 | `drishti_lake.archives` (`plan`, `Limits`, `safe_parts`) through `drishti_lake.inputs` | the Java loader's rule and words: guards (absolute, `..`, links, encrypted, nested), caps from the listing and while reading (`source.archive.*`, `lake.archive.*`), a zip one table, a tar's other tables refused unless `source.dataset` names one; shared fixtures `tck/fixtures/archives` (`test_archives.py`), case `inputs/archive-guards-and-dataset` |
+| `lakeconfig` | 16 | `target.lake: <name>` in the load configuration; `python -m drishti_lake lakes ...` | the lake-file reader is Java's (`LakesCli table`), reached through the product's class path (`LAKE_CLASSPATH`, `drishti_lake.java`); the entry applied with the Java loader's agree rule; a Delta entry only, table properties refused naming the Java loader |
+| `maintain*`, `delete`, `undo`, `relocate`, `laketables` (check) | few | `python -m drishti_lake maintain|retention|undo|relocate|check` | the Java tools themselves (`IcebergMaintenance`, `LakeRetention` incl. delete dates, `LakeUndo`, `LakeRelocate`, `LakeCheck`) through `LAKE_CLASSPATH`: one way per job; the kit's Python row runs its undo, retention and delete steps this way (equal to the Java row) |
+| `scan`, `deltaread`, `ownership`, `compare_lakes`, `memory_*` | few | not yet | reads: the read API (Java) when a host needs them from Python |
 | `feedfiles`, `feedroute`, `stores`, `demo`, `publish`, `s3sim` | 19 + 4 + 2 + 2 | stay in Drishti | feeds, source systems and the demo (design 2) |
 
 ## The host's read API (G4 rehearsal L1; built through RA-S7 on 2026-11-21)

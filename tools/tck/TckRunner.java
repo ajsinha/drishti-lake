@@ -130,7 +130,7 @@ public final class TckRunner {
         }
         String[] argv = a.toArray(new String[0]);
         int code;
-        if (step.path("loader").asText("").equals("python")) code = python(argv, ps); else   // the matrix's Python row (LK-7)   // lake-only
+        if (step.path("loader").asText("").equals("python")) code = python(op, argv, ps); else   // the matrix's Python row (LK-7)   // lake-only
         code = switch (op) {
             case "load" -> LakeLoad.run(RT, argv, ps);
             case "undo" -> LakeUndo.run(RT, argv, ps);
@@ -203,11 +203,16 @@ public final class TckRunner {
      * A load by the Python path ({@code drishti_lake}): the command {@code -Dtck.python} names (a JSON list: uv, the built wheel, its   // lake-only
      * pins; tools/tck/tck.py), with the step's arguments; what it prints is what it said, its exit code the step's.   // lake-only
      */   // lake-only
-    static int python(String[] argv, PrintStream ps) throws Exception {   // lake-only
+    static int python(String op, String[] argv, PrintStream ps) throws Exception {   // lake-only
         List<String> cmd = new ArrayList<>();   // lake-only
         JSON.readTree(System.getProperty("tck.python")).forEach(x -> cmd.add(x.asText()));   // lake-only
+        cmd.add(op);   // lake-only
         cmd.addAll(List.of(argv));   // lake-only
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();   // lake-only
+        ProcessBuilder pb = new ProcessBuilder(cmd).redirectError(ProcessBuilder.Redirect.INHERIT);   // lake-only
+        pb.environment().put("LAKE_CLASSPATH", java.util.Arrays.stream(System.getProperty("java.class.path").split(java.io.File.pathSeparator))   // lake-only
+                .filter(e -> !e.contains("logback")).collect(java.util.stream.Collectors.joining(java.io.File.pathSeparator)));   // the product's class path for its Java tools, without the runner's logging   // lake-only
+        pb.environment().put("LAKE_JAVA", ProcessHandle.current().info().command().orElse("java"));   // lake-only
+        Process p = pb.start();   // lake-only
         byte[] said = p.getInputStream().readAllBytes();   // lake-only
         int code = p.waitFor();   // lake-only
         ps.print(new String(said, StandardCharsets.UTF_8));   // lake-only

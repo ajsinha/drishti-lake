@@ -12,10 +12,6 @@ config:rejects.file
 config:report.dry-run
 config:report.manifest
 config:report.progress
-config:source.archive
-config:source.archive.max-mb
-config:source.archive.max-members
-config:source.archive.max-ratio
 config:source.archive.validate
 config:source.connector
 config:source.dataset
@@ -29,7 +25,6 @@ config:target.path
 config:target.properties
 config:target.storage-options
 config:target.table
-flag:--dataset
 flag:--kind
 flag:--pack
 ready:connector

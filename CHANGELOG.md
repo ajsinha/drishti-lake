@@ -5,6 +5,11 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **The Python path, L10 rest**: the archive rule with the Java loader's guards, caps and words (`drishti_lake.archives`; the shared
+  fixtures in `test_archives.py`; case `inputs/archive-guards-and-dataset`, `--dataset` picking a tar's one table); the Java tools from
+  Python (`python -m drishti_lake undo|retention|relocate|check|maintain|lakes`, class path `LAKE_CLASSPATH`): one implementation per
+  job, and the kit's Python row now runs its undo, retention and delete steps through them (equal to the Java row); a named lake
+  (`target.lake: <name>`) read through `LakesCli table` and applied with the Java loader's agree rule.
 - **Data contracts (L11)**: the contract schema, reader, checks and page generator are the product's. Python `drishti_lake.contracts`
   (`schema.json` without the host's keys; `Profile` adds a host's keys, handed back untouched; `schema_problems`, `record`, `drift`;
   `pages` with a host's words through a `PageProfile`; `python -m drishti_lake contracts check|pages`). Java `lake-contracts`

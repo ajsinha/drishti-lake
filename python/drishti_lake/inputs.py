@@ -4,9 +4,9 @@
 as lines whatever its container.
 
 A pattern is a file, a folder (its data files; ``recursive`` for subfolders) or a glob (``*``, ``?``, ``**``). Plain JSON Lines
-(``.jsonl``, ``.ndjson``, ``.json``), gzip (every member), zstd, a zip (its JSON Lines members, in name order, dated by the archive's
-name) and a tar (``<table>/<YYYY-MM-DD>/<file>.jsonl``, every member dated by its folder; a bad layout refuses the archive with every
-problem listed). Local files only: an object store's input is the Java loader's."""
+(``.jsonl``, ``.ndjson``, ``.json``), gzip (every member), zstd, a zip (its JSON Lines files loose, in name order, dated by the
+archive's name) and a tar (``<table>/<YYYY-MM-DD>/<file>.jsonl``, every member dated by its folder); both under the archive rule and
+its guards and caps (``archives``). Local files only: an object store's input is the Java loader's."""
 from __future__ import annotations
 
 import gzip
@@ -16,13 +16,12 @@ import pathlib
 import re
 import tarfile
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
-from . import filedate
+from . import archives, filedate
 
 SUFFIXES = (".jsonl", ".ndjson", ".json", ".gz", ".zst", ".zip", ".tgz", ".tar")
-_JSONL = re.compile(r"\.(jsonl|ndjson|json)(\.gz|\.zst)?$", re.IGNORECASE)
 
 
 class InputError(Exception):
@@ -39,6 +38,7 @@ class InputFile:
     member: str | None = None
     folder_date: date | None = None
     folder_table: str | None = None
+    tally: object = field(default=None, compare=False, hash=False)    # the archive's running counts (archives.Tally) while read
 
     @property
     def top(self) -> str:
@@ -95,8 +95,12 @@ def _local(pattern: str, recursive: bool) -> list[str]:
     return sorted(str(f.absolute()) for f in walk if f.is_file() and glob.match(f.relative_to(folder).as_posix()))
 
 
-def resolve(patterns: list[str], recursive: bool, today: date) -> list[InputFile]:
-    """The data files of ``source.files``, in path order; an archive expanded to its members (module doc)."""
+def resolve(patterns: list[str], recursive: bool, today: date, limits: archives.Limits | None = None, dataset: str | None = None,
+            table: str | None = None, as_of: date | None = None, notes: list | None = None) -> list[InputFile]:
+    """The data files of ``source.files``, in path order; an archive expanded to its members (module doc). ``limits``: the caps
+    (``source.archive``); ``dataset``: a folderless archive's dataset, or the one tar table of this load; ``table``: the load's table
+    (a tar's other tables refused); ``notes``: the archives' notes are added to it."""
+    limits = limits or archives.Limits.defaults()
     paths = []
     for pattern in patterns:
         if "://" in pattern and not pattern.startswith("file:"):
@@ -105,41 +109,31 @@ def resolve(patterns: list[str], recursive: bool, today: date) -> list[InputFile
         if not found:
             raise InputError(f"source.files {pattern}: no input file matches")
         paths += found
-    out = []
+    out, plans = [], []
     for p in sorted(paths):
         name = os.path.basename(p)
-        low = name.lower()
-        if filedate.is_tar(name):
-            out += _tar(p, name, today)
-        elif low.endswith(".zip") and zipfile.is_zipfile(p):
-            out += _zip(p, name)
+        if archives.is_archive(name):
+            plan = archives.plan(p, dataset, limits, today)
+            if notes is not None:
+                notes += [f"{plan.archive_name}: {n}" for n in plan.notes]
+            plans.append(plan)
         else:
             out.append(InputFile(p, name))
-    return out
-
-
-def _tar(path: str, name: str, today: date) -> list[InputFile]:
-    if name.lower().endswith(".tar.zip"):
-        raise InputError(f"{name}: a .tar.zip is read by the Java loader")
-    with tarfile.open(path, "r:*") as t:
-        entries = [(m.name, "file" if m.isfile() else "dir" if m.isdir() else "link" if m.issym() or m.islnk() else "other") for m in t]
-    lay = filedate.tar_layout(entries, today)
-    if lay.errors:
-        n = len(lay.errors)
-        raise InputError(f"{name}: refused, nothing was loaded ({n} problem{'s' if n > 1 else ''}): " + "; ".join(lay.errors))
-    out = []
-    for table, days in lay.tables.items():
-        for day, members in sorted(days.items()):
-            for m in members:
-                out.append(InputFile(path, m.rsplit("/", 1)[-1], path, m, day, table))
-    return out
-
-
-def _zip(path: str, name: str) -> list[InputFile]:
-    with zipfile.ZipFile(path) as z:
-        members = sorted(i.filename for i in z.infolist() if not i.is_dir() and _JSONL.search(i.filename)
-                         and not any(part.startswith(".") or part in filedate.LITTER for part in i.filename.split("/")))
-    return [InputFile(path, m.rsplit("/", 1)[-1], path, m) for m in members]
+    for plan in plans:
+        if plan.kind != "zip" and as_of is not None:
+            raise archives.ArchiveError(f"{plan.archive_name}: a .tar archive names its own tables and dates (its <table>/<YYYY-MM-DD>/ "
+                                        "folders): source.as-of is refused for it")
+    for plan in plans:
+        tally = archives.Tally(plan.archive_name, limits.cap(plan.size))
+        if plan.folders and dataset and dataset.strip():                 # a tar's one table this load is for (the others: other loads)
+            members = plan.datasets.get(dataset, [])
+        else:
+            if plan.folders and table is not None:
+                plan.require([table])
+            members = plan.members()
+        out += [InputFile(plan.archive, m.name.rsplit("/", 1)[-1], plan.archive, m.raw, m.day, m.dataset if plan.folders else None, tally)
+                for m in members]
+    return sorted(out, key=lambda f: f.path)
 
 
 def _decompress(raw: io.BufferedIOBase, name: str):
@@ -156,16 +150,28 @@ def _decompress(raw: io.BufferedIOBase, name: str):
     return raw
 
 
+def _member(raw, f: InputFile):
+    """A member's JSON Lines held to the archive's caps: the bytes it expands to, and apart the text of a compressed member."""
+    if f.tally is None:
+        return _decompress(raw, f.member)
+    entry = io.BufferedReader(archives.Capped(raw, f.tally, "expanded", f.tally.archive_name))
+    low = f.member.lower()
+    if low.endswith((".gz", ".zst")):
+        what = f"{f.tally.archive_name}!/{archives.safe_parts(f.member) and '/'.join(archives.safe_parts(f.member))}'s JSON Lines"
+        return io.BufferedReader(archives.Capped(_decompress(entry, f.member), f.tally, "text", what))
+    return entry
+
+
 def lines(f: InputFile):
     """The lines of one data file, decoded as UTF-8 (a bad byte replaced, as the Java reader does), without their line ends; blank
-    lines skipped."""
+    lines skipped. An archive's member is held to its caps while it is read (``archives.ArchiveError``)."""
     if f.archive and f.archive.lower().endswith(".zip"):
         with zipfile.ZipFile(f.archive) as z, z.open(f.member) as raw:
-            yield from _text(_decompress(raw, f.member))
+            yield from _text(_member(raw, f))
     elif f.archive:
         with tarfile.open(f.archive, "r:*") as t:
             raw = t.extractfile(f.member)
-            yield from _text(_decompress(raw, f.member))
+            yield from _text(_member(raw, f))
     else:
         with open(f.path, "rb") as raw:
             yield from _text(_decompress(raw, f.name))

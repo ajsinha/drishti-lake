@@ -104,7 +104,10 @@ def step(s, work, env, loader="java"):
         if loader != "java":
             out["loader"] = loader
         return out
-    return {"op": op, "args": subst(arg, env)}
+    out = {"op": op, "args": subst(arg, env)}
+    if loader != "java" and op in ("undo", "retention"):
+        out["loader"] = loader                                   # the Python path's command, which runs the Java tool
+    return out
 
 
 PYTHON = "^python"   # the matrix's Python row (LK-7): a case's loads by the Python path, its lake on the local disk, Delta (design 3.3)
@@ -170,14 +173,15 @@ def s3_classpath():
 
 def python_command(scratch):
     """The Python path's command for the runner (-Dtck.python): the wheel built from python/ into the scratch folder, run by uv with the
-    pins of tools/ci/interop-pins.txt and Polars (the path uses Polars when it is installed), offline first."""
+    pins of tools/ci/interop-pins.txt and Polars (the path uses Polars when it is installed), offline first. The runner adds the step's
+    command (load, undo, retention): the Python path's upkeep runs the Java tools through the product's class path (drishti_lake.java)."""
     uv = shutil.which("uv") or str(Path.home() / ".local" / "bin" / "uv")
     dist = scratch / "dist"
     subprocess.run([uv, "build", "--offline", "--quiet", "--wheel", "--out-dir", str(dist), str(ROOT / "python")], check=True)
     wheel = next(dist.glob("drishti_lake-*.whl"))
     pins = [l.strip() for l in (ROOT / "tools" / "ci" / "interop-pins.txt").read_text().splitlines() if l.strip() and not l.startswith("#")]
     withs = [x for p in pins + [str(wheel), "polars==2.1.0", "pyyaml"] for x in ("--with", p)]
-    return [uv, "run", "--offline", "--quiet", "--no-project"] + withs + ["python", "-I", "-m", "drishti_lake", "load"]
+    return [uv, "run", "--offline", "--quiet", "--no-project"] + withs + ["python", "-I", "-m", "drishti_lake"]
 
 
 def module_cp(java, m):

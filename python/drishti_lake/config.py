@@ -71,6 +71,8 @@ class LoadConfig:
     loader_rows_of: str | None = None
     float32: bool = False
     contract: object = None    # contracts.Contract (target.contract): every row checked against it before the first write
+    limits: object = None      # archives.Limits (source.archive, else lake.archive.*)
+    dataset: str | None = None
 
 
 def _check(section: str, n):
@@ -173,40 +175,139 @@ def of(tree: dict) -> LoadConfig:
     date_from = _text(s, "date-from", "auto").lower()
     if date_from not in ("auto", "name"):
         raise ConfigError(f"source.date-from {date_from}: auto or name")
-    fmt = _text(t, "format", "delta").lower()
+    lake, path = _text(t, "lake"), _text(t, "path")
+    e = _entry(t, lake) if lake is not None and is_lake_name(lake) else None
+    key, day, latest = _text(s, "id"), _text(s, "date"), _text(s, "latest-by")
+    promote, vectors = _list(s, "promote"), _list(s, "vectors") + _list(s, "vector")
+    flatten = {str(k): str(_env(v)) for k, v in (s.get("flatten") or {}).items()}
+    partition_by, sort_by = _list(s, "partition-by"), _list(t.get("layout") or {}, "sort-by")
+    fmt = _text(t, "format", e["format"] if e else "delta").lower()
+    if e:                                             # the lake file's entry: everything of the table from there, nothing contradicted here
+        day = _agree(e, "date", day, e.get("date"))
+        if "partition-by" in s:
+            _agree(e, "partition-by", partition_by, e.get("partition-by"))
+        partition_by = list(e.get("partition-by") or [])
+        promote = _agree(e, "promote", promote, e.get("promote")) if "promote" in s else list(e.get("promote") or [])
+        vectors = _agree(e, "vectors", vectors, e.get("vectors")) if "vectors" in s or "vector" in s else list(e.get("vectors") or [])
+        if "flatten" in s:
+            _agree(e, "flatten", flatten, e.get("flatten") or {})
+        flatten = dict(e.get("flatten") or {})
+        key = _agree(e, "id", key, e.get("id") or key) if key else e.get("id")
+        latest = _agree(e, "latest-by", latest, e.get("latest-by") or latest) if latest else e.get("latest-by")
+        _agree(e, "format", fmt, e["format"])
+        if sort_by:
+            _agree(e, "sort-by", sort_by, e.get("sort-by") or [])
+        sort_by = sort_by or list(e.get("sort-by") or [])
+        if path is not None:
+            _agree(e, "path", path, e["location"])
+        if e.get("properties") or (e.get("maintenance") or {}).get("checkpoint-interval"):
+            raise ConfigError(f"target.lake {lake}: table {e['name']} sets table properties; {JAVA}")
     if fmt != "delta":
         raise ConfigError(f"target.format {fmt}: the Python path writes Delta tables; {JAVA}")
-    lake, path = _text(t, "lake"), _text(t, "path")
-    if path is None and lake is not None and "/" not in lake and "\\" not in lake:
-        raise ConfigError(f"target.lake {lake}: a lake named by its lake file is read by the Java loader; {JAVA}")
-    if path is None and (lake is None or _text(t, "domain") is None or (_text(t, "kind") is None and _text(t, "table") is None)):
+    if e is None and path is None and (lake is None or _text(t, "domain") is None or (_text(t, "kind") is None and _text(t, "table") is None)):
         raise ConfigError("target: give path, or lake, domain and kind (or table)")
-    table_path = _trim(path) if path else _trim(lake) + "/" + _text(t, "domain") + "/" + (_text(t, "table") or _text(t, "kind"))
+    if e:
+        table_path = _trim(e["location"])
+    else:
+        table_path = _trim(path) if path else _trim(lake) + "/" + _text(t, "domain") + "/" + (_text(t, "table") or _text(t, "kind"))
     if "://" in table_path and not table_path.startswith("file:"):
         raise ConfigError(f"target {table_path}: the Python path writes local tables; {JAVA}")
     a = table_path.rfind("/")
     b = table_path.rfind("/", 0, a) if a > 0 else -1
     table = table_path[a + 1:]
-    domain = _text(t, "domain") or (table_path[b + 1:a] if b >= 0 else "")
-    lake_root = _trim(lake) if lake and not path else (table_path[:b] if b > 0 else table_path)
+    domain = _text(t, "domain") or (e["domain"] if e else None) or (table_path[b + 1:a] if b >= 0 else "")
+    lake_root = _trim(e["root"]) if e else _trim(lake) if lake and not path else (table_path[:b] if b > 0 else table_path)
     given, fallback = _text(t, "mode"), _text(t, "default-mode")
-    mode_from = "given" if given else "default" if fallback else "rules"
-    mode = (given or fallback or "append").lower()
+    mode_from = "given" if given else "lake" if e else "default" if fallback else "rules"
+    lake_mode = None if e is None else "append" if str(e.get("load-mode") or "").lower() == "append" else "replace-date"
+    mode = (given or lake_mode or fallback or "append").lower()
     mode = "replace-date" if mode in ("overwrite-dates", "replace") else mode
     if mode not in ("replace-date", "append"):
         raise ConfigError(f"target.mode {mode}: append (the default: each business date's rows are added, one commit per date) or "
                           "replace-date (each business date of the input replaced by one commit; also replace, overwrite-dates)")
-    vectors = _list(s, "vectors") + _list(s, "vector")
-    flatten = {str(k): str(_env(v)) for k, v in (s.get("flatten") or {}).items()}
     rj, rp, lay = tree.get("rejects") or {}, tree.get("report") or {}, t.get("layout") or {}
     return LoadConfig(
-        files=files, recursive=_bool(s, "recursive", False), key=_text(s, "id", "id"), date=_text(s, "date"), as_of=as_of,
-        date_from=date_from, promote=_list(s, "promote"), vectors=vectors, flatten=flatten, partition_by=_list(s, "partition-by"),
-        latest_by=_text(s, "latest-by", DEFAULT_LATEST_BY), fmt=fmt, table_path=table_path, lake_root=lake_root, domain=domain, table=table,
+        files=files, recursive=_bool(s, "recursive", False), key=key or "id", date=day, as_of=as_of,
+        date_from=date_from, promote=promote, vectors=vectors, flatten=flatten, partition_by=partition_by,
+        latest_by=(latest or DEFAULT_LATEST_BY).strip(), fmt=fmt, table_path=table_path, lake_root=lake_root, domain=domain, table=table,
         mode=mode, mode_from=mode_from, batch_id=_text(t, "batch-id"), max_pct=float(rj.get("max-pct", 100.0)), keep=int(rj.get("keep", 50)),
         summary=_text(rp, "summary"), progress=_text(rp, "progress"), run_log=_bool(rp, "run-log", True), dry_run=_bool(rp, "dry-run", False),
-        lock=_bool(tree, "lock", True), sort_by=_list(lay, "sort-by") or list(DEFAULT_SORT),
-        loader_rows_of=loader_rows_of, float32=_vector_type(_text(lay, "vector-type", "double")), contract=_contract(_text(t, "contract")))
+        lock=_bool(tree, "lock", True), sort_by=sort_by or list(DEFAULT_SORT),
+        loader_rows_of=loader_rows_of, float32=_vector_type(_text(lay, "vector-type", "double")), contract=_contract(_text(t, "contract")),
+        limits=_limits(s.get("archive") or {}), dataset=_dataset(_text(s, "dataset")))
+
+
+_LAKE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
+
+
+def is_lake_name(ref: str) -> bool:
+    """Whether ``target.lake`` names a lake by its lake file (a plain name) rather than a folder or a URL (Java: LoadConfig.isLakeName)."""
+    return _LAKE_NAME.fullmatch(ref) is not None and not os.path.isdir(ref)
+
+
+def _entry(t: dict, lake: str) -> dict:
+    """The lake file's entry for ``target.kind`` (the Java reader's answer, through the product's class path: ``java.lake_table``)."""
+    from . import java
+    kind = _text(t, "kind")
+    if kind is None:
+        raise ConfigError(f"target.kind: name the kind whose table of lake {lake} this load writes")
+    try:
+        return java.lake_table(lake, kind, _text(t, "domain"), _text(t, "table"),
+                               os.environ.get("LAKE_LAKES_DIR") or os.environ.get("lake.lakes.dir"))
+    except java.JavaError as e:
+        raise ConfigError(f"target.lake {lake}: a lake named by its lake file is read through the Java tools: {e}") from None
+    except ValueError as e:
+        raise ConfigError(str(e)) from None
+
+
+def _java_text(v) -> str:
+    """A value as Java's toString writes it in the refusal (a list [a, b], a map {k=v})."""
+    if isinstance(v, list):
+        return "[" + ", ".join(_java_text(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{" + ", ".join(f"{k}={_java_text(x)}" for k, x in v.items()) + "}"
+    return str(v)
+
+
+def _agree(e: dict, key: str, mine, lakes):
+    """A value of the load file that the lake file also gives: the same, else refused naming both (Java: LoadConfig.agree)."""
+    if mine is not None and lakes is not None and mine != lakes:
+        raise ConfigError(f"{key} {_java_text(mine)} differs from {_java_text(lakes)}, the {key} of table {e['name']} in its lake file: the lake "
+                          f"file decides (docs/guides/DATA_LAKE_GUIDE.md); remove {key} from the load or correct the lake file")
+    return mine if mine is not None else lakes
+
+
+def _mb(v, key: str) -> int:
+    mb = float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else float(str(_env(str(v))))
+    if mb <= 0:
+        raise ConfigError(f"{key} must be more than 0")
+    return int(mb * 1024 * 1024)
+
+
+def _limits(a: dict):
+    """source.archive.max-mb, max-ratio, max-members over lake.archive.* (Java: LoadConfig.archive); validate: rows or structure."""
+    from . import archives
+    try:
+        d = archives.Limits.defaults()
+    except ValueError as e:
+        raise ConfigError(str(e)) from None
+    max_bytes = _mb(a["max-mb"], "max-mb") if a.get("max-mb") is not None else d.max_bytes
+    ratio = float(_text(a, "max-ratio", "0")) if "max-ratio" in a else d.max_ratio
+    members = int(_text(a, "max-members", "0")) if "max-members" in a else d.max_members
+    if ratio <= 0 or members <= 0 or max_bytes <= 0:
+        raise ConfigError("source.archive: max-mb, max-ratio and max-members must be more than 0")
+    validate = _text(a, "validate", "rows").lower()
+    if validate not in ("rows", "structure"):
+        raise ConfigError(f"source.archive.validate {validate}: rows (every dataset read and checked before the first commit) or structure "
+                          "(the archives' listing only)")
+    return archives.Limits(max_bytes, ratio, members)
+
+
+def _dataset(d: str | None):
+    from . import archives
+    if d is not None and not archives.valid_name(d):
+        raise ConfigError(f"source.dataset {d}: a table's folder name (letters, digits, '.', '_' and '-')")
+    return d
 
 
 def _contract(file: str | None):

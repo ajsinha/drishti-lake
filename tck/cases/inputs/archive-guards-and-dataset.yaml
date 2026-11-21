@@ -1,0 +1,58 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# from: ArchivesTest and tck/fixtures/archives (the guards and caps, every refusal in the loader's words, the Python path's too):
+# the declared size over source.archive.max-mb, more entries than max-members, a '..' member, a zip with folders, a tar holding
+# another table than the load's, refused before a row is read; --dataset picks a tar's one table (source.dataset) and loads it
+inputs:
+  big.2026-10-27.zip:
+    zip:
+      a.jsonl: {pv: {n: 80, scenarios: 3, seed: 3}}
+  many.2026-10-27.zip:
+    zip:
+      a.jsonl: {pv: {n: 2, scenarios: 3, seed: 3}}
+      b.jsonl: {pv: {n: 2, scenarios: 3, seed: 4}}
+      c.jsonl: {pv: {n: 2, scenarios: 3, seed: 5}}
+  slip.2026-10-27.zip:
+    zip:
+      ../escape.jsonl: {pv: {n: 2, scenarios: 3, seed: 3}}
+  folders.2026-10-27.zip:
+    zip:
+      scenario-pv/a.jsonl: {pv: {n: 2, scenarios: 3, seed: 3}}
+  two-tables.tar:
+    tar:
+      scenario-pv/2026-10-27/a.jsonl: {pv: {n: 5, scenarios: 3, seed: 6}}
+      other/2026-10-27/b.jsonl: {pv: {n: 3, scenarios: 3, seed: 7}}
+configs:
+  big: |
+    source:
+      files: '${in}/big.2026-10-27.zip'
+      id: POSITION_ID
+      promote: [DESK, QUANTITY]
+      vectors: [SCENARIO_PV]
+      archive: {max-mb: 0.01}
+    target: {format: '${store}', lake: '${lake}', domain: risk, kind: scenario-pv}
+  many: |
+    source:
+      files: '${in}/many.2026-10-27.zip'
+      id: POSITION_ID
+      archive: {max-members: 2, max-ratio: 1000}
+    target: {format: '${store}', lake: '${lake}', domain: risk, kind: scenario-pv}
+  slip: |
+    source: {files: '${in}/slip.2026-10-27.zip', id: POSITION_ID}
+    target: {format: '${store}', lake: '${lake}', domain: risk, kind: scenario-pv}
+  folders: |
+    source: {files: '${in}/folders.2026-10-27.zip', id: POSITION_ID}
+    target: {format: '${store}', lake: '${lake}', domain: risk, kind: scenario-pv}
+  tar: |
+    source:
+      files: '${in}/two-tables.tar'
+      id: POSITION_ID
+      promote: [DESK, QUANTITY]
+      vectors: [SCENARIO_PV]
+    target: {format: '${store}', lake: '${lake}', domain: risk, kind: scenario-pv}
+steps:
+  - load: {config: big}
+  - load: {config: many}
+  - load: {config: slip}
+  - load: {config: folders}
+  - load: {config: tar}
+  - load: {config: tar, args: [--dataset, scenario-pv]}

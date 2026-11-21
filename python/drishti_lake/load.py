@@ -22,7 +22,7 @@ import time
 from datetime import date, datetime, timezone
 
 from . import config as configs
-from . import delta, filedate, inputs, rowrule
+from . import archives, delta, filedate, inputs, rowrule
 
 OK, FAILED, PARTIAL, LOCKED = 0, 1, 2, 3
 STATE = "_drishti-lake"
@@ -96,8 +96,12 @@ def main(argv: list[str], out=None) -> int:
         print(f"lakeload: the configuration: {e}", file=out)
         return FAILED
     today = filedate.today()
+    notes = []
     try:
-        files = inputs.resolve(cfg.files, cfg.recursive, today)
+        files = inputs.resolve(cfg.files, cfg.recursive, today, cfg.limits, cfg.dataset, cfg.table, cfg.as_of, notes)
+    except archives.ArchiveError as e:
+        print(f"lakeload: {e}", file=out)
+        return FAILED
     except inputs.InputError as e:
         msg = str(e)
         print("lakeload: " + ("" if "refused, nothing was loaded" in msg else "the input: ") + msg, file=out)
@@ -105,6 +109,9 @@ def main(argv: list[str], out=None) -> int:
     except OSError as e:
         print(f"lakeload: the input: {e}", file=out)
         return FAILED
+    if not quiet:
+        for n in notes:
+            print(f"  {n}", file=out)
     report = Report(cfg, given_run or run_id(), today)
     error, lock = None, None
     try:
@@ -113,7 +120,7 @@ def main(argv: list[str], out=None) -> int:
         Loader(cfg, files, report).run()
     except Locked as e:
         report.status, error = "locked", str(e)
-    except (LoadError, delta.TableError, ValueError) as e:
+    except (LoadError, delta.TableError, ValueError, archives.ArchiveError) as e:
         error = str(e)
     except Exception as e:  # noqa: BLE001 - one line, as the Java loader's
         error = f"{type(e).__name__}: {str(e).splitlines()[0] if str(e) else ''}"
