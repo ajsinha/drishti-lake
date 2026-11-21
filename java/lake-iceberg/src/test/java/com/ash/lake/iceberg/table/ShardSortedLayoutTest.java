@@ -21,15 +21,15 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * A table the parallel lake loader laid out by legal entity, desk and id ({@code drishti.layout.sort-by}) is left in that order by the
+ * A table the parallel lake loader laid out by legal entity, desk and id ({@code lake.layout.sort-by}) is left in that order by the
  * relayout of lake maintain (its files overlap in id by design); a table sorted by id alone is relaid as before.
  */
 class ShardSortedLayoutTest {
 
     @Test
     void onlyATableSortedByMoreThanTheIdIsLeftInItsOrder() {
-        assertThat(IcebergMaintenance.shardSorted(Map.of("drishti.layout.sort-by", "LEGAL_ENTITY,DESK,id"))).isTrue();
-        assertThat(IcebergMaintenance.shardSorted(Map.of("drishti.layout.sort-by", "id"))).isFalse();
+        assertThat(IcebergMaintenance.shardSorted(Map.of("lake.layout.sort-by", "LEGAL_ENTITY,DESK,id"))).isTrue();
+        assertThat(IcebergMaintenance.shardSorted(Map.of("lake.layout.sort-by", "id"))).isFalse();
         assertThat(IcebergMaintenance.shardSorted(Map.of())).isFalse();
     }
 }

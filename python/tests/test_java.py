@@ -85,5 +85,5 @@ def test_a_folder_is_not_a_lake_name(tmp_path):
 
 def test_the_command_line_lists_the_tools(capsys):
     assert main(["--help"]) == 0
-    assert "undo|retention|relocate|check|maintain|lakes" in capsys.readouterr().out
+    assert "undo|retention|check|maintain|lakes" in capsys.readouterr().out
     assert main(["nope"]) == 1

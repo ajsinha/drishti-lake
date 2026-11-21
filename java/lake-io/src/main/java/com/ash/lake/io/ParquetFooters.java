@@ -34,7 +34,7 @@ import org.apache.parquet.io.SeekableInputStream;
  * single-entity read; a file of many row groups has a large footer (hundreds of KB to parse). Keyed by path and length;
  * weighed in bytes (2.9.9): a parsed footer holds about 700 bytes a column chunk (its statistics, encodings and offsets) and
  * 1 KB of its own, so a lake of 34 columns costs about 23 KB a row group (measured at 1,000,000 positions: 385 MB for 16,487 row
- * groups when the cache was weighed by row groups). At most {@code -Ddrishti.parquet.footer-cache-mb} (default 64) are kept,
+ * groups when the cache was weighed by row groups). At most {@code -Dlake.parquet.footer-cache-mb} (default 64) are kept,
  * across every connector of the process.
  */
 public final class ParquetFooters {

@@ -307,7 +307,7 @@ public final class LakeFiles {
 
     /**
      * Creates {@code <lakesDir>/<name>.yaml} for a lake a load names that has no file yet (the data inbox, DATA_LAKE_GUIDE.md section 4): a
-     * Delta lake in its own folder, {@code root: ${drishti.data.dir:./data}/delta/<name>}, with {@code tables} (the routed packs' recommended
+     * Delta lake in its own folder, {@code root: ${lake.data.dir:./data}/delta/<name>}, with {@code tables} (the routed packs' recommended
      * entries). A file that exists is never touched (false); the name must be a lake's name ({@link Lakes#NAME}).
      *
      * @return true when the file was created

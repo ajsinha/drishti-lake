@@ -142,7 +142,7 @@ public final class TckRunner {
         String text = said.toString(StandardCharsets.UTF_8).lines()
                 .filter(l -> !l.matches("\\d{4}-\\d{2}-\\d{2}T\\S+ lake-build .*"))   // the run log's line: a time and a run id
                 .collect(java.util.stream.Collectors.joining("\n")).strip();
-        if (!text.isEmpty() && (code != 0 || !op.equals("load"))) {
+        if (!text.isEmpty()) {
             s.put("said", text);                    // a refusal's reason, an upkeep's answer (paths become ${work})
         }
         if (summary != null) {
@@ -161,8 +161,9 @@ public final class TckRunner {
         if (!mem.isEmpty()) MEMORY.stores().define(mem, 512L << 20, 1 << 20, "");   // lake-only
         try {
             for (JsonNode step : job.path("steps")) {
-                if (step.path("op").asText().equals("parallel")) {      // writers at once: each started together, listed in order
-                    ArrayNode at = steps.addObject().put("op", "parallel").putArray("steps");
+                String group = step.path("op").asText();
+                if (group.equals("parallel") || group.equals("race")) {   // writers at once: each started together, listed in order
+                    ArrayNode at = steps.addObject().put("op", group).putArray("steps");
                     List<JsonNode> each = new ArrayList<>();
                     step.path("steps").forEach(each::add);
                     ExecutorService pool = Executors.newFixedThreadPool(each.size());
@@ -173,9 +174,14 @@ public final class TckRunner {
                             done.add(pool.submit(() -> { go.await(); return step(e); }));
                         }
                         go.countDown();
+                        List<ObjectNode> each2 = new ArrayList<>();
                         for (var f : done) {
-                            at.add(f.get());
+                            each2.add(f.get());
                         }
+                        if (group.equals("race")) {                     // which writer wins is not known: the outcomes in the order of their text
+                            each2.sort(java.util.Comparator.comparing(ObjectNode::toString));
+                        }
+                        each2.forEach(at::add);
                     } finally {
                         pool.shutdownNow();
                     }

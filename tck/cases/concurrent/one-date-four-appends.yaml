@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# Four loaders append to ONE business date at once (mode append, --no-lock): appends do not conflict, so every one lands on every
+# store (Delta's blind appends, Iceberg's commit retry, the files log's rebuilt content): the first load's rows and four copies of the
+# appended rows, each kept once per load.
+not-on:
+  s3: >-
+    the S3 simulator (S3Mock 4.12.4) does not make a conditional PUT (If-None-Match) atomic between two requests in flight (see
+    concurrent/two-writers-two-dates); the commits rely on S3's and MinIO's refusal of the second. Runs on the local disk and the memory row.
+inputs:
+  first/pv.2026-10-27.jsonl: {pv: {n: 40, scenarios: 3, seed: 1}}
+  more/pv.2026-10-27.jsonl: {pv: {n: 30, scenarios: 3, seed: 2, start: '2026-10-27'}}
+configs:
+  first: |
+    source: {files: '${in}/first/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  more: |
+    source: {files: '${in}/more/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: append}
+steps:
+  - load: {config: first}
+  - race:
+      - load: {config: more, args: [--no-lock]}
+      - load: {config: more, args: [--no-lock]}
+      - load: {config: more, args: [--no-lock]}
+      - load: {config: more, args: [--no-lock]}

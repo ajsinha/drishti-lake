@@ -52,13 +52,13 @@ class NewLakeKeysTest {
         lakes = tmp.resolve("config/lakes");
         data = tmp.resolve("data");
         System.setProperty(Lakes.PROPERTY, lakes.toString());
-        System.setProperty("drishti.data.dir", data.toString());   // the process's settings: the runtime reads them
+        System.setProperty("lake.data.dir", data.toString());   // the process's settings: the runtime reads them
     }
 
     @AfterEach
     void reset() {
         System.clearProperty(Lakes.PROPERTY);
-        System.clearProperty("drishti.data.dir");
+        System.clearProperty("lake.data.dir");
     }
 
     /** A pack in the lake form, as the shipped trading pack: one kind with a table per source system, no id: in its entries, no ingest key. */
@@ -198,7 +198,7 @@ class NewLakeKeysTest {
             assertThat(o.outcome()).as(o.reason()).isEqualTo("loaded");
             assertThat(o.rows()).isEqualTo(3);
         });
-        Lake lake = Lakes.readFile(lakes.resolve("pushlake.yaml"), k -> k.equals("drishti.data.dir") ? data.toString() : null);
+        Lake lake = Lakes.readFile(lakes.resolve("pushlake.yaml"), k -> k.equals("lake.data.dir") ? data.toString() : null);
         assertThat(lake.tables()).containsOnlyKeys("book.trade_endur");
         assertThat(lake.tables().get("book.trade_endur").id()).isEqualTo("TRADE_ID");
         assertThat(data.resolve("delta/pushlake/book/trade_endur/_delta_log")).isDirectory();
@@ -230,7 +230,7 @@ class NewLakeKeysTest {
             assertThat(o.outcome()).as(o.reason()).isEqualTo("loaded");
             assertThat(o.rows()).isEqualTo(13);
         });
-        Lake lake = Lakes.readFile(lakes.resolve("pushlake.yaml"), k -> k.equals("drishti.data.dir") ? data.toString() : null);
+        Lake lake = Lakes.readFile(lakes.resolve("pushlake.yaml"), k -> k.equals("lake.data.dir") ? data.toString() : null);
         assertThat(lake.tables()).containsOnlyKeys("book.trade_endur", "book.trade_calypso", "book.var-limit");
         assertThat(lake.tables().values()).extracting(LakeTable::id).containsOnly("TRADE_ID", "NODE_ID");
         for (String t : List.of("book/trade_endur", "book/trade_calypso", "book/var-limit")) {

@@ -1,0 +1,26 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# Four loaders replace ONE business date at once (mode replace-date, no lock between them: --no-lock, as machines on one object store).
+# A replace is optimistic on every store (TableWriter): the first to commit wins and the date holds its rows alone, once; each of the
+# other three began on the table before that commit, so it commits nothing, says the date was replaced meanwhile and exits 1. Never the
+# date loaded four times, never a silent last-wins. The four load the same rows, so the table reads the same whoever wins.
+not-on:
+  s3: >-
+    the S3 simulator (S3Mock 4.12.4) does not make a conditional PUT (If-None-Match) atomic between two requests in flight (see
+    concurrent/two-writers-two-dates); the commits rely on S3's and MinIO's refusal of the second. Runs on the local disk and the memory row.
+inputs:
+  first/pv.2026-10-27.jsonl: {pv: {n: 40, scenarios: 3, seed: 1}}
+  again/pv.2026-10-27.jsonl: {pv: {n: 30, scenarios: 3, seed: 2}}
+configs:
+  first: |
+    source: {files: '${in}/first/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+  again: |
+    source: {files: '${in}/again/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+steps:
+  - load: {config: first}
+  - race:
+      - load: {config: again, args: [--no-lock]}
+      - load: {config: again, args: [--no-lock]}
+      - load: {config: again, args: [--no-lock]}
+      - load: {config: again, args: [--no-lock]}

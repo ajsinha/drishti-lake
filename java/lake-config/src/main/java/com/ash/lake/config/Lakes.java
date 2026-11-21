@@ -60,7 +60,7 @@ public final class Lakes {
     /** A lake's name: lower-case letters, digits, '-' and '_' (its file's name, and its folder under {@link #LAKES_PARENT}). */
     public static final Pattern NAME = Pattern.compile("[a-z0-9][a-z0-9_-]*");
     /** Where lakes are by default: each lake's own folder under it, {@code <data>/delta/<lake>} (a lake file may name another root). */
-    public static final String LAKES_PARENT = "${drishti.data.dir:./data}/delta";
+    public static final String LAKES_PARENT = "${lake.data.dir:./data}/delta";
     private static final Set<String> SECRETS = Set.of("access-key", "secret-key", "session-token", "credential", "token", "password",
             "client-secret", "s3.access-key", "s3.secret-key", "s3.session-token");
     private static final Set<String> TOP = Set.of("lake", "format", "root", "storage", "catalog", "defaults", "tables", "memory", "description");
@@ -84,14 +84,14 @@ public final class Lakes {
         return name != null && NAME.matcher(name).matches();
     }
 
-    /** A lake's default root, unresolved: {@code ${drishti.data.dir:./data}/delta/<name>}. */
+    /** A lake's default root, unresolved: {@code ${lake.data.dir:./data}/delta/<name>}. */
     public static String defaultRoot(String name) {
         return LAKES_PARENT + "/" + name;
     }
 
     /** A lake's default root for its format: a Delta lake's {@link #defaultRoot(String)}; an Iceberg lake's {@code <data>/iceberg/<name>}. */
     public static String defaultRoot(String name, String format) {
-        return "iceberg".equals(format) ? "${drishti.data.dir:./data}/iceberg/" + name : defaultRoot(name);
+        return "iceberg".equals(format) ? "${lake.data.dir:./data}/iceberg/" + name : defaultRoot(name);
     }
 
     /**
@@ -531,15 +531,14 @@ public final class Lakes {
 
         /**
          * A variable through the settings given; a dotted name ({@code lake.data.dir}) also in its environment form
-         * ({@code LAKE_DATA_DIR}), then under the other prefix ({@link com.ash.lake.PersistedNames#alias}).
+         * ({@code LAKE_DATA_DIR}). A reference with the host's prefix ({@code drishti.data.dir}) is refused, naming the product's.
          */
         String lookup(String name) {
-            String v = one(name);
-            String other = com.ash.lake.PersistedNames.alias(name);
-            if ((v == null || v.isEmpty()) && other != null) {
-                v = one(other);                           // drishti.data.dir and lake.data.dir: a lake file of either age (read both)
+            if (com.ash.lake.PersistedNames.earlier(name)) {
+                throw new IllegalArgumentException("${" + name + "} is a host's setting: a lake file names Drishti Lake's ${"
+                        + com.ash.lake.PersistedNames.product(name) + "}");
             }
-            return v;
+            return one(name);
         }
 
         private String one(String name) {

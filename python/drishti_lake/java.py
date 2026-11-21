@@ -4,7 +4,7 @@
 Java one through the product's class path, never a host's jar). The class path is ``LAKE_CLASSPATH`` (the lake-load module's run-time
 class path, or one runnable jar), the Java binary ``LAKE_JAVA`` (else ``$JAVA_HOME/bin/java``, else ``java``); JDK 21 or later.
 
-The tools: ``undo`` (LakeUndo), ``retention`` (LakeRetention: delete dates, keep days or rows), ``relocate`` (LakeRelocate),
+The tools: ``undo`` (LakeUndo), ``retention`` (LakeRetention: delete dates, keep days or rows),
 ``check`` (LakeCheck), ``maintain`` (the Iceberg tables' upkeep, IcebergMaintenance), ``lakes`` (LakesCli: a lake file's model).
 Each runs with the arguments given and prints what the Java tool prints; its exit code is the tool's."""
 from __future__ import annotations
@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import sys
 
-TOOLS = {"undo": "com.ash.lake.load.LakeUndo", "retention": "com.ash.lake.load.LakeRetention", "relocate": "com.ash.lake.load.LakeRelocate",
+TOOLS = {"undo": "com.ash.lake.load.LakeUndo", "retention": "com.ash.lake.load.LakeRetention",
          "check": "com.ash.lake.load.LakeCheck", "maintain": "com.ash.lake.iceberg.table.IcebergMaintenance",
          "lakes": "com.ash.lake.config.LakesCli"}
 

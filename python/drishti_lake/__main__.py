@@ -12,13 +12,13 @@ def main(argv=None) -> int:
     if not argv or argv[0] in ("-h", "--help"):
         print("usage: python -m drishti_lake load --config FILE [options]   (load --help)\n"
               "       python -m drishti_lake contracts check|pages ...          (contracts --help)\n"
-              "       python -m drishti_lake undo|retention|relocate|check|maintain|lakes ...   (the Java tools: LAKE_CLASSPATH)")
+              "       python -m drishti_lake undo|retention|check|maintain|lakes ...   (the Java tools: LAKE_CLASSPATH)")
         return 0
     if argv[0] == "contracts":
         from . import contracts
         return contracts.main(argv[1:])
     from . import java
-    if argv[0] in java.TOOLS:                         # the Java tools (undo, retention, relocate, check, maintain, lakes): one way per job
+    if argv[0] in java.TOOLS:                         # the Java tools (undo, retention, check, maintain, lakes): one way per job
         return java.run(argv[0], argv[1:])
     if argv[0] != "load":
         print(f"drishti_lake: unknown command {argv[0]} (load, contracts, {', '.join(java.TOOLS)})")

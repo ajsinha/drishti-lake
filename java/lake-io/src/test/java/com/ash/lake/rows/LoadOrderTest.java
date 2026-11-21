@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** The one load order: the run's time, then the commit for runs of one millisecond, then the id. */
+/** The one load order: the commit, then the run's time (within one commit), then the id. */
 class LoadOrderTest {
 
     private static final String A = "20261121T131500.123-77-9.pv.2026-10-27.jsonl";
@@ -39,14 +39,17 @@ class LoadOrderTest {
     }
 
     @Test
-    void anEarlierRunIsOlderWhateverItsCommit() {
-        String earlier = "20261121T131500.122-99999999-12.x";
-        assertFalse(LoadOrder.needsCommits(List.of(earlier, A)));
-        assertTrue(LoadOrder.compare(earlier, 9, A, 1) < 0);
+    void theLaterCommitIsNewerWhateverTheClocksSaid() {
+        String later = "20261121T131500.122-99999999-12.x";           // a machine whose clock is behind, or a long load that began first
+        assertTrue(LoadOrder.needsCommits(List.of(later, A)));
+        assertTrue(LoadOrder.compare(later, 9, A, 1) > 0);
+        assertTrue(LoadOrder.compare(A, 1, later, 9) < 0);
     }
 
     @Test
-    void oneRunsFilesNeedNoCommitAndGoByTheirIds() {
+    void withinOneCommitTheTimeThenTheId() {
+        String earlier = "20261121T131500.122-99999999-12.x";
+        assertTrue(LoadOrder.compare(earlier, 4, A, 4) < 0);
         assertFalse(LoadOrder.needsCommits(List.of(A, "20261121T131500.123-77-9.other.jsonl")));
         assertEquals("20261121T131500.123", LoadOrder.time(A));
         assertEquals("20261121T131500.123-77-9", LoadOrder.run(A));

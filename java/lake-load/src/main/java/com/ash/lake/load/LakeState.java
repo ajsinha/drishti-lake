@@ -135,9 +135,9 @@ final class LakeState {
         String text = LoadReport.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(summary);
         Path mine = runs.resolve(run + ".json");
         Files.writeString(mine, text);
-        Path tmp = state.resolve("last-run.json." + ProcessHandle.current().pid());
+        Path tmp = state.resolve("last-run." + run + ".part");    // one per load: loads of one process at once never share it
         Files.writeString(tmp, text);
-        Files.move(tmp, state.resolve("last-run.json"), StandardCopyOption.REPLACE_EXISTING);
+        Files.move(tmp, state.resolve("last-run.json"), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         Files.writeString(state.resolve("runs.log"), logLine + System.lineSeparator(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         return mine;
     }

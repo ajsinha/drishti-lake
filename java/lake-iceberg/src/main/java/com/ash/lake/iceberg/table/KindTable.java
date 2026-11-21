@@ -335,7 +335,7 @@ abstract class KindTable {
         for (int i = 0; i < idx.length; i++) {
             idx[i] = i;
         }
-        // the one load order (LoadOrder): the run's time, the commit (the file's data sequence number) for runs of one millisecond, the id
+        // the one load order (LoadOrder): the commit (the file's data sequence number), the run's time, the id
         long[] seq = new long[perFile.size()];
         if (com.ash.lake.rows.LoadOrder.needsCommits(lids)) {
             for (int f = 0; f < seq.length; f++) {

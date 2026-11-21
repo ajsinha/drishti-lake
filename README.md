@@ -35,7 +35,7 @@ Author: Ashutosh Sinha. Proprietary. All rights reserved (see [LICENSE](LICENSE)
 | `lake-io` | storage (local disk, S3 with TLS and proxies), ranged reads, cached Parquet footers, codecs |
 | `lake-config` | the lake file: tables, roots, partitions, locations, checks |
 | `lake-delta`, `lake-iceberg`, `lake-files` | the three stores; Iceberg catalogs: files, REST, S3 Tables, Glue |
-| `lake-load` | the loader (archives, child kinds, modes, rejects), undo, retention, check, relocate, and the inbox (`.ready` hand-over, ledger, routes) |
+| `lake-load` | the loader (archives, child kinds, modes, rejects), undo, retention, check, and the inbox (`.ready` hand-over, ledger, routes) |
 | `lake-memory` | the in-memory lake (`mem://`) with a hard cap, retention and a replenish source |
 | `lake-contracts` | data contracts: the reader and the row checker |
 | `lake-tck`, `lake-guards` | test support (S3 simulator, delta-rs runner) and the repository's guards |
@@ -64,7 +64,7 @@ the Windows `PKIX` fix and the install order: [docs/BUILD_AND_IDE.md](docs/BUILD
 |---|---|
 | [docs/BUILD_AND_IDE.md](docs/BUILD_AND_IDE.md) | prepare, build, install from a tag, IntelliJ, PyCharm, VS Code, Windows |
 | [docs/guides/STORAGE.md](docs/guides/STORAGE.md) | the three stores and their parity, storage, the lake file, the runtime's options |
-| [docs/guides/LOADER.md](docs/guides/LOADER.md) | the loader's configuration and rules, undo, retention, check, relocate, the inbox; a tutorial that was run |
+| [docs/guides/LOADER.md](docs/guides/LOADER.md) | the loader's configuration and rules, undo, retention, check, the inbox; a tutorial that was run |
 | [docs/guides/READ.md](docs/guides/READ.md) | the read API, with a tutorial reading the same data from the three stores |
 | [docs/guides/CONTRACTS.md](docs/guides/CONTRACTS.md) | data contracts: format, checks, pages ([generated samples](docs/contracts/README.md)) |
 | [docs/guides/PYTHON.md](docs/guides/PYTHON.md) | the Python package and its commands |

@@ -344,11 +344,7 @@ public final class FilesStore implements TableStore {
     }
 
     @Override
-    public TableWriter writer(WriteSpec spec) {
-        if (!spec.slice().isEmpty()) {
-            throw new UnsupportedOperationException("the files store holds one day file per table: a shared table's slice " + spec.slice()
-                    + " cannot be replaced alone");
-        }
+    public TableWriter writer(WriteSpec spec) throws IOException {
         return new FilesWriter(spec, local(spec.root()));
     }
 

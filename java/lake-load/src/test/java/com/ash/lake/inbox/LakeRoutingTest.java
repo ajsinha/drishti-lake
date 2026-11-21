@@ -50,13 +50,13 @@ class LakeRoutingTest {
         lakes = tmp.resolve("config/lakes");
         data = tmp.resolve("data");
         System.setProperty(Lakes.PROPERTY, lakes.toString());
-        System.setProperty("drishti.data.dir", data.toString());   // the process's settings: the runtime reads them
+        System.setProperty("lake.data.dir", data.toString());   // the process's settings: the runtime reads them
     }
 
     @AfterEach
     void reset() {
         System.clearProperty(Lakes.PROPERTY);
-        System.clearProperty("drishti.data.dir");
+        System.clearProperty("lake.data.dir");
     }
 
     /** The fixture's packs, with the lakes the connectors read ({@code null}: not known). */
@@ -109,8 +109,8 @@ class LakeRoutingTest {
         assertThat(r.files()).as(r.toString()).singleElement().satisfies(o -> assertThat(o.outcome()).isEqualTo("loaded"));
         Path file = lakes.resolve("risklake.yaml");
         assertThat(file).isRegularFile();
-        assertThat(Files.readString(file)).contains("lake: risklake", "format: delta", "${drishti.data.dir:./data}/delta/risklake");
-        Lake lake = Lakes.readFile(file, k -> k.equals("drishti.data.dir") ? data.toString() : null);
+        assertThat(Files.readString(file)).contains("lake: risklake", "format: delta", "${lake.data.dir:./data}/delta/risklake");
+        Lake lake = Lakes.readFile(file, k -> k.equals("lake.data.dir") ? data.toString() : null);
         assertThat(lake.root()).isEqualTo(data + "/delta/risklake");
         assertThat(lake.tables()).containsOnlyKeys("demo.trade");
         assertThat(lake.tables().get("demo.trade").promote()).contains("TRADE_ID", "DESK");

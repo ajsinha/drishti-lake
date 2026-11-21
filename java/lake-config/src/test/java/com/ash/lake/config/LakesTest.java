@@ -128,6 +128,7 @@ class LakesTest {
         assertRefused("lake: main\nroot: mem://feeds\n", "memory.max-mb");
         assertRefused("lake: main\nroot: s3://${NOT_SET}/x\n", "NOT_SET is not set");
         assertRefused("lake: main\nroot: /x\ntables:\n  nodot: {}\n", "<domain>.<kind>");
+        assertRefused("lake: main\nroot: ${drishti.data.dir:./data}/delta\n", "Drishti Lake's ${lake.data.dir}");   // a host's name: refused
     }
 
     private static void assertRefused(String yaml, String words) {
@@ -137,24 +138,24 @@ class LakesTest {
 
     @Test
     void referencesNestAndADottedNameIsReadThroughTheSettingsGiven() {
-        // the build's surefire sets drishti.data.dir (target/test-data), and a system property comes before the environment's form
-        String before = System.clearProperty("drishti.data.dir");
+        // the build's surefire sets lake.data.dir (target/test-data), and a system property comes before the environment's form
+        String before = System.clearProperty("lake.data.dir");
         try {
-            Function<String, String> env = Map.of("DRISHTI_DATA_DIR", "/srv/drishti")::get;
-            Lake l = Lakes.parse("lake: main\nroot: ${DRISHTI_DELTA_ROOT:${drishti.data.dir:./data}/delta}\n", "main", env);
+            Function<String, String> env = Map.of("LAKE_DATA_DIR", "/srv/drishti")::get;
+            Lake l = Lakes.parse("lake: main\nroot: ${DRISHTI_DELTA_ROOT:${lake.data.dir:./data}/delta}\n", "main", env);
             assertEquals("/srv/drishti/delta", l.root());
-            assertEquals("./data/delta", Lakes.parse("lake: main\nroot: ${DRISHTI_DELTA_ROOT:${drishti.data.dir:./data}/delta}\n", "main",
+            assertEquals("./data/delta", Lakes.parse("lake: main\nroot: ${DRISHTI_DELTA_ROOT:${lake.data.dir:./data}/delta}\n", "main",
                     k -> null).root());
-            System.setProperty("drishti.data.dir", "/opt/drishti");
-            assertEquals("/srv/drishti/delta", Lakes.parse("lake: main\nroot: ${DRISHTI_DELTA_ROOT:${drishti.data.dir:./data}/delta}\n",
+            System.setProperty("lake.data.dir", "/opt/drishti");
+            assertEquals("/srv/drishti/delta", Lakes.parse("lake: main\nroot: ${DRISHTI_DELTA_ROOT:${lake.data.dir:./data}/delta}\n",
                     "main", env).root(), "a lookup given is the only one read: no system property behind it (LK-6)");
-            assertEquals("/opt/drishti/delta", Lakes.parse("lake: main\nroot: ${DRISHTI_DELTA_ROOT:${drishti.data.dir:./data}/delta}\n",
+            assertEquals("/opt/drishti/delta", Lakes.parse("lake: main\nroot: ${DRISHTI_DELTA_ROOT:${lake.data.dir:./data}/delta}\n",
                     "main", com.ash.lake.LakeRuntime.fromProcess().settings()).root(), "the process's settings: the property first");
         } finally {
             if (before == null) {
-                System.clearProperty("drishti.data.dir");
+                System.clearProperty("lake.data.dir");
             } else {
-                System.setProperty("drishti.data.dir", before);
+                System.setProperty("lake.data.dir", before);
             }
         }
     }
@@ -315,12 +316,12 @@ class LakesTest {
 
     @Test
     void aLakeWithoutARootIsInItsOwnFolderAndANewLakeFileIsWrittenOnce() throws Exception {
-        String before = System.clearProperty("drishti.data.dir");
+        String before = System.clearProperty("lake.data.dir");
         try {
-            Function<String, String> env = Map.of("DRISHTI_DATA_DIR", "/srv/drishti")::get;
+            Function<String, String> env = Map.of("LAKE_DATA_DIR", "/srv/drishti")::get;
             assertEquals("/srv/drishti/delta/risklake", Lakes.parse("lake: risklake\n", "risklake", env).root());
             assertEquals("./data/iceberg/risklake", Lakes.parse("lake: risklake\nformat: iceberg\n", "risklake", k -> null).root());
-            assertEquals("${drishti.data.dir:./data}/delta/demo", Lakes.defaultRoot("demo"));
+            assertEquals("${lake.data.dir:./data}/delta/demo", Lakes.defaultRoot("demo"));
             assertTrue(Lakes.validName("risk_lake-2"));
             assertFalse(Lakes.validName("Risk Lake"));
             assertFalse(Lakes.validName("../x"));
@@ -330,7 +331,7 @@ class LakesTest {
             assertTrue(LakeFiles.create(lakes, "risklake", List.of(t), "a test"));
             assertFalse(LakeFiles.create(lakes, "risklake", List.of(), "a test"), "a file that exists is never touched");
             String text = Files.readString(lakes.resolve("risklake.yaml"));
-            assertTrue(text.contains("${drishti.data.dir:./data}/delta/risklake"), text);
+            assertTrue(text.contains("${lake.data.dir:./data}/delta/risklake"), text);
             Lake l = Lakes.readFile(lakes.resolve("risklake.yaml"), env);
             assertEquals("/srv/drishti/delta/risklake", l.root());
             assertEquals("delta", l.format());
@@ -339,7 +340,7 @@ class LakesTest {
             assertThrows(IllegalArgumentException.class, () -> LakeFiles.create(lakes, "Risk Lake", List.of(), "a test"));
         } finally {
             if (before != null) {
-                System.setProperty("drishti.data.dir", before);
+                System.setProperty("lake.data.dir", before);
             }
         }
     }

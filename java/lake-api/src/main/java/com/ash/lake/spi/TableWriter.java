@@ -24,8 +24,12 @@ import java.util.Map;
  * Where a load's rows go: the loader's target in one table, given by {@link TableStore#writer}. Files are written by many threads at
  * once ({@link #newFile}); {@link #commit} makes one date's files that date's data in ONE commit that also takes the date's earlier rows
  * out (a replace), so a reader sees the old date or the new one, never a mix, and a load that stops before its commit leaves the table as
- * it was. The loader calls {@link #open} once, then per date {@link #appended}, {@link #begin}, files, {@link #commit}; then
- * {@link #close}.
+ * it was. The loader makes the writer when the load starts, before it reads its input: the table as it is then is the load's base. It
+ * calls {@link #open} once, then per date {@link #appended}, {@link #begin}, files, {@link #commit}; then {@link #close}.
+ *
+ * <p>Replaces are optimistic, on every store: a replace of a date that another writer changed after this load's base (a concurrent
+ * replace, an append, a delete of that date or of this load's slice of it) commits nothing and throws {@link LostReplace}; the other
+ * writer's rows stand. Appends of one date by writers at once all land.
  */
 public interface TableWriter extends AutoCloseable {
 
@@ -58,6 +62,19 @@ public interface TableWriter extends AutoCloseable {
 
     @Override
     void close();
+
+    /**
+     * A replace that lost to another writer: the date (this load's slice of it, on a shared table) changed after the load began, so
+     * nothing of this load's date was committed and the rows that are there stand. The load fails; running it again replaces the date.
+     */
+    final class LostReplace extends IllegalStateException {
+        private static final long serialVersionUID = 1L;
+
+        public LostReplace(String table, java.time.LocalDate date) {
+            super(table + ": " + date + " was replaced or changed by another load while this one ran; this load's " + date
+                    + " was not committed (the other load's rows stand): run it again");
+        }
+    }
 
     /** A file being written by one thread. */
     interface FileOut {

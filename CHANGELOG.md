@@ -5,6 +5,26 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **A lost concurrent replace fails on every store (G3 F5, decision O5a)**: a load's base is the table as it found it when it started
+  (the writer is made before the input is read). A replace of a date that another writer changed after that commits nothing and fails
+  with `TableWriter.LostReplace` (exit 1, "... was replaced or changed by another load while this one ran ... run it again"); the winner's
+  rows alone stand. Delta compares the date's live files at the base with the transaction's read version and maps Kernel's
+  `ConcurrentWriteException`; Iceberg's replace is iceberg-core's overwrite validated from the base snapshot with a conflict filter on the
+  date (and slice) (`validateNoConflictingData`, `validateNoConflictingDeletes`; it used to keep all four writers' rows); the files log
+  refuses a replace when the date was committed after the base (it used to keep the last). Appends at once all land, as before. Kit
+  cases `concurrent/one-date-four-replaces` and `concurrent/one-date-four-appends` (four loaders started together, local and memory rows;
+  S3 waits for a simulator with atomic conditional writes), with the runner's `race:` step (results sorted: the winner is not known).
+  `last-run.json` is written through a temporary file per load, so loads of one process at once no longer collide.
+- **The newest load is the later commit (G3 F10, decision O5)**: `LoadOrder` orders loads by commit (table version, data sequence
+  number, the files log's order) first, the run's time only within one commit; clocks that disagree no longer decide which copy wins.
+- **Lake leftovers removed (G3 F6, decision O4)**: the read-both of the host's `drishti.*` persisted names and lake-file settings is
+  gone: `PersistedNames` reads `lake.*` only and refuses a table that carries the older names ("rebuild the lake"; no migration code), a
+  lake file's `${drishti.x}` is refused naming `${lake.x}`, the default lake roots are `${lake.data.dir:./data}/delta` and `/iceberg`
+  (`PersistedNames.alias` removed, `earlier`/`product` added). `LakeRelocate` (the one-time move of the older layout) is deleted, with
+  `python -m drishti_lake relocate`. The loader's spill folder and Iceberg maintenance's rewrite runs come from `TempFiles` (the
+  runtime's temporary folder, or `TempFiles.under` an operator's `--spill-dir`), not `java.io.tmpdir` directly.
+- **A shared table's slice in the files store**: a replace takes out only the load's slice of the date (by its promoted or partition
+  columns, as Iceberg), so the files store no longer refuses a shared table.
 - **Migration code removed (G4 shims)**: no customers, so no compatibility code. `LakesCli migrate-config` and `LakeFiles.migrate` /
   `adoptDemo` / `demoRoot` (the rewrite of old connector files into lake files), `ConnectorLake.legacy` and its `LakeCheck` note are gone;
   `api-surface.txt` shrinks by the same names. A connector's explicit form (`root`, `domain`, `table.<kind>`) stays: it is a way to name tables, not a leftover.

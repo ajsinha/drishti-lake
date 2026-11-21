@@ -26,7 +26,6 @@ class public abstract interface com.ash.lake.spi.TableWriter implements java.lan
 class public abstract static interface com.ash.lake.inbox.Cycle$Faults
 class public abstract static interface com.ash.lake.inbox.ReadyRule$Facts
 class public abstract static interface com.ash.lake.inbox.Routes$Packs
-class public abstract static interface com.ash.lake.load.LakeRelocate$Faults
 class public abstract static interface com.ash.lake.memory.MemoryLake$Cron
 class public abstract static interface com.ash.lake.memory.store.MemoryStorage$RoomMaker
 class public abstract static interface com.ash.lake.spi.TableWriter$FileOut
@@ -61,7 +60,6 @@ class public final class com.ash.lake.load.FileRows
 class public final class com.ash.lake.load.IcebergStore implements com.ash.lake.spi.TableStore
 class public final class com.ash.lake.load.LakeCheck
 class public final class com.ash.lake.load.LakeLoad
-class public final class com.ash.lake.load.LakeRelocate
 class public final class com.ash.lake.load.LakeRetention
 class public final class com.ash.lake.load.LakeUndo
 class public final class com.ash.lake.load.Stores
@@ -114,6 +112,7 @@ class public final record com.ash.lake.spi.WriteSpec
 class public static final class com.ash.lake.LakeOptions$Builder
 class public static final class com.ash.lake.LakeRuntime$Builder
 class public static final class com.ash.lake.inbox.Routes$Unrouted extends java.lang.Exception
+class public static final class com.ash.lake.spi.TableWriter$LostReplace extends java.lang.IllegalStateException
 class public static final enum com.ash.lake.memory.Retention$Sink
 class public static final record com.ash.lake.config.PackEntry$PackTable
 class public static final record com.ash.lake.inbox.Cycle$FileOutcome
@@ -133,8 +132,6 @@ class public static final record com.ash.lake.inbox.Routes$Route
 class public static final record com.ash.lake.inbox.Signal$Landed
 class public static final record com.ash.lake.load.FileRows$Counted
 class public static final record com.ash.lake.load.LakeCheck$Finding
-class public static final record com.ash.lake.load.LakeRelocate$Measure
-class public static final record com.ash.lake.load.LakeRelocate$Outcome
 class public static final record com.ash.lake.load.LakeUndo$Done
 class public static final record com.ash.lake.load.TableDateRows$Counts
 class public static final record com.ash.lake.memory.MemoryLakeSettings$Compaction
@@ -237,11 +234,12 @@ com.ash.lake.LakeRuntime$Builder :: public com.ash.lake.LakeRuntime$Builder com.
 com.ash.lake.LakeRuntime$Builder :: public com.ash.lake.LakeRuntime$Builder com.ash.lake.LakeRuntime$Builder.settings(java.util.function.Function<java.lang.String, java.lang.String>,java.util.function.Supplier<java.util.Collection<java.lang.String>>)
 com.ash.lake.LakeRuntime$Builder :: public com.ash.lake.LakeRuntime$Builder com.ash.lake.LakeRuntime$Builder.storage(com.ash.lake.spi.StorageProvider...)
 com.ash.lake.LakeRuntime$Builder :: public com.ash.lake.LakeRuntime$Builder com.ash.lake.LakeRuntime$Builder.store(com.ash.lake.spi.TableStore...)
+com.ash.lake.PersistedNames :: public static boolean com.ash.lake.PersistedNames.earlier(java.lang.String)
 com.ash.lake.PersistedNames :: public static final java.lang.String com.ash.lake.PersistedNames.PREFIX
-com.ash.lake.PersistedNames :: public static java.lang.String com.ash.lake.PersistedNames.alias(java.lang.String)
 com.ash.lake.PersistedNames :: public static java.lang.String com.ash.lake.PersistedNames.get(java.util.Map<java.lang.String, java.lang.String>,java.lang.String)
 com.ash.lake.PersistedNames :: public static java.lang.String com.ash.lake.PersistedNames.get(java.util.Map<java.lang.String, java.lang.String>,java.lang.String,java.lang.String)
 com.ash.lake.PersistedNames :: public static java.lang.String com.ash.lake.PersistedNames.key(java.lang.String)
+com.ash.lake.PersistedNames :: public static java.lang.String com.ash.lake.PersistedNames.product(java.lang.String)
 com.ash.lake.config.ConnectorLake :: public static boolean com.ash.lake.config.ConnectorLake.lakeKey(java.lang.String)
 com.ash.lake.config.ConnectorLake :: public static final java.lang.String com.ash.lake.config.ConnectorLake.LAKE
 com.ash.lake.config.ConnectorLake :: public static final java.lang.String com.ash.lake.config.ConnectorLake.LAKE_NAME
@@ -799,33 +797,6 @@ com.ash.lake.load.LakeLoad :: public static int com.ash.lake.load.LakeLoad.run(j
 com.ash.lake.load.LakeLoad :: public static java.lang.String com.ash.lake.load.LakeLoad.packDomain(com.ash.lake.LakeRuntime,java.nio.file.Path) throws java.io.IOException
 com.ash.lake.load.LakeLoad :: public static java.util.Map<java.lang.String, java.util.SortedSet<java.time.LocalDate>> com.ash.lake.load.LakeLoad.tarTables(com.ash.lake.LakeRuntime,java.lang.String) throws java.io.IOException
 com.ash.lake.load.LakeLoad :: public static void com.ash.lake.load.LakeLoad.main(java.lang.String[])
-com.ash.lake.load.LakeRelocate :: public static com.ash.lake.load.LakeRelocate$Outcome com.ash.lake.load.LakeRelocate.relocate(com.ash.lake.LakeRuntime,com.ash.lake.config.Lakes,java.lang.String,boolean)
-com.ash.lake.load.LakeRelocate :: public static com.ash.lake.load.LakeRelocate$Outcome com.ash.lake.load.LakeRelocate.relocate(com.ash.lake.LakeRuntime,com.ash.lake.config.Lakes,java.lang.String,boolean,com.ash.lake.load.LakeRelocate$Faults)
-com.ash.lake.load.LakeRelocate :: public static final java.lang.String com.ash.lake.load.LakeRelocate.RECORD
-com.ash.lake.load.LakeRelocate :: public static java.util.Map<java.lang.String, java.lang.Object> com.ash.lake.load.LakeRelocate.describe(com.ash.lake.load.LakeRelocate$Outcome)
-com.ash.lake.load.LakeRelocate :: public static void com.ash.lake.load.LakeRelocate.main(java.lang.String[])
-com.ash.lake.load.LakeRelocate$Faults :: public abstract void com.ash.lake.load.LakeRelocate$Faults.at(java.lang.String) throws java.io.IOException
-com.ash.lake.load.LakeRelocate$Faults :: public static final com.ash.lake.load.LakeRelocate$Faults com.ash.lake.load.LakeRelocate$Faults.NONE
-com.ash.lake.load.LakeRelocate$Measure :: public com.ash.lake.load.LakeRelocate$Measure(long,long,long,long)
-com.ash.lake.load.LakeRelocate$Measure :: public final boolean com.ash.lake.load.LakeRelocate$Measure.equals(java.lang.Object)
-com.ash.lake.load.LakeRelocate$Measure :: public final int com.ash.lake.load.LakeRelocate$Measure.hashCode()
-com.ash.lake.load.LakeRelocate$Measure :: public final java.lang.String com.ash.lake.load.LakeRelocate$Measure.toString()
-com.ash.lake.load.LakeRelocate$Measure :: public long com.ash.lake.load.LakeRelocate$Measure.files()
-com.ash.lake.load.LakeRelocate$Measure :: public long com.ash.lake.load.LakeRelocate$Measure.missing()
-com.ash.lake.load.LakeRelocate$Measure :: public long com.ash.lake.load.LakeRelocate$Measure.rows()
-com.ash.lake.load.LakeRelocate$Measure :: public long com.ash.lake.load.LakeRelocate$Measure.version()
-com.ash.lake.load.LakeRelocate$Outcome :: public boolean com.ash.lake.load.LakeRelocate$Outcome.refusedOrFailed()
-com.ash.lake.load.LakeRelocate$Outcome :: public com.ash.lake.load.LakeRelocate$Outcome(java.lang.String,java.lang.String,java.lang.String,java.nio.file.Path,java.nio.file.Path,java.util.List<java.lang.String>,java.util.Map<java.lang.String, com.ash.lake.load.LakeRelocate$Measure>)
-com.ash.lake.load.LakeRelocate$Outcome :: public final boolean com.ash.lake.load.LakeRelocate$Outcome.equals(java.lang.Object)
-com.ash.lake.load.LakeRelocate$Outcome :: public final int com.ash.lake.load.LakeRelocate$Outcome.hashCode()
-com.ash.lake.load.LakeRelocate$Outcome :: public final java.lang.String com.ash.lake.load.LakeRelocate$Outcome.toString()
-com.ash.lake.load.LakeRelocate$Outcome :: public java.lang.String com.ash.lake.load.LakeRelocate$Outcome.lake()
-com.ash.lake.load.LakeRelocate$Outcome :: public java.lang.String com.ash.lake.load.LakeRelocate$Outcome.message()
-com.ash.lake.load.LakeRelocate$Outcome :: public java.lang.String com.ash.lake.load.LakeRelocate$Outcome.state()
-com.ash.lake.load.LakeRelocate$Outcome :: public java.nio.file.Path com.ash.lake.load.LakeRelocate$Outcome.from()
-com.ash.lake.load.LakeRelocate$Outcome :: public java.nio.file.Path com.ash.lake.load.LakeRelocate$Outcome.to()
-com.ash.lake.load.LakeRelocate$Outcome :: public java.util.List<java.lang.String> com.ash.lake.load.LakeRelocate$Outcome.folders()
-com.ash.lake.load.LakeRelocate$Outcome :: public java.util.Map<java.lang.String, com.ash.lake.load.LakeRelocate$Measure> com.ash.lake.load.LakeRelocate$Outcome.tables()
 com.ash.lake.load.LakeRetention :: public static int com.ash.lake.load.LakeRetention.run(com.ash.lake.LakeRuntime,java.lang.String[],java.io.PrintStream)
 com.ash.lake.load.LakeRetention :: public static int com.ash.lake.load.LakeRetention.run(java.lang.String[],java.io.PrintStream)
 com.ash.lake.load.LakeRetention :: public static java.util.Map<java.lang.String, java.lang.Object> com.ash.lake.load.LakeRetention.apply(com.ash.lake.LakeRuntime,java.lang.String,java.lang.String,java.lang.String,com.ash.lake.common.RowRetention,java.time.Instant,boolean) throws java.lang.Exception
@@ -1497,6 +1468,7 @@ com.ash.lake.spi.TableWriter$LoadColumns :: public final boolean com.ash.lake.sp
 com.ash.lake.spi.TableWriter$LoadColumns :: public final int com.ash.lake.spi.TableWriter$LoadColumns.hashCode()
 com.ash.lake.spi.TableWriter$LoadColumns :: public final java.lang.String com.ash.lake.spi.TableWriter$LoadColumns.toString()
 com.ash.lake.spi.TableWriter$LoadColumns :: public java.util.List<java.lang.String> com.ash.lake.spi.TableWriter$LoadColumns.promoted()
+com.ash.lake.spi.TableWriter$LostReplace :: public com.ash.lake.spi.TableWriter$LostReplace(java.lang.String,java.time.LocalDate)
 com.ash.lake.spi.TableWriter$WrittenFile :: public com.ash.lake.spi.TableWriter$WrittenFile(java.lang.String,long,long,java.lang.Object,java.lang.String[],java.util.List<java.lang.Object>,java.util.List<java.lang.Object>)
 com.ash.lake.spi.TableWriter$WrittenFile :: public final boolean com.ash.lake.spi.TableWriter$WrittenFile.equals(java.lang.Object)
 com.ash.lake.spi.TableWriter$WrittenFile :: public final int com.ash.lake.spi.TableWriter$WrittenFile.hashCode()

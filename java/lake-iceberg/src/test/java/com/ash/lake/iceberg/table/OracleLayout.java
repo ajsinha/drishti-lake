@@ -58,7 +58,7 @@ public final class OracleLayout {
     public static final String DOC = "doc";
     public static final String DATE = "business_date";
     /** Table property: the rows per file the layout cuts each day into (maintenance re-cuts drifted days to it). */
-    public static final String FILE_ROWS = "drishti.layout.file-rows";
+    public static final String FILE_ROWS = "lake.layout.file-rows";
     public static final int DEFAULT_FILE_ROWS = 250_000;
     /**
      * About 900 trade documents a row group (measured: zstd packs a 6.3 KB trade into about 0.7 KB, and the writer
@@ -278,7 +278,7 @@ public final class OracleLayout {
         Object[] dates = days.keySet().stream().map(LocalDate::toString).toArray();
         OverwriteFiles o = table.newOverwrite().overwriteByRowFilter(Expressions.in(DATE, dates));
         days.values().forEach(files -> files.forEach(o::addFile));
-        o.set("drishti.business-dates", days.size() == 1 ? dates[0].toString() : days.size() + " days").commit();
+        o.set("lake.business-dates", days.size() == 1 ? dates[0].toString() : days.size() + " days").commit();
     }
 
     /** The table's file-rows (the layout's), or the default. */

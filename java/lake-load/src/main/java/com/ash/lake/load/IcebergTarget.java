@@ -49,7 +49,7 @@ import java.util.Map;
  * ({@code target.iceberg}). Each date is ONE commit: an overwrite that replaces the date's partition with the new files.
  *
  * <p>Sorted by other columns than the id ({@code sort-by}), the files say so: they carry no sort order id, and the table gets the property
- * {@code drishti.layout.sort-by}, which lake maintain reads so that it does not re-sort such a day by id.
+ * {@code lake.layout.sort-by}, which lake maintain reads so that it does not re-sort such a day by id.
  */
 final class IcebergTarget implements TableWriter {
 
@@ -61,6 +61,8 @@ final class IcebergTarget implements TableWriter {
     private final WriteSpec spec;
     private final Catalog catalog;
     private final String name;
+    /** The table's snapshot when the load began ({@code -1}: none): a replace of a date changed since is lost. */
+    private final long base;
     private Table table;
     private Schema schema;
     private Source[] sources;
@@ -71,7 +73,7 @@ final class IcebergTarget implements TableWriter {
     private Integer sortOrderId;
     private final List<String> leftOut = new ArrayList<>();
 
-    IcebergTarget(WriteSpec spec) {
+    IcebergTarget(WriteSpec spec) throws IOException {
         this.spec = spec;
         Map<String, String> settings = new HashMap<>(spec.storage());
         settings.putAll(spec.formatOptions());
@@ -79,6 +81,7 @@ final class IcebergTarget implements TableWriter {
         settings.put("domain", spec.domain());
         this.catalog = Catalogs.open(spec.runtime(), settings);
         this.name = spec.table();
+        this.base = catalog.load(name).flatMap(Table::currentSnapshot).map(Snapshot::snapshotId).orElse(-1L);   // the load's base (TableWriter)
     }
 
     @Override
@@ -269,8 +272,14 @@ final class IcebergTarget implements TableWriter {
             s = Operations.append(table, add, summary).orElseThrow(() -> new IllegalStateException("the commit of " + date + " made no snapshot"));
         } else {
             Map<String, String> slice = spec.slice();      // a shared table: only this load's slice of the date
-            s = Operations.replacePartitions(table, f -> date.equals(dateOf(f)) && inSlice(f, slice), add, summary)
-                    .orElseThrow(() -> new IllegalStateException("the commit of " + date + " made no snapshot"));
+            Map<String, String> where = new LinkedHashMap<>(slice);
+            where.put("business_date", date.toString());
+            try {
+                s = Operations.replacePartitions(table, f -> date.equals(dateOf(f)) && inSlice(f, slice), add, summary, new Operations.Since(base, where))
+                        .orElseThrow(() -> new IllegalStateException("the commit of " + date + " made no snapshot"));
+            } catch (Operations.ValidationFailed lost) {
+                throw new TableWriter.LostReplace(spec.domain() + "/" + spec.table(), date);
+            }
         }
         return s.snapshotId();
     }

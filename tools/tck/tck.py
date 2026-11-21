@@ -108,11 +108,12 @@ ROW = {"mem": MEM, "s3": S3}
 
 
 def step(s, work, env, loader="java"):
-    """One step of a case: {load|undo|retention|store: args}, or {parallel: [steps]} (writers started together). ``loader``: who runs
+    """One step of a case: {load|undo|retention|store: args}, {parallel: [steps]} (writers started together, their results in the
+    order listed) or {race: [steps]} (writers started together whose winner is not known: their results sorted). ``loader``: who runs
     its loads (the matrix's loader column: java, or python for the Python path; every other step is the Java tools')."""
     (op, arg), = s.items()
-    if op == "parallel":
-        return {"op": "parallel", "steps": [step(x, work, env, loader) for x in arg]}
+    if op in ("parallel", "race"):
+        return {"op": op, "steps": [step(x, work, env, loader) for x in arg]}
     arg = arg or []
     if op == "load":
         cfg = "main"

@@ -19,7 +19,7 @@ python -m drishti_lake --help
 python -m drishti_lake load --config FILE [--set key.path=value ...] [--as-of YYYY-MM-DD] [--table T] [--kind K] [--mode append|replace]
         [--key FIELD] [--date-from auto|name] [--plan] [--summary FILE] [--progress FILE] [--no-lock] [--no-run-log] [--dry-run] [--run-id ID] [--json] [-q]
 python -m drishti_lake contracts check|pages ...            (CONTRACTS.md)
-python -m drishti_lake undo|retention|relocate|check|maintain|lakes ...    the Java tools, below
+python -m drishti_lake undo|retention|check|maintain|lakes ...    the Java tools, below
 ```
 
 `load` takes **the same configuration file and flags as the Java loader** ([LOADER.md](LOADER.md)), applies the same rules in the same order (the
@@ -28,7 +28,7 @@ id's copies on a date resolved; one commit per business date), prints the same s
 with rejects, 1 failed, 3 locked). It writes Delta on the local disk (`target.path` or a lake folder); what it does not do is refused **before a row
 is read**, naming the Java loader: Iceberg and files, `s3://` and `mem://` tables, `datasets:`, `source.pack`, a lake named by a lake file.
 
-The upkeep commands run the Java tools of the product (`LakeUndo`, `LakeRetention`, `LakeRelocate`, `LakeCheck`, `IcebergMaintenance`, `LakesCli`) so there is
+The upkeep commands run the Java tools of the product (`LakeUndo`, `LakeRetention`, `LakeCheck`, `IcebergMaintenance`, `LakesCli`) so there is
 one implementation of each job. Point them at the product's class path with `LAKE_CLASSPATH` (the `lake-load` module's run-time class path, or one
 runnable jar); the Java binary is `LAKE_JAVA`, else `$JAVA_HOME/bin/java`, else `java` (JDK 21 or later). Without them the command says what to set.
 

@@ -332,6 +332,29 @@ public final class LakeWriter {
         return out;
     }
 
+    /**
+     * The live files of {@code s} whose partition values {@code picked} takes, each as its path with its deletion vector's id
+     * ({@code path#dv}): two snapshots give equal sets exactly when no writer added, removed or deleted rows of those partitions between them.
+     */
+    public static java.util.Set<String> liveFiles(Engine engine, Snapshot s, java.util.function.Predicate<Map<String, String>> picked) throws IOException {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        Scan scan = s.getScanBuilder().build();
+        try (CloseableIterator<FilteredColumnarBatch> it = scan.getScanFiles(engine)) {
+            while (it.hasNext()) {
+                try (CloseableIterator<Row> rows = it.next().getRows()) {
+                    while (rows.hasNext()) {
+                        Row r = rows.next();
+                        if (picked.test(InternalScanFileUtils.getPartitionValues(r))) {
+                            AddFile add = new AddFile(r.getStruct(r.getSchema().indexOf("add")));
+                            out.add(add.getPath() + "#" + add.getDeletionVector().map(d -> d.getUniqueId()).orElse(""));
+                        }
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
     private static <T> CloseableIterator<T> toIterator(List<T> list) {
         java.util.Iterator<T> it = list.iterator();
         return new CloseableIterator<>() {

@@ -170,7 +170,7 @@ public final class IcebergMaintenance {
         boolean force = false;
         boolean manifests = false;
         long budget = 1024L * 1024 * 1024;
-        Path spill = Path.of(System.getProperty("java.io.tmpdir"));
+        String spill = null;                                    // --spill-dir: the operator's folder, else the runtime's temporary folder
         int floorDays = 0;
         long orphanHours = OrphanFiles.MIN_AGE_HOURS;
         boolean orphans = false;
@@ -192,7 +192,7 @@ public final class IcebergMaintenance {
                 case "--max-rows" -> maxRows = Integer.valueOf(v);
                 case "--expire-hours" -> expireHours = Long.parseLong(v);
                 case "--buffer-mb" -> budget = Long.parseLong(v) * 1024 * 1024;
-                case "--spill-dir" -> spill = Path.of(v);
+                case "--spill-dir" -> spill = v;
                 case "--columns" -> addColumns.put(v.substring(0, v.indexOf(':')), Arrays.asList(v.substring(v.indexOf(':') + 1).split(",")));
                 case "--floor-days" -> floorDays = Integer.parseInt(v);
                 case "--older-than-hours" -> orphanHours = Long.parseLong(v);
@@ -239,6 +239,7 @@ public final class IcebergMaintenance {
             expireHours = floorDays * 24L;                     // time travel is kept as long as the dates are
         }
         int failures = 0;
+        Path work = com.ash.lake.common.TempFiles.under(runtime, spill).subDir("iceberg");   // a rewrite's sorted runs; gone as the JVM stops
         for (String domain : domains) {
             Map<String, String> s = new HashMap<>(settings);
             s.put("domain", domain.trim());
@@ -261,7 +262,7 @@ public final class IcebergMaintenance {
                     try {
                         report.put("before", stats(native0));
                         if (undo != null) {
-                            List<Map<String, Object>> lines = NativeMaintenance.undo(native0, undo, spill.resolve("drishti-iceberg-" + ProcessHandle.current().pid()),
+                            List<Map<String, Object>> lines = NativeMaintenance.undo(native0, undo, work,
                                     budget, dryRun);
                             report.put("undo", lines);
                             for (Map<String, Object> u : lines) {
@@ -280,7 +281,7 @@ public final class IcebergMaintenance {
                         }
                         if (rowRetention.active()) {
                             List<Map<String, Object>> days = NativeMaintenance.retention(native0, rowRetention, java.time.Instant.now(),
-                                    spill.resolve("drishti-iceberg-" + ProcessHandle.current().pid()), budget, dryRun);
+                                    work, budget, dryRun);
                             report.put("rowRetention", days);
                             long dropped = days.stream().mapToLong(d -> ((Number) d.get("dropped")).longValue()).sum();
                             say(json, "%s: %d rows %s past the row retention%n", name, dropped, dryRun ? "would be dropped" : "dropped");
@@ -289,7 +290,7 @@ public final class IcebergMaintenance {
                             t.addColumns(addColumns.get(kind));
                         }
                         if (!dryRun && (relayout || addColumns.containsKey(kind))) {
-                            int n = t.relayout(force || addColumns.containsKey(kind), spill.resolve("drishti-iceberg-" + ProcessHandle.current().pid()), budget);
+                            int n = t.relayout(force || addColumns.containsKey(kind), work, budget);
                             report.put("relayout", n);
                             say(json, "%s: %d business days rewritten%n", name, n);
                         }
@@ -403,7 +404,7 @@ public final class IcebergMaintenance {
     }
 
     /**
-     * True for a table the parallel lake loader laid out by more than the id ({@code drishti.layout.sort-by}: legal entity, desk, id; a
+     * True for a table the parallel lake loader laid out by more than the id ({@code lake.layout.sort-by}: legal entity, desk, id; a
      * file of a day then overlaps another's id range by design): relayout leaves its days in their order (2.9.6); loading a day again
      * re-lays it.
      */

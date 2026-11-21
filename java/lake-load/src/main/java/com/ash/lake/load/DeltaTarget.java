@@ -103,6 +103,8 @@ final class DeltaTarget implements TableWriter {
     private Map<String, String> options;
     private final List<String> leftOut = new ArrayList<>();
     private Snapshot before;
+    /** The table when the load began (null: none): a replace of a date changed since is lost ({@link TableWriter.LostReplace}). */
+    private final Snapshot base;
     private Transaction txn;
     private Row state;
     private final Map<List<String>, DataWriteContext> contexts = new HashMap<>();
@@ -115,10 +117,8 @@ final class DeltaTarget implements TableWriter {
         this.page = spec.runtime().options().pageBytes();
         this.engine = LakeWriter.engineFor(spec.runtime(), path, s3);
         this.io = new FileAccess(spec.runtime(), S3Settings.from(spec.runtime(), s3), com.ash.lake.iceberg.io.Relocation.none(), null);
-        if (LocalPaths.isLocal(path)) {
-            Files.createDirectories(Path.of(LocalPaths.toLocal(path, LocalPaths.WINDOWS)));
-        }
         this.table = Table.forPath(engine, path);
+        this.base = snapshot();                  // the load's base: the table as the load found it (TableWriter)
     }
 
     @Override
@@ -126,6 +126,9 @@ final class DeltaTarget implements TableWriter {
         List<String> parts = new ArrayList<>();
         parts.add("business_date");
         parts.addAll(spec.partition());
+        if (LocalPaths.isLocal(path)) {
+            Files.createDirectories(Path.of(LocalPaths.toLocal(path, LocalPaths.WINDOWS)));
+        }
         before = snapshot();
         StructType wanted = new StructType().add("id", StringType.STRING, true).add("doc", StringType.STRING, true).add("business_date", DateType.DATE, true);
         for (String p : spec.partition()) {
@@ -258,7 +261,7 @@ final class DeltaTarget implements TableWriter {
     }
 
     @Override
-    public void begin(LocalDate date) {
+    public void begin(LocalDate date) throws IOException {
         TransactionBuilder tb;
         if (before == null) {
             tb = table.createTransactionBuilder(engine, ENGINE_INFO, Operation.CREATE_TABLE).withSchema(engine, schema)
@@ -273,6 +276,9 @@ final class DeltaTarget implements TableWriter {
             tb = tb.withTransactionId(engine, appId(date), 1);
         }
         txn = tb.build(engine);
+        if (!spec.appends()) {
+            before = lostOrBase(date);
+        }
         state = txn.getTransactionState(engine);
         synchronized (contexts) {
             contexts.clear();
@@ -311,6 +317,30 @@ final class DeltaTarget implements TableWriter {
         });
     }
 
+    /**
+     * A replace's view of the table: the snapshot the transaction reads (its removals are that snapshot's files of the date; Delta's
+     * own conflict check covers what is committed after it), once the date's live files there are the ones the load's base had, else
+     * {@link TableWriter.LostReplace}: another writer changed the date in between.
+     */
+    private Snapshot lostOrBase(LocalDate date) throws IOException {
+        long read = txn.getReadTableVersion();
+        Snapshot at = read < 0 ? null : before != null && before.getVersion() == read ? before : table.getSnapshotAsOfVersion(engine, read);
+        if (at != null && (base == null || base.getVersion() != at.getVersion()) && !dayFiles(base, date).equals(dayFiles(at, date))) {
+            throw new TableWriter.LostReplace(spec.domain() + "/" + spec.table(), date);
+        }
+        return at;
+    }
+
+    /** The live files of {@code date} (this load's slice of it) in {@code s}, with their deletion vectors; empty for no table. */
+    private java.util.Set<String> dayFiles(Snapshot s, LocalDate date) throws IOException {
+        if (s == null) {
+            return java.util.Set.of();
+        }
+        String day = date.toString();
+        Map<String, String> slice = spec.slice();
+        return LakeWriter.liveFiles(engine, s, pv -> day.equals(pv.get("business_date")) && TargetRules.inSlice(pv, slice));
+    }
+
     @Override
     public long commit(LocalDate date, List<WrittenFile> files) throws IOException {
         List<Row> actions = new ArrayList<>();
@@ -331,7 +361,15 @@ final class DeltaTarget implements TableWriter {
                 }
             }
         }
-        TransactionCommitResult result = txn.commit(engine, CloseableIterable.inMemoryIterable(iterator(actions)));
+        TransactionCommitResult result;
+        try {
+            result = txn.commit(engine, CloseableIterable.inMemoryIterable(iterator(actions)));
+        } catch (io.delta.kernel.exceptions.ConcurrentWriteException e) {
+            if (spec.appends()) {
+                throw e;
+            }
+            throw new TableWriter.LostReplace(spec.domain() + "/" + spec.table(), date);           // committed by another writer after this transaction read the table
+        }
         for (PostCommitHook hook : result.getPostCommitHooks()) {
             try {
                 hook.threadSafeInvoke(engine);                     // a checkpoint every so many versions, as lake build's writer

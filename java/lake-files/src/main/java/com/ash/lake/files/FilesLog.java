@@ -220,13 +220,28 @@ final class FilesLog {
      * commit written and the day file published together, so a day file never goes back to an older version.
      */
     Commit commit(LocalDate date, String op, List<String> loads, String batch, long rows, Path content, long base) throws IOException {
+        return commit(date, op, loads, batch, rows, content, now -> base == ANY || (now == null ? -1 : now.version()) == base);
+    }
+
+    /**
+     * As {@link #commit(LocalDate, String, List, String, long, Path)}, when no commit of {@code date} came after the log's version
+     * {@code since} (-1: the log had none): null when one did (a replace that lost to another writer).
+     */
+    Commit commitSince(LocalDate date, String op, List<String> loads, String batch, long rows, Path content, long since) throws IOException {
+        return commit(date, op, loads, batch, rows, content, now -> now == null || now.version() <= since);
+    }
+
+    /** The log's newest version, -1 when it has none. */
+    long head() throws IOException {
+        return commits().stream().mapToLong(Commit::version).max().orElse(-1);
+    }
+
+    private Commit commit(LocalDate date, String op, List<String> loads, String batch, long rows, Path content,
+            java.util.function.Predicate<Commit> builtOn) throws IOException {
         return locked(() -> {
             List<Commit> all = commits();
-            if (base != ANY) {
-                Commit now = at(all, date, Long.MAX_VALUE);
-                if ((now == null ? -1 : now.version()) != base) {
-                    return null;
-                }
+            if (!builtOn.test(at(all, date, Long.MAX_VALUE))) {
+                return null;
             }
             long n = all.stream().mapToLong(Commit::version).max().orElse(-1) + 1;
             String name = content == null ? null : n + ".jsonl";

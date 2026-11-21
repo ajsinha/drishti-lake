@@ -13,7 +13,7 @@
 | `lake-delta` | `com.ash.lake.delta` (`.read`, `.write`, `.table`) | lake-io, tools-net; Delta Kernel (native engine) |
 | `lake-iceberg` | `com.ash.lake.iceberg` (`.catalog`, `.expr`, `.io`, `.manifest`, `.meta`, `.read`, `.scan`, `.types`, `.write`, `.table`, `.external`) | lake-io, tools-net, tools-concurrent, tools-time; iceberg-core, iceberg-aws |
 | `lake-files` | `com.ash.lake.files` (the plain-file store) | lake-io |
-| `lake-load` | `com.ash.lake.load` (the loader, undo, retention, check, relocate), `com.ash.lake.inbox` | lake-io, lake-config, lake-delta, lake-iceberg, lake-files, lake-contracts |
+| `lake-load` | `com.ash.lake.load` (the loader, undo, retention, check), `com.ash.lake.inbox` | lake-io, lake-config, lake-delta, lake-iceberg, lake-files, lake-contracts |
 | `lake-memory` | `com.ash.lake.memory` (`.store`): the in-memory lake, `mem://` | lake-io, lake-config, lake-delta |
 | `lake-contracts` | `com.ash.lake.contract` (`Contract`, `ContractChecker`) | Jackson YAML |
 | `lake-tck` | `com.ash.lake.tck` (the S3 simulator, delta-rs runner, test roots) | test support only |

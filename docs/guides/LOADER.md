@@ -61,10 +61,18 @@ values named; a kind the lake file lacks is refused.
   with two faults is rejected for the first. Rejects are counted by reason; over `rejects.max-pct` nothing commits. Several rows of one id on
   one date: `latest-by` decides, else the last read.
 - **Commits.** One commit per business date. A load never leaves a date half written.
+- **Loads at once.** A load's base is the table as it found it when it started. A replace is optimistic on every store (Delta, Iceberg,
+  files; local disk, S3, memory): when another writer changed the date (this load's slice of it) after that, the load commits nothing for
+  the date, says `<domain>/<table>: <date> was replaced or changed by another load while this one ran ... run it again` and exits 1; the
+  other load's rows stand. Appends of one date at once all land. The lock (`--no-lock` turns it off) only makes loads of one lake on one
+  machine wait for each other.
+- **The newest load.** Where a date holds several loads' copies of an id (appends), the reader keeps the copy of the **later commit**
+  (the table version, the data sequence number, the files log's order), whatever the loaders' clocks said; the run's time orders only
+  copies of one commit.
 - **Output.** A local lake gets `_drishti-lake/` beside its tables: `runs/<run>.json` (the summary), `runs/<run>.manifest.json` (every file
   written, with its row counts and key bounds), `runs.log`, `last-run.json`, and the lock.
 
-## Undo, delete, retention, check, relocate
+## Undo, delete, retention, check
 
 Every row carries the `_load_id` of its load (`<run-id>.<n>`, listed in the summary's `loads`).
 
@@ -73,16 +81,14 @@ LakeUndo      --lake ROOT --load-id ID [--table domain/table ...] [--dry-run] [-
 LakeRetention --lake ROOT --format delta|iceberg|files --table domain/table --dates 2026-11-20[,2026-11-01..2026-11-10] [--dry-run] [--json]
 LakeRetention --lake ROOT --format delta|iceberg|files --table domain/table [--ttl 8h] [--on FIELD] [--max-rows N] [--dry-run] [--json]
 LakeCheck     check [--dir LAKEFILES]
-LakeRelocate  --lake NAME [--dry-run]
 ```
 
 All in `com.ash.lake.load`, run like `LakeLoad`. **Undo** removes exactly a load's rows, one commit per table and date; a load that replaced a date
 is undone by restoring the date as it was (rows appended by later loads kept). **Retention** removes whole business dates (`--dates`) in one
 commit, or the rows older than `--ttl` on a field (default the `arrived_at` column, else the business date) or beyond `--max-rows`. **Check**
-reads the lake files and the tables on disk and reports findings. **Relocate** is the one-time move of a lake built in the older layout
-(tables directly under `<data>/delta/<domain>/`) into `<data>/delta/<lake>/`; it refuses, saying why, whenever it cannot be safe.
+reads the lake files and the tables on disk and reports findings.
 Iceberg upkeep (compaction, snapshot expiry, orphan files) is `com.ash.lake.iceberg.table.IcebergMaintenance`. The same commands are
-`python -m drishti_lake undo|retention|relocate|check|maintain|lakes` ([PYTHON.md](PYTHON.md)).
+`python -m drishti_lake undo|retention|check|maintain|lakes` ([PYTHON.md](PYTHON.md)).
 
 ## The inbox: hand-over by `.ready` files
 

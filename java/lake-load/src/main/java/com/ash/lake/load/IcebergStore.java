@@ -215,7 +215,11 @@ public final class IcebergStore implements TableStore {
 
     @Override
     public TableWriter writer(WriteSpec spec) {
-        return new IcebergTarget(spec);
+        try {
+            return new IcebergTarget(spec);
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
     }
 
     @Override

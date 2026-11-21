@@ -21,6 +21,7 @@ import com.ash.lake.spi.ColumnType;
 import com.ash.lake.spi.Columns;
 import com.ash.lake.spi.LoadRow;
 import com.ash.lake.spi.TableWriter;
+import com.ash.lake.spi.TableWriter.LostReplace;
 import com.ash.lake.spi.WriteSpec;
 import com.fasterxml.jackson.core.io.JsonStringEncoder;
 import java.io.BufferedOutputStream;
@@ -53,9 +54,13 @@ final class FilesWriter implements TableWriter {
     private char[] kind;
     private int[] index;
 
-    FilesWriter(WriteSpec spec, Path root) {
+    /** The log's newest version when the load began (-1: none): a replace of a date committed since is lost (TableWriter). */
+    private final long base;
+
+    FilesWriter(WriteSpec spec, Path root) throws IOException {
         this.spec = spec;
         this.log = new FilesLog(root.resolve(spec.domain()), spec.table());
+        this.base = log.head();
     }
 
     static final String LOAD_ID = "_load_id";
@@ -204,42 +209,82 @@ final class FilesWriter implements TableWriter {
             columnsChanged = false;
         }
         boolean append = spec.appends();
+        Map<String, String> slice = spec.slice();
         if (files.isEmpty() && (append || !Files.isRegularFile(log.day(date)))) {
             return -1;                                             // nothing to add, or nothing to remove
         }
         FilesLog.Commit c;
         while (true) {                                             // an append is built on the date's newest version, again if another writer moved it
-            FilesLog.Commit base = append ? log.latest(date) : null;
+            FilesLog.Commit latest = append || !slice.isEmpty() ? log.latest(date) : null;
+            Path before = latest != null ? log.content(latest)                    // a day file without a log (written before it): its lines
+                    : (append || !slice.isEmpty()) && Files.isRegularFile(log.day(date)) ? log.day(date) : null;
             Path content = null;
             long rows = 0;
-            if (!files.isEmpty()) {
+            if (!files.isEmpty() || before != null && !slice.isEmpty()) {
                 content = log.newContent();
                 try (OutputStream out = Files.newOutputStream(content)) {
-                    Path before = base != null ? log.content(base)            // a day file without a log (written before it): its lines
-                            : append && Files.isRegularFile(log.day(date)) ? log.day(date) : null;
-                    if (before != null) {
+                    if (before != null && append) {
                         rows += FilesStore.count(before);
                         Files.copy(before, out);
+                    } else if (before != null) {
+                        rows += otherSlices(before, slice, out);  // a shared table: the other loads' slices of the date stay
                     }
                     for (WrittenFile f : files) {
                         Files.copy((Path) f.handle(), out);
                         rows += f.rows();
                     }
                 }
+                if (rows == 0) {
+                    Files.deleteIfExists(content);
+                    content = null;                                // nothing left of the date
+                }
             }
-            c = log.commit(date, append ? "append" : "replace", spec.loadIds(), append ? spec.batchId() : null, rows, content,
-                    append ? (base == null ? -1 : base.version()) : FilesLog.ANY);
+            String op = append ? "append" : "replace";
+            c = append ? log.commit(date, op, spec.loadIds(), spec.batchId(), rows, content, latest == null ? -1 : latest.version())
+                    : log.commitSince(date, op, spec.loadIds(), null, rows, content, base);
             if (c != null) {
                 break;
             }
             if (content != null) {
                 Files.deleteIfExists(content);
             }
+            if (!append) {
+                for (WrittenFile f : files) {
+                    Files.deleteIfExists((Path) f.handle());
+                }
+                throw new LostReplace(spec.domain() + "/" + spec.table(), date);
+            }
         }
         for (WrittenFile f : files) {
             Files.deleteIfExists((Path) f.handle());
         }
         return c.version();
+    }
+
+    /** Copies the lines of {@code day} outside the slice (a line whose columns hold every value of the slice is in it); their count. */
+    private static long otherSlices(Path day, Map<String, String> slice, OutputStream out) throws IOException {
+        long n = 0;
+        try (java.io.BufferedReader r = Files.newBufferedReader(day, StandardCharsets.UTF_8)) {
+            for (String line = r.readLine(); line != null; line = r.readLine()) {
+                if (line.isBlank() || inSlice(FilesLog.JSON.readTree(line).path("columns"), slice)) {
+                    continue;
+                }
+                out.write(line.getBytes(StandardCharsets.UTF_8));
+                out.write('\n');
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private static boolean inSlice(com.fasterxml.jackson.databind.JsonNode columns, Map<String, String> slice) {
+        for (Map.Entry<String, String> e : slice.entrySet()) {
+            com.fasterxml.jackson.databind.JsonNode v = columns.get(e.getKey());
+            if (v == null || v.isNull() || !e.getValue().equals(v.asText())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override

@@ -296,7 +296,8 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
     /**
      * The load's slice of a shared table (DATA_LAKE_GUIDE.md section 5.1): when other connectors of the pack (a module's templates, a
      * site's {@code lake-tables:} over them) write the same table as this load (WSS, SwapOne and ICI into {@code trading.trades_shared}),
-     * the connector's {@code set:} constants that are a partition column (Delta) or a promoted column (Iceberg, partitioned by date alone)
+     * the connector's {@code set:} constants that are a partition column (Delta) or a promoted column (Iceberg, partitioned by date alone;
+     * files)
      * split it, and a replace takes out only this load's slice of each date. A shared table with no such column refuses a replace: it would
      * take out the other connectors' rows of the date.
      */
@@ -327,13 +328,14 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         if (sharing.size() < 2) {
             return src;
         }
-        List<String> columns = (format.equals("iceberg") ? java.util.stream.Stream.concat(src.partitionBy().stream(), src.promote().stream()).toList()
+        boolean byPromoted = !format.equals("delta");       // Iceberg (partitioned by date alone) and files: a promoted column too
+        List<String> columns = (byPromoted ? java.util.stream.Stream.concat(src.partitionBy().stream(), src.promote().stream()).toList()
                 : src.partitionBy()).stream().map(RowPlan::column).toList();
         Map<String, String> slice = TargetRules.slice(src.set(), columns);
         if (slice.isEmpty() && !LakeTable.APPEND.equals(loadMode)) {
             throw new IllegalArgumentException("the table of connector " + connector + " is shared by " + String.join(", ", sharing.stream().sorted().toList())
                     + ": a replace would take out the other connectors' rows of the date; split it by the connector's set: column "
-                    + String.join(", ", src.set().keySet()) + " (" + (format.equals("iceberg") ? "promote:" : "partition-by:")
+                    + String.join(", ", src.set().keySet()) + " (" + (byPromoted ? "promote:" : "partition-by:")
                     + " in the lake file's entry), or give each connector its own table (DATA_LAKE_GUIDE.md section 16.2)");
         }
         return new Source(src.files(), src.recursive(), src.storage(), src.id(), src.date(), src.asOf(), src.promote(), src.vectors(), src.flatten(),

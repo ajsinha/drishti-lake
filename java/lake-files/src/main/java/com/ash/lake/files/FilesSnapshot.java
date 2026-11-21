@@ -164,7 +164,7 @@ final class FilesSnapshot implements TableSnapshot {
 
     /**
      * The ids written more than once on the date, each with the line readers see: the newest load's copy in the one load order
-     * ({@link com.ash.lake.rows.LoadOrder}: the run's time, then the commit, here the line's place, as an append adds lines after the
+     * ({@link com.ash.lake.rows.LoadOrder}: the commit, here the line's place, as an append adds lines after the
      * earlier ones).
      */
     private Map<String, Integer> shadow(LocalDate date) throws IOException {

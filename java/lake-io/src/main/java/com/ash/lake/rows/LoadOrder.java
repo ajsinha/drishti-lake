@@ -16,10 +16,10 @@
 package com.ash.lake.rows;
 
 /**
- * The one rule of which load is the newer, for every store's "the newest load wins": a load id is {@code <run>.<file>} with the run
- * {@code yyyyMMdd'T'HHmmss.SSS-<pid>[-<n>]} (or the run the caller gave, {@code --run-id}). Two loads are ordered by the run's time
- * (the text before the first {@code -}); loads that started in the same millisecond, by their commit order (the process id and run
- * number are not an order: {@code -10} sorts before {@code -9}); then by the whole id (one commit's files).
+ * The one rule of which load is the newer, for every store's "the newest load wins": the later commit (a table version, a data sequence
+ * number, the place in a files log), whatever the loaders' clocks said; between rows of one commit (one load, or a day rewritten whole),
+ * the run's time, then the whole id. A load id is {@code <run>.<file>} with the run {@code yyyyMMdd'T'HHmmss.SSS-<pid>[-<n>]} (or the
+ * run the caller gave, {@code --run-id}); its time is the text before the first {@code -}, a name, never an order across commits.
  */
 public final class LoadOrder {
 
@@ -46,14 +46,16 @@ public final class LoadOrder {
     }
 
     /**
-     * Whether two different runs of {@code loadIds} started in the same millisecond: only then is the commit order needed (a store reads
-     * it for those files alone; otherwise every commit order may be given as 0).
+     * Whether {@code loadIds} hold two different runs: only then is the commit order needed (a store reads it for those files alone;
+     * otherwise every commit order may be given as 0).
      */
     public static boolean needsCommits(Iterable<String> loadIds) {
-        java.util.Map<String, String> runOf = new java.util.HashMap<>();
+        String first = null;
         for (String id : loadIds) {
-            String r = runOf.putIfAbsent(time(id), run(id));
-            if (r != null && !r.equals(run(id))) {
+            String r = run(id);
+            if (first == null) {
+                first = r;
+            } else if (!first.equals(r)) {
                 return true;
             }
         }
@@ -61,13 +63,13 @@ public final class LoadOrder {
     }
 
     /**
-     * Compares two loads' copies: by time, then by commit order ({@code commitA}/{@code commitB}: a table version or sequence number;
-     * 0 for both when {@link #needsCommits} is false), then by the whole id. Negative when {@code a} is the older.
+     * Compares two loads' copies: by commit order ({@code commitA}/{@code commitB}: a table version or sequence number; 0 for both when
+     * {@link #needsCommits} is false), then by the run's time, then by the whole id. Negative when {@code a} is the older.
      */
     public static int compare(String a, long commitA, String b, long commitB) {
-        int c = time(a).compareTo(time(b));
+        int c = Long.compare(commitA, commitB);
         if (c == 0) {
-            c = Long.compare(commitA, commitB);
+            c = time(a).compareTo(time(b));
         }
         return c != 0 ? c : (a == null ? "" : a).compareTo(b == null ? "" : b);
     }

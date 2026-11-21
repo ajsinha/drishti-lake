@@ -18,15 +18,15 @@ package com.ash.lake;
 import java.util.Map;
 
 /**
- * The names the product writes into a table's own metadata (Iceberg snapshot summaries and table properties): {@code lake.<name>}.
- * Tables written before the split carry the host's prefix ({@code drishti.<name>}); a reader takes {@code lake.<name>} first, then the
- * older name, so those tables read as before and nothing is rewritten (step L7, read both, write the product's).
+ * The names the product writes into a table's own metadata (Iceberg snapshot summaries and table properties): {@code lake.<name>}, the
+ * only ones it reads. A table written before Drishti Lake carries its host's prefix instead; such a table is refused with the way out
+ * (rebuild the lake: load its tables again), never read by the older name and never rewritten (no migration code).
  */
 public final class PersistedNames {
 
-    /** The prefix the product writes. */
+    /** The prefix the product writes and reads. */
     public static final String PREFIX = "lake.";
-    /** The prefix of tables written before the split, read only. */
+    /** The prefix of tables written before Drishti Lake: only recognised, to refuse them. */
     static final String EARLIER = "drishti" + ".";
 
     private PersistedNames() {
@@ -37,32 +37,36 @@ public final class PersistedNames {
         return PREFIX + name;
     }
 
-    /** {@code name}'s value in {@code m}: the product's key, else the earlier one; null when neither is there. */
+    /**
+     * {@code name}'s value in {@code m} ({@code lake.<name>}); null when it is not there.
+     *
+     * @throws IllegalStateException when {@code m} names it only under the prefix of a table written before Drishti Lake
+     */
     public static String get(Map<String, String> m, String name) {
         if (m == null) {
             return null;
         }
         String v = m.get(PREFIX + name);
-        return v != null ? v : m.get(EARLIER + name);
+        if (v == null && m.containsKey(EARLIER + name)) {
+            throw new IllegalStateException("the table was written before Drishti Lake: its metadata names " + EARLIER + name + ", Drishti "
+                    + "Lake reads " + PREFIX + name + " only; rebuild the lake (load its tables again into a new lake folder)");
+        }
+        return v;
     }
 
-    /** As {@link #get}, {@code dflt} when neither key is there. */
+    /** As {@link #get}, {@code dflt} when the name is not there. */
     public static String get(Map<String, String> m, String name, String dflt) {
         String v = get(m, name);
         return v != null ? v : dflt;
     }
 
-    /**
-     * The other prefix's name of a dotted setting a lake file refers to ({@code drishti.data.dir} and {@code lake.data.dir}), so a lake
-     * file of either age resolves where its host or the product names the value; null when {@code name} has neither prefix.
-     */
-    public static String alias(String name) {
-        if (name.startsWith(PREFIX)) {
-            return EARLIER + name.substring(PREFIX.length());
-        }
-        if (name.startsWith(EARLIER)) {
-            return PREFIX + name.substring(EARLIER.length());
-        }
-        return null;
+    /** Whether {@code setting} (a lake file's reference, {@code drishti.data.dir}) has the host's prefix: refused, with the product's name. */
+    public static boolean earlier(String setting) {
+        return setting != null && setting.startsWith(EARLIER);
+    }
+
+    /** The product's name of a setting with the host's prefix ({@code drishti.data.dir}: {@code lake.data.dir}). */
+    public static String product(String setting) {
+        return PREFIX + setting.substring(EARLIER.length());
     }
 }

@@ -42,6 +42,22 @@ public final class TempFiles {
         return runtime.part(TempFolder.class, () -> TempFolder.of(base(runtime), "lake-", SEQUENCE.incrementAndGet(), MARKER));
     }
 
+    /** The temporary folders under operators' own folders (a {@code --spill-dir}), one per folder for the process's life. */
+    private static final java.util.concurrent.ConcurrentHashMap<Path, TempFolder> UNDER = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * The temporary folder for a job's scratch files: {@code <dir>/lake-<pid>} when the operator names a folder ({@code --spill-dir},
+     * {@code memory.spill-dir}; a relative one under the install folder), else the runtime's ({@link #of}). Removed when the JVM stops
+     * cleanly; a job removes its own sub-folder when it ends.
+     */
+    public static TempFolder under(LakeRuntime runtime, String dir) {
+        if (dir == null || dir.isBlank()) {
+            return of(runtime);
+        }
+        Path base = runtime.roots().anchored(dir).toAbsolutePath().normalize();
+        return UNDER.computeIfAbsent(base, b -> TempFolder.of(b, "lake-", MARKER));
+    }
+
     static Path base(LakeRuntime runtime) {
         String p = runtime.options().tmpDirSetting();
         return (p == null ? Path.of(System.getProperty("java.io.tmpdir", "/tmp")) : runtime.roots().anchored(p)).toAbsolutePath().normalize();

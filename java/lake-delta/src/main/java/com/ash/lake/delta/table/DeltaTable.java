@@ -341,10 +341,10 @@ final class DeltaTable {
 
     /**
      * A date's files in load order, the newest last: by the largest {@code _load_id} each holds (its statistics) in the one load order
-     * ({@link com.ash.lake.rows.LoadOrder}: the run's time, then the commit for runs of one millisecond, then the id), then the time
+     * ({@link com.ash.lake.rows.LoadOrder}: the commit, then the run's time, then the id), then the time
      * the file was added, then the path. A reader that keeps the last copy of an id keeps the newest load's. {@code loadColumn} is the load
      * id column's name in the statistics (its physical name on a column-mapped table); {@code commits}
-     * gives the version that added each of the files when two runs of the date started in the same millisecond (null: none known).
+     * gives the version that added each of the files when the date holds two runs (null: none known).
      */
     static void newestLast(List<Row> files, String loadColumn, java.util.function.Function<List<Row>, Map<String, Long>> commits) {
         Map<Row, String> max = new java.util.IdentityHashMap<>();

@@ -10,7 +10,7 @@ go down from its value at the move. **This list only shrinks**; at `v1.0.0` it i
 ## Counts (read by the guards)
 
 - hostcompat types: 0
-- host-word files: 66
+- host-word files: 57
 - parked checks: 1
 
 ## Dependencies
@@ -31,15 +31,13 @@ product's own row, column and vector types (`com.ash.lake.rows`, module `lake-io
 ## Setting names and host words (read by `NamesNoHostTest`)
 
 The product reads its own settings only, through `LakeOptions` (`lake.*` names, `LAKE_*` variables; the surefire configuration in
-`java/pom.xml` sets `lake.home`, `lake.data.dir`, `lake.repo.root`, `lake.module.root`, absolute). What still carries a host word: the lake
-files' placeholder text `${drishti.data.dir:./data}` and the demo root `DRISHTI_DELTA_ROOT` (configuration the host writes and sets,
-read as text; the connector-migration helpers name the host's connector files: L12 decides whether they stay in the product). The
-**persisted names** are decided (L7, `PersistedNames`): the product writes `lake.<name>` into Iceberg snapshot summaries and table
-properties (`lake.business-dates`, `lake.load-ids`, `lake.layout.*`; the per-column writer options are `lake.parquet.*`) and reads
-`lake.<name>` first, then the host's `drishti.<name>`, so tables written before the split read the same and nothing is rewritten; a lake
-file's `${drishti.x}` and `${lake.x}` resolve each other's value when only one is set; the Delta commit's engine info names the
-product ("Drishti Lake"). Left: `DRS-` codes in messages, source-system names (`trade_endur`) and the host's
-name in comments (L13 the prose). The count of such files is the "host-word files" line above.
+`java/pom.xml` sets `lake.home`, `lake.data.dir`, `lake.repo.root`, `lake.module.root`, absolute). What still carries a host word: the demo
+root `DRISHTI_DELTA_ROOT` (a variable the host sets, read as text). The **persisted names** are the product's alone (`PersistedNames`):
+it writes and reads `lake.<name>` in Iceberg snapshot summaries and table properties (`lake.business-dates`, `lake.load-ids`,
+`lake.layout.*`; the per-column writer options are `lake.parquet.*`); a table that carries the host's older names is refused with the way
+out (rebuild the lake), and a lake file's `${drishti.x}` is refused naming `${lake.x}` (no read-both, no migration code; G3 decision
+O4). The Delta commit's engine info names the product ("Drishti Lake"). Left: `DRS-` codes in messages, source-system names
+(`trade_endur`) and the host's name in comments (L13 the prose). The count of such files is the "host-word files" line above.
 
 ## Parked checks
 

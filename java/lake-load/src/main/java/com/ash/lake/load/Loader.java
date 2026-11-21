@@ -97,6 +97,7 @@ final class Loader {
         Runtime.getRuntime().addShutdownHook(cleanup);
         FileAccess io = new FileAccess(cfg.runtime(), S3Settings.from(cfg.runtime(), cfg.source().storage()), Relocation.none(), null);
         List<ParseWorker> workers = new ArrayList<>();
+        TableWriter target = null;
         try (Progress progress = new Progress(cfg.report().progress(), report); HeapWatch heap = new HeapWatch(report)) {
             List<InputFile> files = given != null ? given : Inputs.resolve(cfg.source().files(), cfg.source().recursive(), io);
             for (InputFile f : files) {
@@ -110,6 +111,9 @@ final class Loader {
             }
             List<Split> splits = Inputs.splits(files, par.splitBytes());
             loadIds(splits);
+            if (!cfg.report().dryRun()) {          // the writer before the read: the table as it is now is the load's base (TableWriter)
+                target = Stores.of(cfg.runtime(), cfg.target().format()).writer(writeSpec(cfg, plan));
+            }
             report.inputs(files);
             checkSpillSpace(spillDir, files);
             int readers = Math.max(1, Math.min(par.readers(), splits.size()));
@@ -137,7 +141,7 @@ final class Loader {
             if (report.accepted == 0) {
                 throw new LoadException("no document could be loaded (every one was rejected: see rejects)");
             }
-            write(workers, progress);
+            write(workers, progress, target);
             report.status = report.rejected > 0 ? "partial" : "ok";
             return report;
         } finally {
@@ -147,6 +151,9 @@ final class Loader {
                         r.close();
                     }
                 }
+            }
+            if (target != null) {
+                target.close();
             }
             io.close();
             report.meters(meters);
@@ -367,7 +374,7 @@ final class Loader {
     }
 
     /** The write and commit stages, one business date after another. */
-    private void write(List<ParseWorker> workers, Progress progress) throws Exception {
+    private void write(List<ParseWorker> workers, Progress progress, TableWriter target) throws Exception {
         TreeMap<Integer, List<Runs.Run>> byDate = new TreeMap<>();
         for (ParseWorker w : workers) {
             w.dates.forEach((day, d) -> byDate.computeIfAbsent(day, k -> new ArrayList<>()).addAll(d.runs));
@@ -391,47 +398,45 @@ final class Loader {
         List<String> promoted = plan.promoted.stream().map(RowPlan.Promoted::column).toList();
         Meter write = meter("write", cfg.parallel().writers());
         Meter commit = meter("commit", 1);
-        try (TableWriter target = Stores.of(cfg.runtime(), cfg.target().format()).writer(writeSpec(cfg, plan))) {
-            target.open(new TableWriter.LoadColumns(promoted, numeric, seen, list));
-            report.columns(target.columnTypes(), target.leftOut());
-            DateWriter dw = new DateWriter(target, plan, cfg.target().layout(), cfg.parallel().writers(), write);
-            ExecutorService pool = Executors.newFixedThreadPool(cfg.parallel().writers(), named("lakeload-write"));
-            long t0 = System.nanoTime();
-            try {
-                int done = 0;
-                for (Map.Entry<Integer, List<Runs.Run>> e : byDate.entrySet()) {
-                    LocalDate date = LocalDate.ofEpochDay(e.getKey());
-                    if (target.appended(date)) {           // this batch's append of the date is committed already: never twice
-                        progress.phase("skipping " + date + ": batch " + cfg.target().batchId() + " was appended already");
-                        report.skippedBatch(date);
-                        for (Runs.Run r : e.getValue()) {
-                            r.close();
-                        }
-                        e.getValue().clear();
-                        progress.done(++done, byDate.size());
-                        continue;
-                    }
-                    progress.phase("writing " + date);
-                    target.begin(date);
-                    List<Runs.Run> runs = fanIn(date, e.getValue());
-                    e.setValue(runs);
-                    List<WrittenFile> files = dw.write(date, runs, pool, mergeBuffer(runs), report.dropped(date));
-                    long c0 = System.nanoTime();
-                    long version = target.commit(date, files);
-                    commit.rows.add(files.stream().mapToLong(WrittenFile::rows).sum());
-                    commit.busy(c0);
-                    report.committed(date, version, files);
+        target.open(new TableWriter.LoadColumns(promoted, numeric, seen, list));
+        report.columns(target.columnTypes(), target.leftOut());
+        DateWriter dw = new DateWriter(target, plan, cfg.target().layout(), cfg.parallel().writers(), write);
+        ExecutorService pool = Executors.newFixedThreadPool(cfg.parallel().writers(), named("lakeload-write"));
+        long t0 = System.nanoTime();
+        try {
+            int done = 0;
+            for (Map.Entry<Integer, List<Runs.Run>> e : byDate.entrySet()) {
+                LocalDate date = LocalDate.ofEpochDay(e.getKey());
+                if (target.appended(date)) {           // this batch's append of the date is committed already: never twice
+                    progress.phase("skipping " + date + ": batch " + cfg.target().batchId() + " was appended already");
+                    report.skippedBatch(date);
                     for (Runs.Run r : e.getValue()) {
                         r.close();
                     }
                     e.getValue().clear();
                     progress.done(++done, byDate.size());
+                    continue;
                 }
-            } finally {
-                pool.shutdownNow();
+                progress.phase("writing " + date);
+                target.begin(date);
+                List<Runs.Run> runs = fanIn(date, e.getValue());
+                e.setValue(runs);
+                List<WrittenFile> files = dw.write(date, runs, pool, mergeBuffer(runs), report.dropped(date));
+                long c0 = System.nanoTime();
+                long version = target.commit(date, files);
+                commit.rows.add(files.stream().mapToLong(WrittenFile::rows).sum());
+                commit.busy(c0);
+                report.committed(date, version, files);
+                for (Runs.Run r : e.getValue()) {
+                    r.close();
+                }
+                e.getValue().clear();
+                progress.done(++done, byDate.size());
             }
-            report.writeSeconds = (System.nanoTime() - t0) / 1e9;
+        } finally {
+            pool.shutdownNow();
         }
+        report.writeSeconds = (System.nanoTime() - t0) / 1e9;
     }
 
     /** The smallest read buffer a writer gives each spilled run it merges. */
@@ -471,10 +476,9 @@ final class Loader {
         return (int) Math.max(8192, Math.min(1 << 20, mergeShare() / (cfg.parallel().writers() * n)));
     }
 
-    private Path spillDir() {
-        String d = cfg.memory().spillDir();
-        Path base = d != null ? Path.of(d) : Path.of(System.getProperty("java.io.tmpdir"));
-        return base.resolve("drishti-lakeload-" + ProcessHandle.current().pid() + "-" + System.nanoTime());
+    /** The load's own scratch folder, in the temporary folder ({@code memory.spill-dir}'s, else the runtime's: TempFiles). */
+    private Path spillDir() throws IOException {
+        return com.ash.lake.common.TempFiles.under(cfg.runtime(), cfg.memory().spillDir()).createDir("lakeload-");
     }
 
     /** What the table's store needs to write this load: the target, its layout and the row plan's columns, in the product's terms. */
@@ -515,20 +519,7 @@ final class Loader {
     }
 
     private static void removeSpillDir(Path dir) {
-        if (!Files.exists(dir)) {
-            return;
-        }
-        try (Stream<Path> s = Files.walk(dir)) {
-            s.sorted(Comparator.reverseOrder()).forEach(p -> {
-                try {
-                    Files.deleteIfExists(p);
-                } catch (IOException e) {
-                    // a scratch file another process holds (Windows): left for the temp folder's clean-up
-                }
-            });
-        } catch (IOException e) {
-            // as above
-        }
+        com.ash.tools.files.TempFolder.deleteTree(dir);          // a file another process holds (Windows): left for the folder's clean-up
     }
 
     private static java.util.concurrent.ThreadFactory named(String prefix) {

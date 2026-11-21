@@ -115,15 +115,34 @@ public final class Operations {
 
     /**
      * Replaces the partitions {@code inPartition} picks: their live data files are removed and {@code files} added, in one snapshot
-     * (an {@code overwrite}); a reader sees the old partitions or the new ones.
+     * (an {@code overwrite}); a reader sees the old partitions or the new ones. Not validated: {@link #replacePartitions(Table, Predicate,
+     * List, Map, Since)} is the writer's replace.
      */
     public static Optional<Snapshot> replacePartitions(Table t, Predicate<DataFile> inPartition, List<DataFile> files, Map<String, String> summary) {
+        return replacePartitions(t, inPartition, files, summary, null);
+    }
+
+    /**
+     * What a replace is validated against: the snapshot its writer began on ({@code -1}: the table had none) and the rows it replaces
+     * ({@code where}: column = value, the business date and a shared table's slice; a column that is not text is left out of the filter,
+     * which then takes in more, never less).
+     */
+    public record Since(long snapshotId, Map<String, String> where) {}
+
+    /**
+     * As {@link #replacePartitions(Table, Predicate, List, Map)}, validated when {@code since} is given: a data or delete file another
+     * writer added, or a data file it removed, in the rows {@code since.where} names after {@code since.snapshotId} fails the commit with
+     * {@link ValidationFailed} (iceberg-core's {@code validateNoConflictingData} and {@code validateNoConflictingDeletes} from that
+     * snapshot), so of writers replacing one date at once exactly one wins.
+     */
+    public static Optional<Snapshot> replacePartitions(Table t, Predicate<DataFile> inPartition, List<DataFile> files, Map<String, String> summary,
+            Since since) {
         org.apache.iceberg.Table table = t.iceberg();
         Picked p = pick(t, inPartition);
         if (p.data.isEmpty() && files.isEmpty() && p.deletes.isEmpty()) {
             return Optional.empty();
         }
-        if (p.data.isEmpty()) {
+        if (since == null && p.data.isEmpty()) {
             if (!files.isEmpty()) {
                 append(t, files, summary);
             }
@@ -132,10 +151,33 @@ public final class Operations {
             p.data.forEach(o::deleteFile);
             files.forEach(f -> o.addFile(Bridge.iceberg(f, table)));
             summary.forEach(o::set);
-            o.commit();
+            if (since != null) {
+                if (since.snapshotId() >= 0) {
+                    o.validateFromSnapshot(since.snapshotId());
+                }
+                o.conflictDetectionFilter(filter(table.schema(), since.where())).validateNoConflictingData().validateNoConflictingDeletes();
+            }
+            try {
+                o.commit();
+            } catch (ValidationException e) {
+                throw new ValidationFailed(e.getMessage());
+            }
         }
         dropDeletes(table, p.deletes);
         return current(t);
+    }
+
+    /** {@code where} as an Iceberg filter: each text (or date) column equal to its value; any other column left out. */
+    private static org.apache.iceberg.expressions.Expression filter(org.apache.iceberg.Schema schema, Map<String, String> where) {
+        org.apache.iceberg.expressions.Expression e = org.apache.iceberg.expressions.Expressions.alwaysTrue();
+        for (Map.Entry<String, String> w : where.entrySet()) {
+            org.apache.iceberg.types.Types.NestedField f = schema.findField(w.getKey());
+            if (f != null && w.getValue() != null && (f.type().typeId() == org.apache.iceberg.types.Type.TypeID.STRING
+                    || f.type().typeId() == org.apache.iceberg.types.Type.TypeID.DATE)) {
+                e = org.apache.iceberg.expressions.Expressions.and(e, org.apache.iceberg.expressions.Expressions.equal(w.getKey(), w.getValue()));
+            }
+        }
+        return e;
     }
 
     /** Removes whole partitions (metadata only: no data file is read or written). */
