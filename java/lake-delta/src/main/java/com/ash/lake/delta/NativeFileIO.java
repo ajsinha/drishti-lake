@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.deltalake;
+package com.ash.lake.delta;
 
-import com.ash.drishti.lakeio.FileEntry;
-import com.ash.drishti.lakeio.LocalPaths;
-import com.ash.drishti.lakeio.LocalStorage;
-import com.ash.drishti.lakeio.NativeCodecs;
-import com.ash.drishti.lakeio.ParquetInput;
-import com.ash.drishti.lakeio.S3Settings;
-import com.ash.drishti.lakeio.S3Storage;
-import com.ash.drishti.lakeio.Storage;
+import com.ash.lake.io.FileEntry;
+import com.ash.lake.io.LocalPaths;
+import com.ash.lake.io.LocalStorage;
+import com.ash.lake.io.NativeCodecs;
+import com.ash.lake.io.ParquetInput;
+import com.ash.lake.io.S3Settings;
+import com.ash.lake.io.S3Storage;
+import com.ash.lake.io.Storage;
 import io.delta.kernel.defaults.engine.fileio.FileIO;
 import io.delta.kernel.defaults.engine.fileio.InputFile;
 import io.delta.kernel.defaults.engine.fileio.OutputFile;
@@ -55,12 +55,12 @@ public final class NativeFileIO implements FileIO {
     private final NativeCodecs codecs;
 
     /** The outbound proxy of the S3 endpoint. */
-    public com.ash.drishti.api.proxy.ProxySettings proxy() {
+    public com.ash.lake.hostcompat.ProxySettings proxy() {
         return s3Settings.proxy();
     }
 
     /** The TLS material of the S3 endpoint, or null. */
-    public com.ash.drishti.api.tls.TlsMaterial tls() {
+    public com.ash.lake.hostcompat.TlsMaterial tls() {
         return s3Settings.tls();
     }
 
@@ -88,7 +88,7 @@ public final class NativeFileIO implements FileIO {
     /** Whether the native engine can read paths of this scheme ({@code file}, {@code s3}, {@code s3a}, {@code s3n}, {@code mem}). */
     public static boolean supports(String path) {
         String scheme = LocalPaths.scheme(path);
-        return scheme.equals("file") || S3_SCHEMES.contains(scheme) || com.ash.drishti.lakeio.StorageProviders.supports(path);
+        return scheme.equals("file") || S3_SCHEMES.contains(scheme) || com.ash.lake.io.StorageProviders.supports(path);
     }
 
     /** The storage that serves {@code path}. */
@@ -100,8 +100,8 @@ public final class NativeFileIO implements FileIO {
         if (S3_SCHEMES.contains(scheme)) {
             return s3();
         }
-        if (com.ash.drishti.lakeio.StorageProviders.supports(path)) {
-            return com.ash.drishti.lakeio.StorageProviders.storage(path);    // mem://, the in-memory lake (docs/architecture/DATA_ARCHITECTURE.md): never a disk
+        if (com.ash.lake.io.StorageProviders.supports(path)) {
+            return com.ash.lake.io.StorageProviders.storage(path);    // mem://, the in-memory lake (docs/architecture/DATA_ARCHITECTURE.md): never a disk
         }
         throw new UnsupportedOperationException("the native Delta engine reads local disk, S3 (s3://, s3a://) and memory (mem://), not " + scheme
                 + "://; set the connector's engine to hadoop for this lake");

@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -75,13 +75,13 @@ class IcebergLoaderFailureTest {
     void aFailureWithoutAMessageIsSaidInWords() {
         var refused = new java.net.ConnectException();
         refused.initCause(new java.nio.channels.ClosedChannelException());
-        Throwable qa = new UncheckedIOException("cannot reach the REST catalog at http://127.0.0.1:1: " + com.ash.drishti.iceberg.io.Reasons.of(new IOException(refused)),
+        Throwable qa = new UncheckedIOException("cannot reach the REST catalog at http://127.0.0.1:1: " + com.ash.lake.iceberg.io.Reasons.of(new IOException(refused)),
                 new IOException(refused));
         String line = IcebergLoader.oneLine(qa, Map.of("catalog", "rest", "uri", "http://127.0.0.1:1"));
         assertThat(line).startsWith("cannot reach the REST catalog at http://127.0.0.1:1 (the connection was refused or closed before an answer "
                 + "(ClosedChannelException)): check --uri").doesNotContain("null");
-        assertThat(com.ash.drishti.iceberg.io.Reasons.of(new IOException(refused))).isEqualTo("the connection was refused or closed before an answer (ClosedChannelException)");
-        assertThat(com.ash.drishti.iceberg.io.Reasons.of(new RuntimeException("null", new IllegalStateException("the real reason")))).isEqualTo("the real reason");
+        assertThat(com.ash.lake.iceberg.io.Reasons.of(new IOException(refused))).isEqualTo("the connection was refused or closed before an answer (ClosedChannelException)");
+        assertThat(com.ash.lake.iceberg.io.Reasons.of(new RuntimeException("null", new IllegalStateException("the real reason")))).isEqualTo("the real reason");
         assertThat(IcebergLoader.oneLine(new java.nio.channels.ClosedChannelException(), Map.of())).startsWith("the load failed: the connection was closed")
                 .doesNotContain("null");
     }

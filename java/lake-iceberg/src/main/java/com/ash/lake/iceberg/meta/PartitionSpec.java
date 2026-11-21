@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.meta;
+package com.ash.lake.iceberg.meta;
 
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Schema;
-import com.ash.drishti.iceberg.types.Type;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Schema;
+import com.ash.lake.iceberg.types.Type;
 import java.util.ArrayList;
 import java.util.List;
 

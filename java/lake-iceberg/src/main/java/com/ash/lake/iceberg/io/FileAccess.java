@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,14 +13,14 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.io;
+package com.ash.lake.iceberg.io;
 
-import com.ash.drishti.lakeio.LocalPaths;
-import com.ash.drishti.lakeio.LocalStorage;
-import com.ash.drishti.lakeio.NativeCodecs;
-import com.ash.drishti.lakeio.S3Settings;
-import com.ash.drishti.lakeio.S3Storage;
-import com.ash.drishti.lakeio.Storage;
+import com.ash.lake.io.LocalPaths;
+import com.ash.lake.io.LocalStorage;
+import com.ash.lake.io.NativeCodecs;
+import com.ash.lake.io.S3Settings;
+import com.ash.lake.io.S3Storage;
+import com.ash.lake.io.Storage;
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Map;
@@ -95,7 +95,7 @@ public final class FileAccess implements AutoCloseable {
     public static boolean supports(String path) {
         String scheme = LocalPaths.scheme(path);
         return scheme.equals("file") || S3_SCHEMES.contains(scheme.toLowerCase(Locale.ROOT))
-                || com.ash.drishti.lakeio.StorageProviders.supports(path);
+                || com.ash.lake.io.StorageProviders.supports(path);
     }
 
     /**
@@ -133,8 +133,8 @@ public final class FileAccess implements AutoCloseable {
         if (S3_SCHEMES.contains(scheme)) {
             return s3();
         }
-        if (com.ash.drishti.lakeio.StorageProviders.supports(path)) {
-            return com.ash.drishti.lakeio.StorageProviders.storage(path);    // mem://, a warehouse in memory (docs/architecture/DATA_ARCHITECTURE.md section 7)
+        if (com.ash.lake.io.StorageProviders.supports(path)) {
+            return com.ash.lake.io.StorageProviders.storage(path);    // mem://, a warehouse in memory (docs/architecture/DATA_ARCHITECTURE.md section 7)
         }
         throw new UnsupportedOperationException("drishti-iceberg reads local disk, S3 (s3://, s3a://) and memory (mem://), not " + scheme
                 + "://");

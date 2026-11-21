@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
-import com.ash.drishti.api.LoadGuard;
-import com.ash.drishti.common.RowRetention;
-import com.ash.drishti.plugin.iceberg.KindTable.Day;
-import com.ash.drishti.plugin.iceberg.KindTable.Layout;
+import com.ash.lake.hostcompat.LoadGuard;
+import com.ash.lake.common.RowRetention;
+import com.ash.lake.iceberg.table.KindTable.Day;
+import com.ash.lake.iceberg.table.KindTable.Layout;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
@@ -32,7 +32,7 @@ import java.util.concurrent.ExecutorService;
 
 /**
  * Keeps Iceberg tables bounded and in {@link IcebergLayout}: {@code java -cp <plugin classpath>
- * com.ash.drishti.plugin.iceberg.IcebergMaintenance [root] --domain D[,D…] [options]} (run nightly, from cron or a
+ * com.ash.lake.iceberg.table.IcebergMaintenance [root] --domain D[,D…] [options]} (run nightly, from cron or a
  * scheduler). Each step is an ordinary Iceberg commit, so readers never see a half-done change:
  *
  * <ul>
@@ -90,7 +90,7 @@ public final class IcebergMaintenance {
             Map<String, String> ns = new HashMap<>(Map.of("root", root, "domain", d.getFileName().toString()));
             try (LayoutLake view = LayoutLake.of(ns)) {
                 for (String kind : view.kinds()) {
-                    com.ash.drishti.iceberg.Table t = ((LayoutLake.Native.Kind) view.load(kind).orElseThrow()).t();
+                    com.ash.lake.iceberg.Table t = ((LayoutLake.Native.Kind) view.load(kind).orElseThrow()).t();
                     for (Map<String, Object> line : NativeMaintenance.undo(t, id, spillDir, 256L << 20, dryRun)) {
                         Map<String, Object> m = new java.util.LinkedHashMap<>();
                         m.put("table", d.getFileName() + "/" + kind);
@@ -114,7 +114,7 @@ public final class IcebergMaintenance {
             if (table.isEmpty()) {
                 return List.of();
             }
-            com.ash.drishti.iceberg.Table t = ((LayoutLake.Native.Kind) table.get()).t();
+            com.ash.lake.iceberg.Table t = ((LayoutLake.Native.Kind) table.get()).t();
             return NativeMaintenance.retention(t, new RowRetention(ttl, on, maxRows), java.time.Instant.now(), spillDir, 256L << 20, dryRun);
         }
     }
@@ -141,7 +141,7 @@ public final class IcebergMaintenance {
 
     public static void main(String[] args) throws Exception {
         Map<String, String> settings = new HashMap<>();
-        settings.put("root", args.length > 0 && !args[0].startsWith("--") ? args[0] : com.ash.drishti.api.DataDir.under("iceberg"));
+        settings.put("root", args.length > 0 && !args[0].startsWith("--") ? args[0] : com.ash.lake.hostcompat.DataDir.under("iceberg"));
         List<String> domains = new ArrayList<>(List.of(""));
         List<String> kinds = List.of();
         Map<String, List<String>> addColumns = new HashMap<>();
@@ -239,7 +239,7 @@ public final class IcebergMaintenance {
                     if (floor != null) {
                         report.put("floor", Map.of("days", floorDays, "keepsDatesFrom", floor.toString(), "expireHours", expireHours));
                     }
-                    com.ash.drishti.iceberg.Table native0 = ((LayoutLake.Native.Kind) view.load(kind).orElseThrow()).t();
+                    com.ash.lake.iceberg.Table native0 = ((LayoutLake.Native.Kind) view.load(kind).orElseThrow()).t();
                     try {
                         report.put("before", stats(native0));
                         if (undo != null) {
@@ -336,7 +336,7 @@ public final class IcebergMaintenance {
     }
 
     /** The business dates a keep-days would drop now (a dry run), read by drishti-iceberg. */
-    private static List<String> dropping(com.ash.drishti.iceberg.Table t, int keep, LoadGuard guard, LocalDate floor) {
+    private static List<String> dropping(com.ash.lake.iceberg.Table t, int keep, LoadGuard guard, LocalDate floor) {
         if (t.currentSnapshot().isEmpty()) {
             return List.of();
         }
@@ -348,7 +348,7 @@ public final class IcebergMaintenance {
     }
 
     /** A table's size as maintenance reports it: data files, MB, business dates, the newest date and its rows, snapshots. */
-    static Map<String, Object> stats(com.ash.drishti.iceberg.Table t) {
+    static Map<String, Object> stats(com.ash.lake.iceberg.Table t) {
         Map<String, Object> m = new java.util.LinkedHashMap<>();
         m.put("snapshots", t.metadata().snapshots().size());
         if (t.currentSnapshot().isEmpty()) {
@@ -360,7 +360,7 @@ public final class IcebergMaintenance {
             long files = 0;
             long bytes = 0;
             for (Day d : l.days().values()) {
-                for (com.ash.drishti.iceberg.scan.FileTask f : NativeKindTable.tasks(d)) {
+                for (com.ash.lake.iceberg.scan.FileTask f : NativeKindTable.tasks(d)) {
                     files++;
                     bytes += f.file().fileSizeInBytes();
                 }

@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeio;
+package com.ash.lake.io;
 
-import com.ash.drishti.api.proxy.ProxySettings;
-import com.ash.drishti.api.tls.TlsContexts;
-import com.ash.drishti.api.tls.TlsException;
-import com.ash.drishti.api.tls.TlsMaterial;
-import com.ash.drishti.api.tls.TlsSettings;
+import com.ash.lake.hostcompat.ProxySettings;
+import com.ash.lake.hostcompat.TlsContexts;
+import com.ash.lake.hostcompat.TlsException;
+import com.ash.lake.hostcompat.TlsMaterial;
+import com.ash.lake.hostcompat.TlsSettings;
 import java.util.Map;
 
 /**

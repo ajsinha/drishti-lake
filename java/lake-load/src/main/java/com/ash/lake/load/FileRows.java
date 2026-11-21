@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.iceberg.io.FileAccess;
+import com.ash.lake.iceberg.io.FileAccess;
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -126,7 +126,7 @@ public final class FileRows {
     }
 
     private static FileAccess access() throws IOException {
-        return new FileAccess(com.ash.drishti.lakeio.S3Settings.from(Map.of()), com.ash.drishti.iceberg.io.Relocation.none(), null);
+        return new FileAccess(com.ash.lake.io.S3Settings.from(Map.of()), com.ash.lake.iceberg.io.Relocation.none(), null);
     }
 
     /** A file that is not an archive, decompressed by what its first bytes say. */

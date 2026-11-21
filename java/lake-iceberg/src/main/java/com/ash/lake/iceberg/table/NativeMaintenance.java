@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,20 +13,20 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
-import com.ash.drishti.api.LoadGuard;
-import com.ash.drishti.common.RowRetention;
-import com.ash.drishti.iceberg.Table;
-import com.ash.drishti.iceberg.manifest.DataFile;
-import com.ash.drishti.iceberg.scan.FileTask;
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Type;
-import com.ash.drishti.iceberg.types.Values;
-import com.ash.drishti.iceberg.write.Operations;
-import com.ash.drishti.plugin.iceberg.IcebergLayout.Row;
-import com.ash.drishti.plugin.iceberg.KindTable.Day;
-import com.ash.drishti.plugin.iceberg.KindTable.Layout;
+import com.ash.lake.hostcompat.LoadGuard;
+import com.ash.lake.common.RowRetention;
+import com.ash.lake.iceberg.Table;
+import com.ash.lake.iceberg.manifest.DataFile;
+import com.ash.lake.iceberg.scan.FileTask;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Type;
+import com.ash.lake.iceberg.types.Values;
+import com.ash.lake.iceberg.write.Operations;
+import com.ash.lake.iceberg.table.IcebergLayout.Row;
+import com.ash.lake.iceberg.table.KindTable.Day;
+import com.ash.lake.iceberg.table.KindTable.Layout;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -422,7 +422,7 @@ final class NativeMaintenance {
 
     /** The snapshot before the commit that replaced {@code date} with load {@code id}'s rows (an overwrite naming it); null when it appended. */
     private static Long replacedFrom(Table t, String id, LocalDate date) {
-        for (com.ash.drishti.iceberg.meta.Snapshot s : t.metadata().snapshots()) {
+        for (com.ash.lake.iceberg.meta.Snapshot s : t.metadata().snapshots()) {
             String ids = s.summary().getOrDefault("drishti.load-ids", "");
             String dates = s.summary().getOrDefault("drishti.business-dates", "");
             if ("overwrite".equals(s.operation()) && java.util.Arrays.asList(ids.split(",")).contains(id)

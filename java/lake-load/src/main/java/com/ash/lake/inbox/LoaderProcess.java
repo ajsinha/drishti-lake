@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,10 +13,10 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.dataload;
+package com.ash.lake.inbox;
 
-import com.ash.drishti.common.TempFiles;
-import com.ash.drishti.lakeload.LakeLoad;
+import com.ash.lake.common.TempFiles;
+import com.ash.lake.load.LakeLoad;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -38,7 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The load itself (DATA_LAKE_GUIDE.md): the parallel lake loader, {@code com.ash.drishti.lakeload.LakeLoad}, started as a child
+ * The load itself (DATA_LAKE_GUIDE.md): the parallel lake loader, {@code com.ash.lake.load.LakeLoad}, started as a child
  * Java process of the server with its own heap ({@code loader-heap}), at a lower priority ({@code nice}) and the server's temp folder, on a
  * load file this class writes (the loader's own keys: CLI_REFERENCE.md section 4.13). A large or malformed file can never take the server's heap;
  * the loader's exit code says what happened (0 loaded, 2 loaded with rejects, 1 failed, 3 the table locked); a load past
@@ -111,7 +111,7 @@ public final class LoaderProcess implements LoadRunner {
         // the table: the route's, else the pack connector's (trade-endur: trade_endur), which picks among several tables of one kind
         boolean named = r.lake() != null && r.lake().matches("[a-z0-9][a-z0-9_-]*");      // a lake of config/lakes/ (else a folder: the old form)
         put(t, "table", r.table() != null || !named || r.connector() == null || r.newDomain() != null ? r.table()
-                : com.ash.drishti.lakeconfig.PackEntry.read(r.packDir(), r.kind(), r.connector()).table());
+                : com.ash.lake.config.PackEntry.read(r.packDir(), r.kind(), r.connector()).table());
         // the mode (DATA_LAKE_GUIDE.md section 5): the .ready file's, else the lake file's entry for the table, else the inbox's default
         t.put(r.modeGiven() ? "mode" : "default-mode", "append".equals(r.mode()) ? "append" : "replace-date");
         t.put("batch-id", batchId(files));
@@ -132,30 +132,30 @@ public final class LoaderProcess implements LoadRunner {
      * server without its file) is never shadowed by a new file.
      */
     static void lakeEntry(Routes.Route r) throws IOException {
-        if (r.lake() == null || !com.ash.drishti.lakeconfig.Lakes.validName(r.lake())) {
+        if (r.lake() == null || !com.ash.lake.config.Lakes.validName(r.lake())) {
             return;                                         // a folder (the old form): the loader reads it with its one warning
         }
-        Path dir = com.ash.drishti.lakeconfig.Lakes.dir();
+        Path dir = com.ash.lake.config.Lakes.dir();
         Path file = dir.resolve(r.lake() + ".yaml");
         if (!Files.isRegularFile(file)) {
-            if (com.ash.drishti.lakeconfig.Lakes.shipped().contains(r.lake())) {
+            if (com.ash.lake.config.Lakes.shipped().contains(r.lake())) {
                 return;                                     // a shipped lake (demo) read from the jar: its entries are the truth
             }
-            List<com.ash.drishti.lakeconfig.LakeTable> tables = r.newDomain() != null ? List.of() : List.of(packEntry(r));
-            if (com.ash.drishti.lakeconfig.LakeFiles.create(dir, r.lake(), tables, "the data inbox for the pack " + r.pack() + "'s " + r.kind())) {
+            List<com.ash.lake.config.LakeTable> tables = r.newDomain() != null ? List.of() : List.of(packEntry(r));
+            if (com.ash.lake.config.LakeFiles.create(dir, r.lake(), tables, "the data inbox for the pack " + r.pack() + "'s " + r.kind())) {
                 LOG.info("lake {} did not exist: {} was created (its tables under <data>/delta/{}/), with the pack {}'s recommended entry for {}; "
                         + "point the pack's connectors at it (lake: {}) and restart to read it", r.lake(), file, r.lake(), r.pack(), r.kind(), r.lake());
                 return;
             }
         }
-        com.ash.drishti.lakeconfig.Lake lake = com.ash.drishti.lakeconfig.Lakes.readFile(file, com.ash.drishti.settingsfile.Placeholders::process);
-        com.ash.drishti.lakeconfig.LakeTable entry = packEntry(r);
+        com.ash.lake.config.Lake lake = com.ash.lake.config.Lakes.readFile(file, com.ash.lake.hostcompat.Placeholders::process);
+        com.ash.lake.config.LakeTable entry = packEntry(r);
         // the table's entry already there; or, with no connector naming one table, any table of the kind (the lake file is the truth)
         if (lake.tables().containsKey(entry.name())
                 || (r.connector() == null && lake.tables().values().stream().anyMatch(x -> x.kind().equals(r.kind())))) {
             return;
         }
-        if (com.ash.drishti.lakeconfig.LakeFiles.addTable(file, entry)) {
+        if (com.ash.lake.config.LakeFiles.addTable(file, entry)) {
             LOG.info("lake {} had no table for {}: the pack {}'s recommended entry {} was copied into {}; edit it there from now on", r.lake(),
                     r.kind(), r.pack(), entry.name(), file);
         }
@@ -166,8 +166,8 @@ public final class LoaderProcess implements LoadRunner {
      * rule's {@code key:}, else the kind's key (the pack's ingest key, else its data contract's): a table created by its first load takes
      * the key, so its rows are never all rejected for want of an id.
      */
-    static com.ash.drishti.lakeconfig.LakeTable packEntry(Routes.Route r) throws IOException {
-        com.ash.drishti.lakeconfig.LakeTable t = com.ash.drishti.lakeconfig.PackEntry.read(r.packDir(), r.kind(), r.connector()).toTable(r.kind());
+    static com.ash.lake.config.LakeTable packEntry(Routes.Route r) throws IOException {
+        com.ash.lake.config.LakeTable t = com.ash.lake.config.PackEntry.read(r.packDir(), r.kind(), r.connector()).toTable(r.kind());
         return r.key() != null ? t.withId(r.key()) : t;
     }
 
@@ -208,14 +208,14 @@ public final class LoaderProcess implements LoadRunner {
             cmd.add("-Xmx" + settings.loaderHeap());
             cmd.add("-Djava.io.tmpdir=" + tmp.toAbsolutePath());
             cmd.add("-Ddrishti.tmp-dir=" + tmp.toAbsolutePath());
-            cmd.add("-D" + com.ash.drishti.lakeconfig.Lakes.PROPERTY + "=" + com.ash.drishti.lakeconfig.Lakes.dir().toAbsolutePath());
+            cmd.add("-D" + com.ash.lake.config.Lakes.PROPERTY + "=" + com.ash.lake.config.Lakes.dir().toAbsolutePath());
             // the launch roots this process resolved (LaunchRoots, the settings file): the loader takes no folder from its working folder.
             // The data folder is not among them: the lake files' settings (Lakes.environment(), below) give it, as this process reads it
             // and the module boot's result (KERNEL_AND_MODULES.md section 4.2.1): every module's folder and, after a boot on packages, the
             // whole value; the loader never boots or unpacks itself
             List<String> keys = new ArrayList<>(List.of("drishti.home", "drishti.config.dir",
-                    "drishti.settings.file", com.ash.drishti.api.resolution.ModuleHomes.PROPERTY, "drishti.modules.dev"));
-            System.getProperties().stringPropertyNames().stream().filter(k -> k.startsWith(com.ash.drishti.api.resolution.ModuleHomes.DIR_PROPERTY))
+                    "drishti.settings.file", com.ash.lake.hostcompat.ModuleHomes.PROPERTY, "drishti.modules.dev"));
+            System.getProperties().stringPropertyNames().stream().filter(k -> k.startsWith(com.ash.lake.hostcompat.ModuleHomes.DIR_PROPERTY))
                     .sorted().forEach(keys::add);
             for (String key : keys) {
                 String v = System.getProperty(key);
@@ -230,7 +230,7 @@ public final class LoaderProcess implements LoadRunner {
             ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.appendTo(log.toFile()));
             // the settings the lake files refer to, as this server resolves them (a DRISHTI_DELTA_ROOT given as a --setting included):
             // the loader reads the same lake files through the same reader and lands where this server's connectors read
-            pb.environment().putAll(com.ash.drishti.lakeconfig.Lakes.environment());
+            pb.environment().putAll(com.ash.lake.config.Lakes.environment());
             Process p = pb.start();
             running = p;
             boolean done = p.waitFor(settings.loadTimeout().toMillis(), TimeUnit.MILLISECONDS);

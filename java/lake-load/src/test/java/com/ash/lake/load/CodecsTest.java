@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.testroots.TestRoots;
+import com.ash.lake.tck.TestRoots;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -114,7 +114,7 @@ class CodecsTest {
 
     @Test
     void aPackGivesTheDomainTableLayoutKeyAndFlattenedFieldsAsLakeBuildReadsThem() throws IOException {
-        com.ash.drishti.api.resolution.ConfigResolution packs = com.ash.drishti.api.resolution.ConfigResolution.repository(
+        com.ash.lake.hostcompat.ConfigResolution packs = com.ash.lake.hostcompat.ConfigResolution.repository(
                 java.nio.file.Path.of(TestRoots.module()).getParent().getParent());   // where each shipped pack is (its module's folder)
         LoadConfig risk = LoadConfig.read(null, List.of("source.files=x.jsonl", "source.pack=" + packs.packDir("market-risk"), "source.date=BUSINESS_DATE",
                 "target.lake=/l", "target.kind=scenario-pv"));

@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.scan;
+package com.ash.lake.iceberg.scan;
 
-import com.ash.drishti.iceberg.expr.Expr;
-import com.ash.drishti.iceberg.io.DrishtiFileIO;
-import com.ash.drishti.iceberg.manifest.DataFile;
-import com.ash.drishti.iceberg.meta.Bridge;
-import com.ash.drishti.iceberg.meta.PartitionSpec;
-import com.ash.drishti.iceberg.meta.Snapshot;
-import com.ash.drishti.iceberg.types.Schema;
-import com.ash.drishti.iceberg.types.UnsupportedFeature;
+import com.ash.lake.iceberg.expr.Expr;
+import com.ash.lake.iceberg.io.DrishtiFileIO;
+import com.ash.lake.iceberg.manifest.DataFile;
+import com.ash.lake.iceberg.meta.Bridge;
+import com.ash.lake.iceberg.meta.PartitionSpec;
+import com.ash.lake.iceberg.meta.Snapshot;
+import com.ash.lake.iceberg.types.Schema;
+import com.ash.lake.iceberg.types.UnsupportedFeature;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;

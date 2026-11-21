@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.iceberg.io.FileAccess;
-import com.ash.drishti.lakeio.FileEntry;
-import com.ash.drishti.lakeio.LocalPaths;
-import com.ash.drishti.lakeio.RangeReader;
-import com.ash.drishti.lakeio.Storage;
+import com.ash.lake.iceberg.io.FileAccess;
+import com.ash.lake.io.FileEntry;
+import com.ash.lake.io.LocalPaths;
+import com.ash.lake.io.RangeReader;
+import com.ash.lake.io.Storage;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;

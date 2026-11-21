@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.lakeconfig.Lake;
-import com.ash.drishti.lakeconfig.LakeTable;
-import com.ash.drishti.lakeconfig.Lakes;
-import com.ash.drishti.lakeconfig.PackEntry;
+import com.ash.lake.config.Lake;
+import com.ash.lake.config.LakeTable;
+import com.ash.lake.config.Lakes;
+import com.ash.lake.config.PackEntry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -146,7 +146,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
 
     /** Reads {@code file} (YAML or JSON) and applies {@code overrides} ({@code key.path=value}). */
     static LoadConfig read(Path file, List<String> overrides) throws IOException {
-        return read(file, overrides, com.ash.drishti.settingsfile.Placeholders::process);
+        return read(file, overrides, com.ash.lake.hostcompat.Placeholders::process);
     }
 
     static LoadConfig read(Path file, List<String> overrides, Function<String, String> env) throws IOException {
@@ -339,7 +339,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
 
     /** A connector's table as the site's own connector file names it ({@code settings.lake-tables}, its first entry's table), else the template's. */
     private static String siteTable(String connector, String template) {
-        Path f = com.ash.drishti.api.Roots.connectors().resolve(connector + ".yaml");
+        Path f = com.ash.lake.hostcompat.Roots.connectors().resolve(connector + ".yaml");
         if (!Files.isRegularFile(f)) {
             return template;
         }
@@ -721,9 +721,9 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
     /** Reads values with {@code ${VAR}} expanded. */
     record Reader(Function<String, String> env) {
 
-        /** Every {@code ${key}} / {@code ${key:-default}} through the one resolver (com.ash.drishti.settingsfile.Placeholders), this reader's view. */
+        /** Every {@code ${key}} / {@code ${key:-default}} through the one resolver (com.ash.lake.hostcompat.Placeholders), this reader's view. */
         String expand(String s) {
-            return com.ash.drishti.settingsfile.Placeholders.require(s, env);
+            return com.ash.lake.hostcompat.Placeholders.require(s, env);
         }
 
         String text(JsonNode n, String key, String dflt) {

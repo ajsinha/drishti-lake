@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,18 +13,18 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg;
+package com.ash.lake.iceberg;
 
-import com.ash.drishti.iceberg.expr.Expr;
-import com.ash.drishti.iceberg.io.DrishtiFileIO;
-import com.ash.drishti.iceberg.io.FileAccess;
-import com.ash.drishti.iceberg.meta.Snapshot;
-import com.ash.drishti.iceberg.meta.TableMetadata;
-import com.ash.drishti.iceberg.read.TaskReader;
-import com.ash.drishti.iceberg.scan.FileTask;
-import com.ash.drishti.iceberg.scan.Planner;
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Schema;
+import com.ash.lake.iceberg.expr.Expr;
+import com.ash.lake.iceberg.io.DrishtiFileIO;
+import com.ash.lake.iceberg.io.FileAccess;
+import com.ash.lake.iceberg.meta.Snapshot;
+import com.ash.lake.iceberg.meta.TableMetadata;
+import com.ash.lake.iceberg.read.TaskReader;
+import com.ash.lake.iceberg.scan.FileTask;
+import com.ash.lake.iceberg.scan.Planner;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Schema;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;

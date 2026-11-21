@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeconfig;
+package com.ash.lake.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -371,7 +371,7 @@ class LakesTest {
         Path empty = Files.createDirectories(tmp.resolve("none"));
         try (java.net.URLClassLoader loader = new java.net.URLClassLoader(new java.net.URL[] {tmp.resolve("module").toUri().toURL()}, null)) {
             assertFalse(Lakes.read(empty, ENV).find("mod-official").isPresent());
-            Runnable leave = com.ash.drishti.common.ModuleLoaders.add(loader);
+            Runnable leave = com.ash.lake.hostcompat.ModuleLoaders.add(loader);
             try {
                 assertTrue(Lakes.shipped().contains("mod-official"));
                 assertEquals("/m", Lakes.read(empty, ENV).get("mod-official").root());

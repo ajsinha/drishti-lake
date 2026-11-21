@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.iceberg.io.FileAccess;
-import com.ash.drishti.iceberg.io.Relocation;
-import com.ash.drishti.lakeio.S3Settings;
-import com.ash.drishti.lakeload.Inputs.InputFile;
+import com.ash.lake.iceberg.io.FileAccess;
+import com.ash.lake.iceberg.io.Relocation;
+import com.ash.lake.io.S3Settings;
+import com.ash.lake.load.Inputs.InputFile;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;

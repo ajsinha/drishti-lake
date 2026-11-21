@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
@@ -54,7 +54,7 @@ final class LakeState {
 
     /** Takes the lock for {@code domain/table} of the lake at {@code lake}; closing the result releases it. */
     static AutoCloseable lock(Path lake, String domain, String table) throws IOException, Locked {
-        boolean windows = com.ash.drishti.lakeio.LocalPaths.WINDOWS;
+        boolean windows = com.ash.lake.io.LocalPaths.WINDOWS;
         List<AutoCloseable> held = new ArrayList<>();
         try {
             Path lakeLock = lake.resolve(STATE).resolve("lock");

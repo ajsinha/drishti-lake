@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,17 +13,17 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.read;
+package com.ash.lake.iceberg.read;
 
-import com.ash.drishti.iceberg.expr.Expr;
-import com.ash.drishti.iceberg.io.FileAccess;
-import com.ash.drishti.iceberg.manifest.DataFile;
-import com.ash.drishti.iceberg.scan.Planner;
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Schema;
-import com.ash.drishti.iceberg.types.Type;
-import com.ash.drishti.iceberg.types.Values;
-import com.ash.drishti.lakeio.ParquetInput;
+import com.ash.lake.iceberg.expr.Expr;
+import com.ash.lake.iceberg.io.FileAccess;
+import com.ash.lake.iceberg.manifest.DataFile;
+import com.ash.lake.iceberg.scan.Planner;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Schema;
+import com.ash.lake.iceberg.types.Type;
+import com.ash.lake.iceberg.types.Values;
+import com.ash.lake.io.ParquetInput;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.io.IOException;
@@ -54,7 +54,7 @@ public final class Deletes {
      * A delete file is read outside the cache's compute (2.9.7): Caffeine's synchronous {@code get(key, loader)} runs the loader inside a
      * {@code synchronized} bin, and a file read there pins a virtual thread's carrier on Java 21. One read a file still serves every caller.
      */
-    private static final com.ash.drishti.api.SingleFlight<String> LOADS = new com.ash.drishti.api.SingleFlight<>();
+    private static final com.ash.lake.hostcompat.SingleFlight<String> LOADS = new com.ash.lake.hostcompat.SingleFlight<>();
 
     /** No deletes. */
     public static final Deletes NONE = new Deletes(new long[0], List.of());

@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,14 +13,14 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeio;
+package com.ash.lake.io;
 
 /**
  * A storage for one more URI scheme, beyond the local disk and S3 this module serves itself. The engines (the native Delta engine, the
  * Iceberg engine, the lake writer) reach such a scheme only through this interface and {@link StorageProviders}, never through the module
  * that implements it. The in-memory lake ({@code drishti-lakeload}, docs/architecture/DATA_ARCHITECTURE.md) provides {@code mem://} this way.
  *
- * <p>An implementation is listed in {@code META-INF/services/com.ash.drishti.lakeio.StorageProvider} of its module and found with
+ * <p>An implementation is listed in {@code META-INF/services/com.ash.lake.io.StorageProvider} of its module and found with
  * {@link java.util.ServiceLoader}: its scheme works wherever its module is on the class path, and nowhere else.
  */
 public interface StorageProvider {

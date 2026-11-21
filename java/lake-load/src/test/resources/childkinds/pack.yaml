@@ -1,4 +1,4 @@
-# Project Drishti · Any data. Any domain. One grammar.
+# Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
 #
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
 # All rights reserved.

@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.dataload;
+package com.ash.lake.inbox;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
@@ -125,7 +125,7 @@ public record ReadyNote(String pack, String kind, String connector, String table
             f.fields().forEachRemaining(e -> folders.put(e.getKey().toLowerCase(Locale.ROOT), e.getValue().asText()));
         }
         String lake = text(n, "lake");
-        if (lake != null && !com.ash.drishti.lakeconfig.Lakes.validName(lake)) {
+        if (lake != null && !com.ash.lake.config.Lakes.validName(lake)) {
             throw new IllegalArgumentException("the .ready file's lake " + lake + ": a lake's name, lower-case letters, digits, '-' and '_' "
                     + "([a-z0-9][a-z0-9_-]*: risklake); its tables go to <data>/delta/<lake>/<domain>/<table>");
         }

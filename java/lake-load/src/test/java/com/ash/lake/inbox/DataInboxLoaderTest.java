@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.dataload;
+package com.ash.lake.inbox;
 
-import com.ash.drishti.testroots.TestRoots;
+import com.ash.lake.tck.TestRoots;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ash.drishti.common.FileDates;
+import com.ash.lake.common.FileDates;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -251,13 +251,13 @@ class DataInboxLoaderTest {
     @Test
     void theLaunchIsTheExecutableJarsOwnLauncherOrThePlainClassPath(@TempDir Path dir) throws IOException {
         assertThat(LoaderProcess.launch("/a/x.jar" + java.io.File.pathSeparator + "/a/y.jar"))
-                .containsExactly("-cp", "/a/x.jar" + java.io.File.pathSeparator + "/a/y.jar", "com.ash.drishti.lakeload.LakeLoad");
+                .containsExactly("-cp", "/a/x.jar" + java.io.File.pathSeparator + "/a/y.jar", "com.ash.lake.load.LakeLoad");
         Path boot = dir.resolve("drishti-server-exec.jar");
         try (var z = new java.util.zip.ZipOutputStream(Files.newOutputStream(boot))) {
             z.putNextEntry(new java.util.zip.ZipEntry("BOOT-INF/"));
             z.closeEntry();
         }
-        assertThat(LoaderProcess.launch(boot.toString())).containsExactly("-Dloader.main=com.ash.drishti.lakeload.LakeLoad", "-jar", boot.toString());
+        assertThat(LoaderProcess.launch(boot.toString())).containsExactly("-Dloader.main=com.ash.lake.load.LakeLoad", "-jar", boot.toString());
     }
 
     @Test

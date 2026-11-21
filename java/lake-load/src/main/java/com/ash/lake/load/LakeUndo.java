@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.deltalake.write.LakeManifest;
-import com.ash.drishti.deltalake.write.LakeWriter;
-import com.ash.drishti.deltalake.write.TableUpkeep;
+import com.ash.lake.delta.write.LakeManifest;
+import com.ash.lake.delta.write.LakeWriter;
+import com.ash.lake.delta.write.TableUpkeep;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -128,7 +128,7 @@ public final class LakeUndo {
         }
         Class<?> ice;
         try {
-            ice = Class.forName("com.ash.drishti.plugin.iceberg.IcebergMaintenance");
+            ice = Class.forName("com.ash.lake.iceberg.table.IcebergMaintenance");
         } catch (ClassNotFoundException e) {
             return out;                                         // no Iceberg here: Delta tables only
         }
@@ -358,7 +358,7 @@ public final class LakeUndo {
         if (rows.isEmpty()) {
             return removeDates(engine, table, s, date::equals);
         }
-        Path dir = com.ash.drishti.common.TempFiles.createDir("drishti-undo-");
+        Path dir = com.ash.lake.common.TempFiles.createDir("drishti-undo-");
         try {
             Map<Map<String, String>, BufferedWriter> files = new LinkedHashMap<>();
             Map<Map<String, String>, Path> paths = new LinkedHashMap<>();

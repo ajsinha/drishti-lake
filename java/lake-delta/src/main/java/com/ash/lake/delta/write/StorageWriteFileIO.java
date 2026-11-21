@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.deltalake.write;
+package com.ash.lake.delta.write;
 
-import com.ash.drishti.deltalake.NativeFileIO;
-import com.ash.drishti.lakeio.LocalPaths;
-import com.ash.drishti.lakeio.S3Settings;
-import com.ash.drishti.lakeio.Storage;
+import com.ash.lake.delta.NativeFileIO;
+import com.ash.lake.io.LocalPaths;
+import com.ash.lake.io.S3Settings;
+import com.ash.lake.io.Storage;
 import io.delta.kernel.defaults.engine.fileio.OutputFile;
 import io.delta.kernel.defaults.engine.fileio.PositionOutputStream;
 import io.delta.kernel.utils.CloseableIterator;

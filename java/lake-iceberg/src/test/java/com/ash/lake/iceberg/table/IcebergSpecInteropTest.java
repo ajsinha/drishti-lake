@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,17 +13,17 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.drishti.iceberg.catalog.Catalog;
-import com.ash.drishti.iceberg.catalog.Catalogs;
-import com.ash.drishti.iceberg.expr.Expr;
-import com.ash.drishti.iceberg.read.TaskReader;
-import com.ash.drishti.iceberg.scan.FileTask;
-import com.ash.drishti.iceberg.write.Operations;
+import com.ash.lake.iceberg.catalog.Catalog;
+import com.ash.lake.iceberg.catalog.Catalogs;
+import com.ash.lake.iceberg.expr.Expr;
+import com.ash.lake.iceberg.read.TaskReader;
+import com.ash.lake.iceberg.scan.FileTask;
+import com.ash.lake.iceberg.write.Operations;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -164,7 +164,7 @@ class IcebergSpecInteropTest {
     static TreeSet<String> drishtiRows(Table t, Expr filter) throws Exception {
         TreeSet<String> out = new TreeSet<>();
         try (Catalog c = Catalogs.open(Map.of("metadata-location.special", metadataFile(t)))) {
-            com.ash.drishti.iceberg.Table d = c.load("special").orElseThrow();
+            com.ash.lake.iceberg.Table d = c.load("special").orElseThrow();
             var schema = d.metadata().schema();
             List<Integer> ids = schema.columns().stream().map(f -> f.id()).toList();
             for (FileTask task : d.plan(d.currentSnapshot().orElseThrow(), filter, pool)) {
@@ -269,7 +269,7 @@ class IcebergSpecInteropTest {
         assertThat(want).hasSize(13).doesNotContain("1|a/b", "2|<null>").contains("2|null", "2|..", "1|100%", "1|<null>");
         TreeSet<String> got = new TreeSet<>();
         try (Catalog c = Catalogs.open(Map.of("metadata-location.deletes", metadataFile(t)))) {
-            com.ash.drishti.iceberg.Table d = c.load("deletes").orElseThrow();
+            com.ash.lake.iceberg.Table d = c.load("deletes").orElseThrow();
             var schema = d.metadata().schema();
             for (FileTask task : d.plan(d.currentSnapshot().orElseThrow(), Expr.TRUE, pool)) {
                 try (TaskReader r = d.rows(task, schema, List.of(1, 2), Expr.TRUE, false)) {
@@ -286,27 +286,27 @@ class IcebergSpecInteropTest {
     /** The other direction: Drishti writes through iceberg-core with its own FileIO and Parquet writer; the Apache library reads every partition. */
     @Test
     void drishtisTableWithEverySpecialPartitionValueReadsInTheLibrary(@TempDir Path root) throws Exception {
-        var cols = List.of(com.ash.drishti.iceberg.types.NestedField.optional(1, "id", com.ash.drishti.iceberg.types.Type.Primitive.LONG),
-                com.ash.drishti.iceberg.types.NestedField.optional(2, "g", com.ash.drishti.iceberg.types.Type.Primitive.STRING));
-        var schema = new com.ash.drishti.iceberg.types.Schema(0, cols);
-        var spec = new com.ash.drishti.iceberg.meta.PartitionSpec(0, List.of(new com.ash.drishti.iceberg.meta.PartitionSpec.Field(2, 1000, "g",
-                com.ash.drishti.iceberg.meta.Transform.Identity.INSTANCE)));
-        try (var c = com.ash.drishti.iceberg.catalog.Catalogs.open(Map.of("root", root.toString(), "domain", "x"))) {
-            var t = c.create("t", schema, spec, com.ash.drishti.iceberg.meta.SortOrder.UNSORTED, Map.of("format-version", "2"));
+        var cols = List.of(com.ash.lake.iceberg.types.NestedField.optional(1, "id", com.ash.lake.iceberg.types.Type.Primitive.LONG),
+                com.ash.lake.iceberg.types.NestedField.optional(2, "g", com.ash.lake.iceberg.types.Type.Primitive.STRING));
+        var schema = new com.ash.lake.iceberg.types.Schema(0, cols);
+        var spec = new com.ash.lake.iceberg.meta.PartitionSpec(0, List.of(new com.ash.lake.iceberg.meta.PartitionSpec.Field(2, 1000, "g",
+                com.ash.lake.iceberg.meta.Transform.Identity.INSTANCE)));
+        try (var c = com.ash.lake.iceberg.catalog.Catalogs.open(Map.of("root", root.toString(), "domain", "x"))) {
+            var t = c.create("t", schema, spec, com.ash.lake.iceberg.meta.SortOrder.UNSORTED, Map.of("format-version", "2"));
             var ice = t.iceberg();
-            List<com.ash.drishti.iceberg.manifest.DataFile> files = new java.util.ArrayList<>();
+            List<com.ash.lake.iceberg.manifest.DataFile> files = new java.util.ArrayList<>();
             for (int i = 0; i < VALUES.size(); i++) {
                 String v = VALUES.get(i);
                 PartitionKey key = new PartitionKey(ice.spec(), ice.schema());
                 key.set(0, v);
                 String path = ice.locationProvider().newDataLocation(ice.spec(), key, "f" + i + ".parquet");
-                try (var w = new com.ash.drishti.iceberg.write.ParquetDataWriter(t.io(), path, t.metadata().schema(), t.metadata().properties(), 0,
+                try (var w = new com.ash.lake.iceberg.write.ParquetDataWriter(t.io(), path, t.metadata().schema(), t.metadata().properties(), 0,
                         new Object[] {v}, 0)) {
                     w.write(new Object[] {(long) i, v});
                     files.add(w.finish());
                 }
             }
-            com.ash.drishti.iceberg.write.Operations.append(t, files, Map.of());
+            com.ash.lake.iceberg.write.Operations.append(t, files, Map.of());
             java.util.Set<String> want = new java.util.HashSet<>();
             for (int i = 0; i < VALUES.size(); i++) {
                 want.add(i + "|" + VALUES.get(i));
@@ -342,7 +342,7 @@ class IcebergSpecInteropTest {
         t.manageSnapshots().createTag("eod", snapshots.get(0)).createBranch("audit", snapshots.get(1)).commit();
         Thread.sleep(5);
         try (Catalog c = Catalogs.open(Map.of("root", root.toString(), "domain", "ns"))) {
-            com.ash.drishti.iceberg.Table d = c.load("tagged").orElseThrow();
+            com.ash.lake.iceberg.Table d = c.load("tagged").orElseThrow();
             assertThat(d.metadata().allRefs()).containsKeys("main", "eod", "audit");
             assertThat(Operations.expireSnapshots(d, System.currentTimeMillis(), 1)).isEqualTo(1);    // only the untagged third
         }
@@ -379,7 +379,7 @@ class IcebergSpecInteropTest {
         Table t = OracleLayout.open(lake, "trades", Map.of("mtm", true), IcebergLayout.DEFAULT_ROW_GROUP_BYTES, 1000);
         t.updateSpec().addField(org.apache.iceberg.expressions.Expressions.bucket(IcebergLayout.ID, 8)).commit();
         try (Catalog c = Catalogs.open(Map.of("root", root.toString(), "domain", "desk"))) {
-            com.ash.drishti.iceberg.Table d = c.load("trades").orElseThrow();
+            com.ash.lake.iceberg.Table d = c.load("trades").orElseThrow();
             assertThatThrownBy(() -> NativeLayout.writeDay(d, LocalDate.of(2026, 11, 6), Collections.emptyIterator(), 1000))
                     .hasMessageContaining("bucket[8]").hasMessageContaining("partitioned by business_date alone");
         }

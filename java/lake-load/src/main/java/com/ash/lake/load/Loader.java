@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.common.FileDates;
-import com.ash.drishti.iceberg.io.FileAccess;
-import com.ash.drishti.iceberg.io.Relocation;
-import com.ash.drishti.lakeio.S3Settings;
-import com.ash.drishti.lakeload.Inputs.InputFile;
-import com.ash.drishti.lakeload.Inputs.Split;
-import com.ash.drishti.lakeload.SourceReader.Chunk;
-import com.ash.drishti.lakeload.TableTarget.WrittenFile;
+import com.ash.lake.common.FileDates;
+import com.ash.lake.iceberg.io.FileAccess;
+import com.ash.lake.iceberg.io.Relocation;
+import com.ash.lake.io.S3Settings;
+import com.ash.lake.load.Inputs.InputFile;
+import com.ash.lake.load.Inputs.Split;
+import com.ash.lake.load.SourceReader.Chunk;
+import com.ash.lake.load.TableTarget.WrittenFile;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

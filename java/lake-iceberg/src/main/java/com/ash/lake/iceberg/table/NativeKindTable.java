@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,20 +13,20 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
-import com.ash.drishti.iceberg.Table;
-import com.ash.drishti.iceberg.catalog.Catalog;
-import com.ash.drishti.iceberg.expr.Expr;
-import com.ash.drishti.iceberg.manifest.DataFile;
-import com.ash.drishti.iceberg.meta.PartitionSpec;
-import com.ash.drishti.iceberg.meta.Snapshot;
-import com.ash.drishti.iceberg.meta.Transform;
-import com.ash.drishti.iceberg.read.TaskReader;
-import com.ash.drishti.iceberg.scan.FileTask;
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Schema;
-import com.ash.drishti.iceberg.types.Type;
+import com.ash.lake.iceberg.Table;
+import com.ash.lake.iceberg.catalog.Catalog;
+import com.ash.lake.iceberg.expr.Expr;
+import com.ash.lake.iceberg.manifest.DataFile;
+import com.ash.lake.iceberg.meta.PartitionSpec;
+import com.ash.lake.iceberg.meta.Snapshot;
+import com.ash.lake.iceberg.meta.Transform;
+import com.ash.lake.iceberg.read.TaskReader;
+import com.ash.lake.iceberg.scan.FileTask;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Schema;
+import com.ash.lake.iceberg.types.Type;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Instant;

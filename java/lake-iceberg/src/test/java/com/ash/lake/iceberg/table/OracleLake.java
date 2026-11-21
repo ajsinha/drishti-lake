@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -77,13 +77,13 @@ interface OracleLake extends Closeable {
     }
 
     /** The TLS material of the object store ({@code tls.*}), or null: its certificates' expiry is shown in health. */
-    default com.ash.drishti.api.tls.TlsMaterial tls() {
+    default com.ash.lake.hostcompat.TlsMaterial tls() {
         return null;
     }
 
     /** The outbound proxy of the catalog and the object store ({@code proxy.*} or the site default); {@code none} when reached directly. */
-    default com.ash.drishti.api.proxy.ProxySettings proxy() {
-        return com.ash.drishti.api.proxy.ProxySettings.none();
+    default com.ash.lake.hostcompat.ProxySettings proxy() {
+        return com.ash.lake.hostcompat.ProxySettings.none();
     }
 
     static OracleLake of(Map<String, String> settings) {
@@ -93,8 +93,8 @@ interface OracleLake extends Closeable {
         }
         Configuration conf = hadoop(settings);
         String catalog = settings.getOrDefault("catalog", "hadoop").trim();
-        if (!catalog.equalsIgnoreCase("rest") && com.ash.drishti.api.tls.TlsSettings.anyGiven(settings, "tls.")) {
-            throw new com.ash.drishti.api.tls.TlsException("tls.* applies to a REST catalog's object store: Hadoop's S3A, which reads path-based "
+        if (!catalog.equalsIgnoreCase("rest") && com.ash.lake.hostcompat.TlsSettings.anyGiven(settings, "tls.")) {
+            throw new com.ash.lake.hostcompat.TlsException("tls.* applies to a REST catalog's object store: Hadoop's S3A, which reads path-based "
                     + "tables, has no setting for a private CA. Use catalog: rest, or import the CA into the JVM's truststore "
                     + "(-Djavax.net.ssl.trustStore=...)");
         }
@@ -104,15 +104,15 @@ interface OracleLake extends Closeable {
         if (!catalog.isBlank() && !catalog.equalsIgnoreCase("hadoop")) {
             throw new IllegalArgumentException("catalog must be hadoop or rest, not " + catalog);
         }
-        String root = settings.getOrDefault("root", "").isBlank() ? com.ash.drishti.api.DataDir.under("iceberg") : settings.get("root").trim();
+        String root = settings.getOrDefault("root", "").isBlank() ? com.ash.lake.hostcompat.DataDir.under("iceberg") : settings.get("root").trim();
         String base;
         if (root.matches("^[a-zA-Z][a-zA-Z0-9+.-]*://.*") && !root.startsWith("file:")) {
             base = root.replaceAll("/+$", "");
         } else {
             // the folder as a plain file: URI (file:/srv/my lake), never java.nio's percent-encoded one (file:///srv/my%20lake): Hadoop's
             // Path and every Iceberg reader take a table location literally, so an encoded one names a folder my%20lake beside the root
-            base = com.ash.drishti.lakeio.LocalPaths.toUri(Path.of(com.ash.drishti.lakeio.LocalPaths.toLocal(root, com.ash.drishti.lakeio.LocalPaths.WINDOWS))
-                    .toAbsolutePath().normalize().toString(), com.ash.drishti.lakeio.LocalPaths.WINDOWS);
+            base = com.ash.lake.io.LocalPaths.toUri(Path.of(com.ash.lake.io.LocalPaths.toLocal(root, com.ash.lake.io.LocalPaths.WINDOWS))
+                    .toAbsolutePath().normalize().toString(), com.ash.lake.io.LocalPaths.WINDOWS);
         }
         return new PathLake(domain.isBlank() ? base : base + "/" + domain, conf);
     }
@@ -133,7 +133,7 @@ interface OracleLake extends Closeable {
             conf.set("fs.s3a.path.style.access", s.getOrDefault("s3.path-style", "true"));
             conf.set("fs.s3a.connection.ssl.enabled", String.valueOf(endpoint.startsWith("https")));
         }
-        var proxy = com.ash.drishti.api.proxy.ProxySettings.resolve(s, endpoint.isBlank() ? "https://s3.amazonaws.com" : endpoint);
+        var proxy = com.ash.lake.hostcompat.ProxySettings.resolve(s, endpoint.isBlank() ? "https://s3.amazonaws.com" : endpoint);
         if (proxy.appliesTo(endpoint.isBlank() ? "s3.amazonaws.com" : java.net.URI.create(endpoint).getHost())) {   // S3A's own proxy settings
             conf.set("fs.s3a.proxy.host", proxy.host());
             conf.set("fs.s3a.proxy.port", String.valueOf(proxy.port()));
@@ -222,12 +222,12 @@ interface OracleLake extends Closeable {
         private final Namespace namespace;
         private final String uri;
 
-        private final com.ash.drishti.api.tls.TlsMaterial tls;
+        private final com.ash.lake.hostcompat.TlsMaterial tls;
         private final String tlsId;
-        private final com.ash.drishti.api.proxy.ProxySettings proxy;
+        private final com.ash.lake.hostcompat.ProxySettings proxy;
 
-        private RestLake(RESTCatalog catalog, Namespace namespace, String uri, com.ash.drishti.api.tls.TlsMaterial tls, String tlsId,
-                com.ash.drishti.api.proxy.ProxySettings proxy) {
+        private RestLake(RESTCatalog catalog, Namespace namespace, String uri, com.ash.lake.hostcompat.TlsMaterial tls, String tlsId,
+                com.ash.lake.hostcompat.ProxySettings proxy) {
             this.catalog = catalog;
             this.namespace = namespace;
             this.uri = uri;
@@ -237,12 +237,12 @@ interface OracleLake extends Closeable {
         }
 
         @Override
-        public com.ash.drishti.api.proxy.ProxySettings proxy() {
+        public com.ash.lake.hostcompat.ProxySettings proxy() {
             return proxy;
         }
 
         @Override
-        public com.ash.drishti.api.tls.TlsMaterial tls() {
+        public com.ash.lake.hostcompat.TlsMaterial tls() {
             return tls;
         }
 
@@ -276,8 +276,8 @@ interface OracleLake extends Closeable {
                 }
             });
             String tlsId = null;
-            com.ash.drishti.api.tls.TlsMaterial tls = null;
-            var catalogProxy = com.ash.drishti.api.proxy.ProxySettings.none();
+            com.ash.lake.hostcompat.TlsMaterial tls = null;
+            var catalogProxy = com.ash.lake.hostcompat.ProxySettings.none();
             RESTCatalog catalog = new RESTCatalog();
             catalog.setConf(conf);
             catalog.initialize(s.getOrDefault("source-name", "drishti"), props);

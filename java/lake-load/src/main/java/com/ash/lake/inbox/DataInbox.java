@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.dataload;
+package com.ash.lake.inbox;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -255,7 +255,7 @@ public final class DataInbox {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("lake", name);
         out.put("lakeFrom", from);
-        List<Map<String, Object>> lines = com.ash.drishti.lakeload.LakeUndo.undoAll(Cycle.lakeRoot(name), id, List.of(), dryRun);
+        List<Map<String, Object>> lines = com.ash.lake.load.LakeUndo.undoAll(Cycle.lakeRoot(name), id, List.of(), dryRun);
         out.put("lines", lines);
         if (!dryRun) {
             out.put("signals", signalUndone(id, line, lines));

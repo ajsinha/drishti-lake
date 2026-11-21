@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeconfig;
+package com.ash.lake.config;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -77,7 +77,7 @@ public record PackEntry(String domain, String table, String key, String date, Li
         }
         Path file = Files.isDirectory(pack) ? pack.resolve("pack.yaml") : pack;
         // the layers (KERNEL_AND_MODULES.md section 18.5): the template's constants, then the site override's key by key (null removes one)
-        Path siteFile = com.ash.drishti.api.Roots.connectors().resolve(connector + ".yaml");
+        Path siteFile = com.ash.lake.hostcompat.Roots.connectors().resolve(connector + ".yaml");
         JsonNode site = Files.isRegularFile(siteFile) ? new YAMLMapper().readTree(Files.readString(siteFile)) : null;
         JsonNode template = manifest(file).path("connectors").path(connector);
         if (!template.isMissingNode() && !(site != null && site.path("settings").size() > 0 && !site.path("plugin").isMissingNode()
@@ -116,7 +116,7 @@ public record PackEntry(String domain, String table, String key, String date, Li
             // several tables of one kind (trade_endur, trade_calypso): the connector's table picks; else the first of the kind
             String wanted = connector == null ? null : tableOf(m, connector, kind);
             if (entryKind.equals(kind) && (wanted == null || wanted.equals(folder) || e.getValue().path("path").asText("").endsWith("/" + wanted))) {
-                LakeTable t = Lakes.table(new Lakes.Values(file.toString(), com.ash.drishti.settingsfile.Placeholders::process), file.toString(), "delta", e.getKey(), e.getValue(),
+                LakeTable t = Lakes.table(new Lakes.Values(file.toString(), com.ash.lake.hostcompat.Placeholders::process), file.toString(), "delta", e.getKey(), e.getValue(),
                         JsonNodeFactory.instance.objectNode());
                 Map<String, String> flat = t.flatten();
                 if (ingest.path("flatten").size() > 0) {        // the ingest block's flatten replaces the entry's, as on the older path

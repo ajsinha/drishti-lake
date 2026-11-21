@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.dataload;
+package com.ash.lake.inbox;
 
-import com.ash.drishti.api.error.DrishtiException;
-import com.ash.drishti.api.error.ErrorCode;
-import com.ash.drishti.common.FileDates;
-import com.ash.drishti.lakeload.FileRows;
-import com.ash.drishti.lakeload.LakeLoad;
+import com.ash.lake.hostcompat.DrishtiException;
+import com.ash.lake.hostcompat.ErrorCode;
+import com.ash.lake.common.FileDates;
+import com.ash.lake.load.FileRows;
+import com.ash.lake.load.LakeLoad;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -184,7 +184,7 @@ public final class ReadyDesk {
     }
 
     List<ReadyRule> rules() {
-        return com.ash.drishti.common.Extensions.with(rules, ReadyRule.class);     // a loaded module's too
+        return com.ash.lake.hostcompat.Extensions.with(rules, ReadyRule.class);     // a loaded module's too
     }
 
     Routes routes() throws IOException {
@@ -217,7 +217,7 @@ public final class ReadyDesk {
             }
             packList.add(Map.of("pack", p, "kinds", info.kinds()));
             java.util.Set<String> named = new java.util.HashSet<>();
-            List<com.ash.drishti.lakeconfig.PackEntry.PackTable> ts = tablesOf(info);
+            List<com.ash.lake.config.PackEntry.PackTable> ts = tablesOf(info);
             for (var t : ts) {
                 if (info.kinds().contains(t.kind()) && named.add(t.table())) {
                     boolean own = Routes.norm(t.table()).equals(Routes.norm(t.kind()));
@@ -237,9 +237,9 @@ public final class ReadyDesk {
         return out;
     }
 
-    private static List<com.ash.drishti.lakeconfig.PackEntry.PackTable> tablesOf(Routes.PackInfo info) {
+    private static List<com.ash.lake.config.PackEntry.PackTable> tablesOf(Routes.PackInfo info) {
         try {
-            return info.dir() == null ? List.of() : com.ash.drishti.lakeconfig.PackEntry.tables(info.dir());
+            return info.dir() == null ? List.of() : com.ash.lake.config.PackEntry.tables(info.dir());
         } catch (IOException | RuntimeException e) {
             return List.of();
         }
@@ -251,14 +251,14 @@ public final class ReadyDesk {
         m.put("kind", kind);
         m.put("pack", pack);
         m.put("connector", connector);
-        m.put("key", com.ash.drishti.lakeconfig.PackEntry.contractKey(info.dir(), kind));
+        m.put("key", com.ash.lake.config.PackEntry.contractKey(info.dir(), kind));
         m.put("label", table + " · " + kind + " · " + pack);
         return m;
     }
 
     private List<String> lakes() {
         try {
-            return com.ash.drishti.lakeconfig.Lakes.current().all().values().stream().filter(l -> !l.inMemory()).map(com.ash.drishti.lakeconfig.Lake::name)
+            return com.ash.lake.config.Lakes.current().all().values().stream().filter(l -> !l.inMemory()).map(com.ash.lake.config.Lake::name)
                     .sorted().toList();
         } catch (RuntimeException e) {
             return List.of(settings.lake());

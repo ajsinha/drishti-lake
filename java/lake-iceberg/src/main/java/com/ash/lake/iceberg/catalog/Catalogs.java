@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.catalog;
+package com.ash.lake.iceberg.catalog;
 
-import com.ash.drishti.iceberg.io.FileAccess;
-import com.ash.drishti.lakeio.LocalPaths;
-import com.ash.drishti.lakeio.LocalStorage;
-import com.ash.drishti.lakeio.S3Settings;
+import com.ash.lake.iceberg.io.FileAccess;
+import com.ash.lake.io.LocalPaths;
+import com.ash.lake.io.LocalStorage;
+import com.ash.lake.io.S3Settings;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -77,7 +77,7 @@ public final class Catalogs {
         if (!files.isEmpty() && settings.getOrDefault("root", "").isBlank()) {
             return new StaticCatalog(files, io);
         }
-        String root = settings.getOrDefault("root", "").isBlank() ? com.ash.drishti.api.DataDir.under("iceberg") : settings.get("root").trim();
+        String root = settings.getOrDefault("root", "").isBlank() ? com.ash.lake.hostcompat.DataDir.under("iceberg") : settings.get("root").trim();
         if (!FileAccess.supports(root)) {
             io.close();
             throw new UnsupportedOperationException("Iceberg tables are not read from " + root
@@ -89,10 +89,10 @@ public final class Catalogs {
     }
 
     /**
-     * {@code from -> to; from2 -> to2}, each side a plain folder or a URI ({@link com.ash.drishti.iceberg.io.Relocation}); a pair that cannot be
+     * {@code from -> to; from2 -> to2}, each side a plain folder or a URI ({@link com.ash.lake.iceberg.io.Relocation}); a pair that cannot be
      * read fails the start, naming it (QA3B-04: it was ignored without a word).
      */
-    static com.ash.drishti.iceberg.io.Relocation relocate(String spec) {
-        return com.ash.drishti.iceberg.io.Relocation.parse(spec);
+    static com.ash.lake.iceberg.io.Relocation relocate(String spec) {
+        return com.ash.lake.iceberg.io.Relocation.parse(spec);
     }
 }

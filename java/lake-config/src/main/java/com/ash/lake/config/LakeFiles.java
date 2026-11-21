@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeconfig;
+package com.ash.lake.config;
 
-import com.ash.drishti.kernel.api.vocabulary.DomainVocabulary;
+import com.ash.lake.hostcompat.DomainVocabulary;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -304,12 +304,12 @@ public final class LakeFiles {
             if (!Files.isDirectory(root)) {
                 continue;
             }
-            com.ash.drishti.api.resolution.ConfigResolution r = com.ash.drishti.api.resolution.ConfigResolution.currentOrOffline();
+            com.ash.lake.hostcompat.ConfigResolution r = com.ash.lake.hostcompat.ConfigResolution.currentOrOffline();
             if (root.toAbsolutePath().normalize().equals(r.settings().siteDir())) {   // the site's packs folder: every pack the resolution finds
                 r.packs().packs().values().forEach(l -> out.add(l.dir().resolve("pack.yaml")));
                 continue;
             }
-            com.ash.drishti.api.PackFolders.list(root).stream().map(d -> d.resolve("pack.yaml")).forEach(out::add);   // a given folder and its domain folders
+            com.ash.lake.hostcompat.PackFolders.list(root).stream().map(d -> d.resolve("pack.yaml")).forEach(out::add);   // a given folder and its domain folders
         }
         return out;
     }

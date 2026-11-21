@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.common;
+package com.ash.lake.common;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -54,7 +54,7 @@ public final class TempFiles {
 
     /**
      * The configured base: the {@code drishti.tmp-dir} system property, then {@code DRISHTI_TMP_DIR}, then {@code <data dir>/tmp/server}
-     * ({@link com.ash.drishti.api.DataDir}: never the system temp folder, which may be a small in-memory file system).
+     * ({@link com.ash.lake.hostcompat.DataDir}: never the system temp folder, which may be a small in-memory file system).
      */
     /**
      * The base when {@link #start} did not run (unit tests, a library used outside the server): the configured base when one
@@ -65,7 +65,7 @@ public final class TempFiles {
         if (p == null || p.isBlank()) {
             p = System.getenv("DRISHTI_TMP_DIR");
         }
-        return p == null || p.isBlank() ? System.getProperty("java.io.tmpdir", "/tmp") : com.ash.drishti.api.Roots.anchored(p.strip()).toString();
+        return p == null || p.isBlank() ? System.getProperty("java.io.tmpdir", "/tmp") : com.ash.lake.hostcompat.Roots.anchored(p.strip()).toString();
     }
 
     public static String configuredBase() {
@@ -73,7 +73,7 @@ public final class TempFiles {
         if (p == null || p.isBlank()) {
             p = System.getenv("DRISHTI_TMP_DIR");
         }
-        return p == null || p.isBlank() ? com.ash.drishti.api.DataDir.under("tmp/server") : com.ash.drishti.api.Roots.anchored(p.strip()).toString();
+        return p == null || p.isBlank() ? com.ash.lake.hostcompat.DataDir.under("tmp/server") : com.ash.lake.hostcompat.Roots.anchored(p.strip()).toString();
     }
 
     /**

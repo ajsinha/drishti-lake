@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
-import com.ash.drishti.plugin.iceberg.IcebergLayout.Row;
+import com.ash.lake.iceberg.table.IcebergLayout.Row;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.Closeable;
@@ -134,7 +134,7 @@ final class SortedRuns implements Closeable {
         try {
             Files.createDirectories(dir);
             Path file = dir.resolve(name + "-" + java.util.UUID.randomUUID() + ".run");   // a run file in the plugin's own state folder (new names only)
-            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(com.ash.drishti.api.ChannelIo.newOutputStream(file), 1 << 20))) {
+            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(com.ash.lake.hostcompat.ChannelIo.newOutputStream(file), 1 << 20))) {
                 for (Row r : sorted) {
                     writeRow(out, r);
                 }
@@ -283,7 +283,7 @@ final class SortedRuns implements Closeable {
         private Row current;
 
         FileCursor(Path file, int seq) throws IOException {
-            this.in = new DataInputStream(new BufferedInputStream(com.ash.drishti.api.ChannelIo.newInputStream(file), 1 << 20));
+            this.in = new DataInputStream(new BufferedInputStream(com.ash.lake.hostcompat.ChannelIo.newInputStream(file), 1 << 20));
             this.seq = seq;
         }
 

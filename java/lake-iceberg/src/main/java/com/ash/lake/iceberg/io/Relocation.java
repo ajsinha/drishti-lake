@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.io;
+package com.ash.lake.iceberg.io;
 
-import com.ash.drishti.lakeio.LocalPaths;
+import com.ash.lake.io.LocalPaths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;

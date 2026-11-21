@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeio;
+package com.ash.lake.io;
 
 /**
  * A Parquet file whose pages use a compression codec the native engine does not decompress (Brotli, LZO). Its message names the codec and what to do; readers that recognise this type show it to whoever asked rather

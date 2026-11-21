@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,15 +13,15 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.dataload;
+package com.ash.lake.inbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.drishti.lakeconfig.Lake;
-import com.ash.drishti.lakeconfig.LakeTable;
-import com.ash.drishti.lakeconfig.Lakes;
-import com.ash.drishti.lakeconfig.PackEntry;
+import com.ash.lake.config.Lake;
+import com.ash.lake.config.LakeTable;
+import com.ash.lake.config.Lakes;
+import com.ash.lake.config.PackEntry;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.io.IOException;
 import java.nio.file.Files;

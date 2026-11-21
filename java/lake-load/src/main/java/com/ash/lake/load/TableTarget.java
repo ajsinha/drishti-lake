@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Schema;
-import com.ash.drishti.iceberg.types.Type;
-import com.ash.drishti.iceberg.write.ParquetDataWriter;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Schema;
+import com.ash.lake.iceberg.types.Type;
+import com.ash.lake.iceberg.write.ParquetDataWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -201,7 +201,7 @@ interface TableTarget extends AutoCloseable {
         if (tag == RowPlan.STR) {
             return List.of(r.text(i));
         }
-        List<String> values = com.ash.drishti.api.ListValues.of(text);
+        List<String> values = com.ash.lake.hostcompat.ListValues.of(text);
         if (values == null) {
             return List.of(r.text(i));                                  // an object or a nested list: its JSON text, the one element
         }
@@ -285,7 +285,7 @@ interface TableTarget extends AutoCloseable {
         @Override
         public WrittenFile finish() throws IOException {
             Object handle = describe.apply(w);
-            long bytes = handle instanceof com.ash.drishti.iceberg.manifest.DataFile f ? f.fileSizeInBytes() : -1;
+            long bytes = handle instanceof com.ash.lake.iceberg.manifest.DataFile f ? f.fileSizeInBytes() : -1;
             return new WrittenFile(path, rows, bytes, handle, partition, RowPlan.components(firstKey, 0, firstKey.length),
                     RowPlan.components(lastKey, 0, lastKey.length));
         }

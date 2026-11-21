@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,14 +13,14 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.common.FileDates;
-import com.ash.drishti.iceberg.io.FileAccess;
-import com.ash.drishti.iceberg.io.Relocation;
-import com.ash.drishti.lakeio.RangeReader;
-import com.ash.drishti.lakeio.S3Settings;
-import com.ash.drishti.lakeload.Inputs.InputFile;
+import com.ash.lake.common.FileDates;
+import com.ash.lake.iceberg.io.FileAccess;
+import com.ash.lake.iceberg.io.Relocation;
+import com.ash.lake.io.RangeReader;
+import com.ash.lake.io.S3Settings;
+import com.ash.lake.load.Inputs.InputFile;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -73,7 +73,7 @@ final class ChildLoads {
         }
         Path scratch = null;
         try {
-            scratch = com.ash.drishti.common.TempFiles.createDir("drishti-children-");
+            scratch = com.ash.lake.common.TempFiles.createDir("drishti-children-");
             Map<String, Long> rows = split(cfg, given, kids, scratch);
             int worst = LakeLoad.OK;
             for (ChildKinds c : kids) {
@@ -87,7 +87,7 @@ final class ChildLoads {
                 if (!quiet) {
                     out.println("child kind " + c.kind() + ": " + rows.get(c.kind()) + " rows from " + c.field() + " of " + kind);
                 }
-                LoadConfig child = LoadConfig.of(childTree(tree, c, files), com.ash.drishti.settingsfile.Placeholders::process);
+                LoadConfig child = LoadConfig.of(childTree(tree, c, files), com.ash.lake.hostcompat.Placeholders::process);
                 int code = LakeLoad.runOne(child, null, out, json, quiet, System.nanoTime()).code();
                 worst = worse(worst, code);
                 if (code == LakeLoad.FAILED || code == LakeLoad.LOCKED) {

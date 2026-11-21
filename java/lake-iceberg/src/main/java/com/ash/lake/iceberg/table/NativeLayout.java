@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,20 +13,20 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
-import com.ash.drishti.iceberg.Table;
-import com.ash.drishti.iceberg.catalog.Catalog;
-import com.ash.drishti.iceberg.manifest.DataFile;
-import com.ash.drishti.iceberg.meta.PartitionSpec;
-import com.ash.drishti.iceberg.meta.SortOrder;
-import com.ash.drishti.iceberg.meta.Transform;
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Schema;
-import com.ash.drishti.iceberg.types.Type;
-import com.ash.drishti.iceberg.write.Operations;
-import com.ash.drishti.iceberg.write.ParquetDataWriter;
-import com.ash.drishti.plugin.iceberg.IcebergLayout.Row;
+import com.ash.lake.iceberg.Table;
+import com.ash.lake.iceberg.catalog.Catalog;
+import com.ash.lake.iceberg.manifest.DataFile;
+import com.ash.lake.iceberg.meta.PartitionSpec;
+import com.ash.lake.iceberg.meta.SortOrder;
+import com.ash.lake.iceberg.meta.Transform;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Schema;
+import com.ash.lake.iceberg.types.Type;
+import com.ash.lake.iceberg.write.Operations;
+import com.ash.lake.iceberg.write.ParquetDataWriter;
+import com.ash.lake.iceberg.table.IcebergLayout.Row;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.LocalDate;
@@ -247,7 +247,7 @@ final class NativeLayout {
             return null;
         }
         if (type instanceof Type.ListType l && Type.Primitive.STRING.equals(l.element())) {
-            List<String> texts = v instanceof IcebergLoader.Texts x ? x.values() : com.ash.drishti.api.ListValues.of(v);
+            List<String> texts = v instanceof IcebergLoader.Texts x ? x.values() : com.ash.lake.hostcompat.ListValues.of(v);
             return texts != null ? texts : List.of(String.valueOf(v));      // a list attribute; a single value is a list of one
         }
         if (type.id() == Type.Id.LIST) {

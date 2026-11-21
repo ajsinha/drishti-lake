@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.deltalake.read;
+package com.ash.lake.delta.read;
 
-import com.ash.drishti.deltalake.NativeEngine;
+import com.ash.lake.delta.NativeEngine;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
 import io.delta.kernel.Scan;
@@ -68,7 +68,7 @@ import java.util.Optional;
  * JSON array a row in the schema's order (a date as {@code yyyy-MM-dd}, a timestamp as microseconds since the epoch, a decimal as text,
  * an array of numbers as a JSON array).
  *
- * <pre>java -Dloader.main=com.ash.drishti.deltalake.read.DeltaRowsCli -jar drishti-server-exec.jar TABLE [--version N]
+ * <pre>java -Dloader.main=com.ash.lake.delta.read.DeltaRowsCli -jar drishti-server-exec.jar TABLE [--version N]
  *     [--date yyyy-MM-dd] [--columns a,b]</pre>
  */
 public final class DeltaRowsCli {

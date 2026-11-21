@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeconfig;
+package com.ash.lake.config;
 
-import com.ash.drishti.common.ModuleLoaders;
+import com.ash.lake.hostcompat.ModuleLoaders;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import java.io.IOException;
@@ -104,10 +104,10 @@ public final class Lakes {
         if (p == null || p.isBlank()) {
             p = properties.apply(ENV);
         }
-        return com.ash.drishti.api.Roots.anchored(p == null || p.isBlank() ? com.ash.drishti.api.Roots.config("lakes") : p.strip());
+        return com.ash.lake.hostcompat.Roots.anchored(p == null || p.isBlank() ? com.ash.lake.hostcompat.Roots.config("lakes") : p.strip());
     }
 
-    private static volatile Function<String, String> properties = com.ash.drishti.settingsfile.Placeholders::process;
+    private static volatile Function<String, String> properties = com.ash.lake.hostcompat.Placeholders::process;
 
     /**
      * How a lake file's references are resolved by {@link #current()}: the server installs its own settings (its environment, system
@@ -115,7 +115,7 @@ public final class Lakes {
      * setting is seen; null: the process's environment.
      */
     public static void useProperties(Function<String, String> lookup) {
-        properties = lookup == null ? com.ash.drishti.settingsfile.Placeholders::process : lookup;
+        properties = lookup == null ? com.ash.lake.hostcompat.Placeholders::process : lookup;
     }
 
     private static final Pattern NAMED = Pattern.compile("\\$\\{([A-Za-z_][A-Za-z0-9_.-]*)");
@@ -159,13 +159,13 @@ public final class Lakes {
                 out.put(n, v);
             }
         }
-        out.putAll(com.ash.drishti.common.NamedResources.all("lake"));   // the [lake.<name>] sections: root=, storage.<key>=
+        out.putAll(com.ash.lake.hostcompat.NamedResources.all("lake"));   // the [lake.<name>] sections: root=, storage.<key>=
         return out;
     }
 
     /** The lakes of {@link #dir()} with the process's environment. */
     public static Lakes load() {
-        return read(dir(), com.ash.drishti.settingsfile.Placeholders::process);
+        return read(dir(), com.ash.lake.hostcompat.Placeholders::process);
     }
 
     /**
@@ -346,7 +346,7 @@ public final class Lakes {
         if (namedRoot != null && !namedRoot.isBlank()) {
             rootPath = v.resolve("lake." + name + ".root", namedRoot.strip());
         }
-        com.ash.drishti.common.NamedResources.section("lake", name).forEach((k, val) -> {
+        com.ash.lake.hostcompat.NamedResources.section("lake", name).forEach((k, val) -> {
             if (k.startsWith("storage.") && k.length() > "storage.".length()) {
                 storage.put(k.substring("storage.".length()), val);
             }
@@ -547,8 +547,8 @@ public final class Lakes {
             if (raw == null) {
                 return null;
             }
-            try {   // the one resolver (com.ash.drishti.settingsfile.Placeholders), through this reader's view
-                return com.ash.drishti.settingsfile.Placeholders.require(raw, this::lookup);
+            try {   // the one resolver (com.ash.lake.hostcompat.Placeholders), through this reader's view
+                return com.ash.lake.hostcompat.Placeholders.require(raw, this::lookup);
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException(where + ": " + key + ": " + e.getMessage() + " (or give the reference a default: ${name:default})", e);
             }

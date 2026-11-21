@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
-import com.ash.drishti.api.LoadGuard;
-import com.ash.drishti.iceberg.catalog.Catalog;
-import com.ash.drishti.iceberg.catalog.Catalogs;
-import com.ash.drishti.plugin.iceberg.IcebergLayout.Row;
+import com.ash.lake.hostcompat.LoadGuard;
+import com.ash.lake.iceberg.catalog.Catalog;
+import com.ash.lake.iceberg.catalog.Catalogs;
+import com.ash.lake.iceberg.table.IcebergLayout.Row;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -107,7 +107,7 @@ interface LayoutLake extends Closeable {
     /** drishti-iceberg. */
     record Native(Catalog catalog) implements LayoutLake {
 
-        record Kind(Catalog catalog, String kind, com.ash.drishti.iceberg.Table t) implements LayoutTable {
+        record Kind(Catalog catalog, String kind, com.ash.lake.iceberg.Table t) implements LayoutTable {
             @Override
             public String name() {
                 return t.name();
@@ -120,18 +120,18 @@ interface LayoutLake extends Closeable {
 
             @Override
             public long rows(List<?> files) {
-                return files.stream().mapToLong(f -> ((com.ash.drishti.iceberg.manifest.DataFile) f).recordCount()).sum();
+                return files.stream().mapToLong(f -> ((com.ash.lake.iceberg.manifest.DataFile) f).recordCount()).sum();
             }
 
             @Override
             public long bytes(List<?> files) {
-                return files.stream().mapToLong(f -> ((com.ash.drishti.iceberg.manifest.DataFile) f).fileSizeInBytes()).sum();
+                return files.stream().mapToLong(f -> ((com.ash.lake.iceberg.manifest.DataFile) f).fileSizeInBytes()).sum();
             }
 
             @Override
             @SuppressWarnings("unchecked")
             public void commitDays(Map<LocalDate, List<?>> days) {
-                NativeLayout.commitDays(t, (Map<LocalDate, List<com.ash.drishti.iceberg.manifest.DataFile>>) (Map<?, ?>) days);
+                NativeLayout.commitDays(t, (Map<LocalDate, List<com.ash.lake.iceberg.manifest.DataFile>>) (Map<?, ?>) days);
             }
 
             @Override
@@ -142,18 +142,18 @@ interface LayoutLake extends Closeable {
             @Override
             @SuppressWarnings("unchecked")
             public void append(List<?> files, Map<String, String> summary) {
-                com.ash.drishti.iceberg.write.Operations.append(t, (List<com.ash.drishti.iceberg.manifest.DataFile>) files, summary);
+                com.ash.lake.iceberg.write.Operations.append(t, (List<com.ash.lake.iceberg.manifest.DataFile>) files, summary);
             }
 
             @Override
             public void properties(Map<String, String> props) {
-                com.ash.drishti.iceberg.write.Operations.setProperties(t, props);
+                com.ash.lake.iceberg.write.Operations.setProperties(t, props);
             }
 
             @Override
             public long sequenceNumber() {
                 t.refresh();
-                return t.currentSnapshot().map(com.ash.drishti.iceberg.meta.Snapshot::sequenceNumber).orElse(0L);
+                return t.currentSnapshot().map(com.ash.lake.iceberg.meta.Snapshot::sequenceNumber).orElse(0L);
             }
 
             @Override

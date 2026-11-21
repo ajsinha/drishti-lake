@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.read;
+package com.ash.lake.iceberg.read;
 
-import com.ash.drishti.iceberg.expr.Expr;
-import com.ash.drishti.iceberg.meta.NameMapping;
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Type;
-import com.ash.drishti.lakeio.NativeCodecs;
-import com.ash.drishti.lakeio.PageDecodeException;
-import com.ash.drishti.lakeio.ParquetFooters;
-import com.ash.drishti.lakeio.UnsupportedCodec;
+import com.ash.lake.iceberg.expr.Expr;
+import com.ash.lake.iceberg.meta.NameMapping;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Type;
+import com.ash.lake.io.NativeCodecs;
+import com.ash.lake.io.PageDecodeException;
+import com.ash.lake.io.ParquetFooters;
+import com.ash.lake.io.UnsupportedCodec;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -331,7 +331,7 @@ public final class ParquetRowReader implements Closeable {
                 int slot = materializer.slotOf(projection.get(i).id());
                 out[i] = slot >= 0 ? fileRow[slot] : constants.get(projection.get(i).id());
                 if (out[i] != null && projection.get(i).type() instanceof Type.Primitive pt) {
-                    out[i] = com.ash.drishti.iceberg.types.Values.promote(pt, out[i]);
+                    out[i] = com.ash.lake.iceberg.types.Values.promote(pt, out[i]);
                 }
             }
             return new Row(out, pos);

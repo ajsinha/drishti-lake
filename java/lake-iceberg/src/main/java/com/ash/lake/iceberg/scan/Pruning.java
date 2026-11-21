@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,15 +13,15 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.scan;
+package com.ash.lake.iceberg.scan;
 
-import com.ash.drishti.iceberg.expr.Expr;
-import com.ash.drishti.iceberg.manifest.DataFile;
-import com.ash.drishti.iceberg.meta.PartitionSpec;
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Schema;
-import com.ash.drishti.iceberg.types.Type;
-import com.ash.drishti.iceberg.types.Values;
+import com.ash.lake.iceberg.expr.Expr;
+import com.ash.lake.iceberg.manifest.DataFile;
+import com.ash.lake.iceberg.meta.PartitionSpec;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Schema;
+import com.ash.lake.iceberg.types.Type;
+import com.ash.lake.iceberg.types.Values;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -30,7 +30,7 @@ import java.util.Optional;
  * Whether a manifest, a partition or a file <em>may</em> hold rows matching a filter: false only when it certainly
  * cannot (so pruning never loses a row). Manifests are judged by their partition summaries, partitions by their
  * values, files by their column bounds and null counts, all through the inclusive projection of the filter onto each
- * partition spec ({@link com.ash.drishti.iceberg.meta.Transform#project}). Stateless.
+ * partition spec ({@link com.ash.lake.iceberg.meta.Transform#project}). Stateless.
  */
 public final class Pruning {
 

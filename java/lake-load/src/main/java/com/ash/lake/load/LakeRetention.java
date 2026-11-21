@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.common.RowRetention;
-import com.ash.drishti.deltalake.write.LakeWriter;
-import com.ash.drishti.deltalake.write.TableUpkeep;
+import com.ash.lake.common.RowRetention;
+import com.ash.lake.delta.write.LakeWriter;
+import com.ash.lake.delta.write.TableUpkeep;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.delta.kernel.Snapshot;
 import io.delta.kernel.Table;
@@ -290,7 +290,7 @@ public final class LakeRetention {
     static Map<String, Object> icebergDates(String root, String table, java.util.function.Predicate<String> wanted, boolean dryRun) throws Exception {
         Class<?> ice;
         try {
-            ice = Class.forName("com.ash.drishti.plugin.iceberg.IcebergMaintenance");
+            ice = Class.forName("com.ash.lake.iceberg.table.IcebergMaintenance");
         } catch (ClassNotFoundException e) {
             throw new IOException("the Iceberg plugin is not on the class path");
         }
@@ -434,7 +434,7 @@ public final class LakeRetention {
     static List<Map<String, Object>> iceberg(String root, String table, RowRetention r, boolean dryRun) throws Exception {
         Class<?> ice;
         try {
-            ice = Class.forName("com.ash.drishti.plugin.iceberg.IcebergMaintenance");
+            ice = Class.forName("com.ash.lake.iceberg.table.IcebergMaintenance");
         } catch (ClassNotFoundException e) {
             throw new IOException("the Iceberg plugin is not on the class path");
         }

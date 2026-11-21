@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,20 +13,20 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.icebergext;
+package com.ash.lake.iceberg.external;
 
-import com.ash.drishti.iceberg.Table;
-import com.ash.drishti.iceberg.expr.Expr;
-import com.ash.drishti.iceberg.meta.PartitionSpec;
-import com.ash.drishti.iceberg.meta.Snapshot;
-import com.ash.drishti.iceberg.meta.Transform;
-import com.ash.drishti.iceberg.read.JsonValues;
-import com.ash.drishti.iceberg.read.TaskReader;
-import com.ash.drishti.iceberg.scan.FileTask;
-import com.ash.drishti.iceberg.scan.Pruning;
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Type;
-import com.ash.drishti.iceberg.types.Values;
+import com.ash.lake.iceberg.Table;
+import com.ash.lake.iceberg.expr.Expr;
+import com.ash.lake.iceberg.meta.PartitionSpec;
+import com.ash.lake.iceberg.meta.Snapshot;
+import com.ash.lake.iceberg.meta.Transform;
+import com.ash.lake.iceberg.read.JsonValues;
+import com.ash.lake.iceberg.read.TaskReader;
+import com.ash.lake.iceberg.scan.FileTask;
+import com.ash.lake.iceberg.scan.Pruning;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Type;
+import com.ash.lake.iceberg.types.Values;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;

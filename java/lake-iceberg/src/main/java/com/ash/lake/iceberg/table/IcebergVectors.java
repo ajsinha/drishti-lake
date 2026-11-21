@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
-import com.ash.drishti.api.VectorReads;
-import com.ash.drishti.api.VectorSink;
-import com.ash.drishti.plugin.iceberg.KindTable.Day;
-import com.ash.drishti.plugin.iceberg.KindTable.Layout;
+import com.ash.lake.hostcompat.VectorReads;
+import com.ash.lake.hostcompat.VectorSink;
+import com.ash.lake.iceberg.table.KindTable.Day;
+import com.ash.lake.iceberg.table.KindTable.Layout;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -161,16 +161,16 @@ final class IcebergVectors {
             return null;
         }
         if (v instanceof Double d) {
-            return com.ash.drishti.api.IdText.of(d);
+            return com.ash.lake.hostcompat.IdText.of(d);
         }
         if (v instanceof Float f) {
-            return com.ash.drishti.api.IdText.of(f);
+            return com.ash.lake.hostcompat.IdText.of(f);
         }
         if (v instanceof BigDecimal d) {
             return d.stripTrailingZeros().toPlainString();
         }
         if (v instanceof java.util.Collection<?> l) {
-            return com.ash.drishti.api.ListValues.json(l);           // a list attribute (TRADE_IDS): its JSON text
+            return com.ash.lake.hostcompat.ListValues.json(l);           // a list attribute (TRADE_IDS): its JSON text
         }
         return v.toString();
     }

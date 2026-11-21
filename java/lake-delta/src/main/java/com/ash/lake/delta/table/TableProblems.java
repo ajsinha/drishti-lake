@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.delta;
+package com.ash.lake.delta.table;
 
-import com.ash.drishti.api.UnreadableData;
-import com.ash.drishti.lakeio.PageDecodeException;
-import com.ash.drishti.lakeio.UnsupportedCodec;
+import com.ash.lake.hostcompat.UnreadableData;
+import com.ash.lake.io.PageDecodeException;
+import com.ash.lake.io.UnsupportedCodec;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;

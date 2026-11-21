@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
-import com.ash.drishti.api.ColumnSet;
+import com.ash.lake.hostcompat.ColumnSet;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -392,7 +392,7 @@ abstract class KindTable {
                 for (int c = 0; c < paths.size(); c++) {
                     Object v = r[c + 1];
                     values.get(c).add(v == null ? null : num[c] ? (Object) ((Number) v).doubleValue()
-                            : v instanceof java.util.Collection<?> items ? com.ash.drishti.api.ListValues.json(items) : v.toString());   // a list: JSON text
+                            : v instanceof java.util.Collection<?> items ? com.ash.lake.hostcompat.ListValues.json(items) : v.toString());   // a list: JSON text
                 }
             });
             return new Object[] {ids, values};

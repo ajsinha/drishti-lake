@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeio;
+package com.ash.lake.io;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ash.drishti.api.proxy.SiteProxy;
-import com.ash.drishti.testkit.FakeProxy;
-import com.ash.drishti.testkit.TlsFixture;
+import com.ash.lake.hostcompat.SiteProxy;
+import com.ash.lake.tck.FakeProxy;
+import com.ash.lake.tck.TlsFixture;
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpsConfigurator;
 import com.sun.net.httpserver.HttpsServer;

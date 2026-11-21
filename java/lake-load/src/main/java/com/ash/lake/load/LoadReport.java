@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.common.FileDates;
-import com.ash.drishti.lakeload.Inputs.InputFile;
-import com.ash.drishti.lakeload.Inputs.Split;
-import com.ash.drishti.lakeload.TableTarget.WrittenFile;
+import com.ash.lake.common.FileDates;
+import com.ash.lake.load.Inputs.InputFile;
+import com.ash.lake.load.Inputs.Split;
+import com.ash.lake.load.TableTarget.WrittenFile;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -302,7 +302,7 @@ final class LoadReport {
                 if (!Files.exists(pw.rejectsFile)) {
                     continue;
                 }
-                try (InputStream raw = com.ash.drishti.api.ChannelIo.newInputStream(pw.rejectsFile); DataInputStream in = new DataInputStream(new java.io.BufferedInputStream(raw, 1 << 16))) {
+                try (InputStream raw = com.ash.lake.hostcompat.ChannelIo.newInputStream(pw.rejectsFile); DataInputStream in = new DataInputStream(new java.io.BufferedInputStream(raw, 1 << 16))) {
                     while (true) {
                         int split;
                         try {

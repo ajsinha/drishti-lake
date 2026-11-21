@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,9 +13,9 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.lakeio.LocalPaths;
+import com.ash.lake.io.LocalPaths;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -29,9 +29,9 @@ import java.util.Map;
  * The parallel lake loader's command line (docs/guides/CLI_REFERENCE.md section 4.13):
  *
  * <pre>
- * java -Xmx8g -Djava.io.tmpdir=/data/tmp -cp &lt;class path&gt; com.ash.drishti.lakeload.LakeLoad --config load.yaml [--set key.path=value ...]
+ * java -Xmx8g -Djava.io.tmpdir=/data/tmp -cp &lt;class path&gt; com.ash.lake.load.LakeLoad --config load.yaml [--set key.path=value ...]
  *     [--summary FILE] [--no-lock] [--no-run-log] [--dry-run] [--json] [-q]
- * java -Xmx8g -Dloader.main=com.ash.drishti.lakeload.LakeLoad -jar drishti-server-&lt;v&gt;-exec.jar --config load.yaml
+ * java -Xmx8g -Dloader.main=com.ash.lake.load.LakeLoad -jar drishti-server-&lt;v&gt;-exec.jar --config load.yaml
  * </pre>
  *
  * Exit codes as {@code drishti.py lake build}'s (section 4.6): 0 loaded, 2 loaded with rejects, 1 failed (no date that was not committed
@@ -63,7 +63,7 @@ public final class LakeLoad {
     /** Runs a load as the command line would; returns the exit code. */
     /** The lake domain of a pack's tables (its first Delta or Iceberg connector's {@code domain}, else the pack's name). */
     public static String packDomain(java.nio.file.Path pack) throws java.io.IOException {
-        return com.ash.drishti.lakeconfig.PackEntry.read(pack, "_", null).domain();   // no table of the kind: the pack's first Delta or Iceberg connector's domain, else its name
+        return com.ash.lake.config.PackEntry.read(pack, "_", null).domain();   // no table of the kind: the pack's first Delta or Iceberg connector's domain, else its name
     }
 
     /**
@@ -72,8 +72,8 @@ public final class LakeLoad {
      */
     public static Map<String, java.util.SortedSet<java.time.LocalDate>> tarTables(String path) throws java.io.IOException {
         Map<String, java.util.SortedSet<java.time.LocalDate>> out = new java.util.TreeMap<>();
-        try (com.ash.drishti.iceberg.io.FileAccess io = new com.ash.drishti.iceberg.io.FileAccess(com.ash.drishti.lakeio.S3Settings.from(Map.of()),
-                com.ash.drishti.iceberg.io.Relocation.none(), null)) {
+        try (com.ash.lake.iceberg.io.FileAccess io = new com.ash.lake.iceberg.io.FileAccess(com.ash.lake.io.S3Settings.from(Map.of()),
+                com.ash.lake.iceberg.io.Relocation.none(), null)) {
             Archives.Plan p = Archives.plan(io, path, java.nio.file.Files.size(java.nio.file.Path.of(path)), null,
                     Archives.Limits.defaults(System::getenv));
             p.datasets().forEach((table, members) -> members.forEach(m -> out.computeIfAbsent(table, k -> new java.util.TreeSet<>()).add(m.date())));

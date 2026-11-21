@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.write;
+package com.ash.lake.iceberg.write;
 
-import com.ash.drishti.iceberg.io.FileAccess;
-import com.ash.drishti.iceberg.manifest.DataFile;
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Schema;
-import com.ash.drishti.iceberg.types.Type;
-import com.ash.drishti.iceberg.types.Values;
-import com.ash.drishti.lakeio.ParquetFooters;
-import com.ash.drishti.lakeio.Storage;
+import com.ash.lake.iceberg.io.FileAccess;
+import com.ash.lake.iceberg.manifest.DataFile;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Schema;
+import com.ash.lake.iceberg.types.Type;
+import com.ash.lake.iceberg.types.Values;
+import com.ash.lake.io.ParquetFooters;
+import com.ash.lake.io.Storage;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -429,7 +429,7 @@ public final class ParquetDataWriter implements Closeable {
 
         @Override
         public WriteContext init(ParquetConfiguration configuration) {
-            return new WriteContext(message, Map.of("iceberg.schema", org.apache.iceberg.SchemaParser.toJson(com.ash.drishti.iceberg.meta.Bridge.iceberg(schema))));
+            return new WriteContext(message, Map.of("iceberg.schema", org.apache.iceberg.SchemaParser.toJson(com.ash.lake.iceberg.meta.Bridge.iceberg(schema))));
         }
 
         @Override

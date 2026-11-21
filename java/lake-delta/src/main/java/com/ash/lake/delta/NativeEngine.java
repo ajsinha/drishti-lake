@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,12 +13,12 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.deltalake;
+package com.ash.lake.delta;
 
-import com.ash.drishti.lakeio.NativeCodecs;
-import com.ash.drishti.lakeio.ParquetFooters;
-import com.ash.drishti.lakeio.S3Settings;
-import com.ash.drishti.lakeio.Storage;
+import com.ash.lake.io.NativeCodecs;
+import com.ash.lake.io.ParquetFooters;
+import com.ash.lake.io.S3Settings;
+import com.ash.lake.io.Storage;
 import io.delta.kernel.defaults.engine.DefaultExpressionHandler;
 import io.delta.kernel.engine.Engine;
 import io.delta.kernel.engine.ExpressionHandler;
@@ -37,7 +37,7 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
  * (Windows drive letters, backslashes and UNC shares included, so no {@code winutils.exe}), S3 through the AWS SDK v2,
  * Parquet through parquet-java over the engine's own input files with its own page decompression, commit JSON and
  * expressions through Kernel's Hadoop-free handlers. It only reads: the server never writes a Delta table (the loaders
- * do: {@code lake build} through {@link com.ash.drishti.deltalake.write.LakeWriter}, a separate process, or delta-rs).
+ * do: {@code lake build} through {@link com.ash.lake.delta.write.LakeWriter}, a separate process, or delta-rs).
  *
  * <p>One engine serves every read of a connector, from any number of threads: its handlers are stateless, each read
  * opens its own streams, and the S3 client is shared. {@link #close()} releases the S3 client.
@@ -93,12 +93,12 @@ public final class NativeEngine implements Engine, AutoCloseable {
     }
 
     /** The TLS material of the S3 endpoint ({@code tls.*}), or null. */
-    public com.ash.drishti.api.tls.TlsMaterial tls() {
+    public com.ash.lake.hostcompat.TlsMaterial tls() {
         return io.tls();
     }
 
     /** The outbound proxy of the S3 endpoint, {@code none} when it is reached directly. */
-    public com.ash.drishti.api.proxy.ProxySettings proxy() {
+    public com.ash.lake.hostcompat.ProxySettings proxy() {
         return io.proxy();
     }
 

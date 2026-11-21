@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.expr;
+package com.ash.lake.iceberg.expr;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +22,7 @@ import java.util.List;
  * The filters planning and reads push down: comparisons of one column (by field id) with literals, joined by
  * {@code and}. What Drishti asks is narrow (a business date or a range of them, {@code id = …}, a column's value), so
  * this is all there is; anything a filter cannot prune is answered by reading. Literals are in the column's internal
- * form ({@link com.ash.drishti.iceberg.types.Type}).
+ * form ({@link com.ash.lake.iceberg.types.Type}).
  */
 public sealed interface Expr permits Expr.True, Expr.And, Expr.Pred {
 

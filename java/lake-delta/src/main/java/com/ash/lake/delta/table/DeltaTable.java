@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.delta;
+package com.ash.lake.delta.table;
 
 import io.delta.kernel.Scan;
 import io.delta.kernel.Snapshot;
@@ -584,7 +584,7 @@ final class DeltaTable {
      * Columns of the date's rows, read without documents: the id and each named column ({@code physical} name to
      * whether it is a number). Repeated text values (books, desks, currencies) share one string.
      */
-    com.ash.drishti.api.ColumnSet columns(Layout layout, LocalDate date, Map<String, String> pathToColumn, Map<String, Boolean> numeric) {
+    com.ash.lake.hostcompat.ColumnSet columns(Layout layout, LocalDate date, Map<String, String> pathToColumn, Map<String, Boolean> numeric) {
         List<Row> files = layout.files().getOrDefault(date, List.of());
         StructType schema = new StructType().add(idColumn, StringType.STRING);
         List<String> paths = new ArrayList<>(pathToColumn.keySet());
@@ -666,23 +666,23 @@ final class DeltaTable {
         });
         Map<String, String[]> text = new LinkedHashMap<>();
         texts.forEach((p, list) -> text.put(p, list.toArray(new String[0])));
-        return new com.ash.drishti.api.ColumnSet(ids.toArray(new String[0]), numbers, text, date == LocalDate.MIN ? null : date);
+        return new com.ash.lake.hostcompat.ColumnSet(ids.toArray(new String[0]), numbers, text, date == LocalDate.MIN ? null : date);
     }
 
     /**
      * The date's rows with one vector column ({@code list<double>}, or {@code list<float>}: exposure paths may be float32,
      * EXPOSURE_GUIDE.md section 15.3) and some text columns, streamed to {@code sink} batch by batch (VAR_GUIDE.md section 29.3): one
      * buffer a file, reused for every row, so a date of millions of vectors is never held here; several files decode at once when
-     * {@code sink} came from {@link com.ash.drishti.api.VectorReads#parallel}, delivered in file order. A float32 element is widened to a
+     * {@code sink} came from {@link com.ash.lake.hostcompat.VectorReads#parallel}, delivered in file order. A float32 element is widened to a
      * double exactly. Read as stored (no deletion vectors: the vector tables are written without them); partition values come from the log.
      */
-    void vectors(Layout layout, LocalDate date, String vectorColumn, List<String> textColumns, com.ash.drishti.api.VectorSink sink) {
+    void vectors(Layout layout, LocalDate date, String vectorColumn, List<String> textColumns, com.ash.lake.hostcompat.VectorSink sink) {
         vectors(layout, date, vectorColumn, textColumns, f -> true, sink);
     }
 
     /** As above, only the files {@code keep} accepts (a VaR shard's read skips those its statistics show hold none of its keys). */
     void vectors(Layout layout, LocalDate date, String vectorColumn, List<String> textColumns, java.util.function.Predicate<Row> keep,
-            com.ash.drishti.api.VectorSink sink) {
+            com.ash.lake.hostcompat.VectorSink sink) {
         List<Row> files = layout.files().getOrDefault(date, List.of()).stream().filter(keep).toList();
         StructType schema = new StructType().add(idColumn, StringType.STRING).add(vectorColumn, vectorType(layout, vectorColumn));
         for (String c : textColumns) {
@@ -701,7 +701,7 @@ final class DeltaTable {
             order[i] = i;
         }
         // piece by piece in file order; several decode at once when the reader asked for it (VectorReads, VAR_GUIDE.md 27a.6)
-        com.ash.drishti.api.VectorReads.inFileOrder(order, sink, (i, to) -> fileVectors(pieces.get(i), read, partitionKeys, to, shadow,
+        com.ash.lake.hostcompat.VectorReads.inFileOrder(order, sink, (i, to) -> fileVectors(pieces.get(i), read, partitionKeys, to, shadow,
                 all.indexOf(pieces.get(i).file())));
     }
 
@@ -712,16 +712,16 @@ final class DeltaTable {
 
     /**
      * The files cut into pieces for {@code sink}'s decoding threads: whole files on one thread or another engine than the native one;
-     * else each file's row groups in runs of about {@link com.ash.drishti.api.VectorReads#partBytes} uncompressed bytes (at least one
+     * else each file's row groups in runs of about {@link com.ash.lake.hostcompat.VectorReads#partBytes} uncompressed bytes (at least one
      * group), so a date of a few large files still decodes on every thread and a piece decodes whole while the ones before it are taken.
      * A file whose footer cannot be read is one piece: its read says what is wrong.
      */
-    List<Piece> pieces(List<Row> files, com.ash.drishti.api.VectorSink sink) {
+    List<Piece> pieces(List<Row> files, com.ash.lake.hostcompat.VectorSink sink) {
         List<Piece> whole = files.stream().map(f -> new Piece(f, 0, Piece.WHOLE)).toList();
-        if (com.ash.drishti.api.VectorReads.threads(sink) <= 1 || !(engine instanceof com.ash.drishti.deltalake.NativeEngine ne)) {
+        if (com.ash.lake.hostcompat.VectorReads.threads(sink) <= 1 || !(engine instanceof com.ash.lake.delta.NativeEngine ne)) {
             return whole;
         }
-        long part = com.ash.drishti.api.VectorReads.partBytes(sink);
+        long part = com.ash.lake.hostcompat.VectorReads.partBytes(sink);
         List<Piece> out = new ArrayList<>();
         for (int i = 0; i < files.size(); i++) {
             long[] groups;
@@ -750,7 +750,7 @@ final class DeltaTable {
     }
 
     /** One piece's rows into {@code sink}: buffers of its own, so pieces may decode on several threads at once. */
-    private void fileVectors(Piece piece, StructType read, List<String> textColumns, com.ash.drishti.api.VectorSink sink, Map<String, Integer> shadow,
+    private void fileVectors(Piece piece, StructType read, List<String> textColumns, com.ash.lake.hostcompat.VectorSink sink, Map<String, Integer> shadow,
             int fileIndex) {
         Row file = piece.file();
         double[][] buf = {new double[512]};
@@ -788,7 +788,7 @@ final class DeltaTable {
             raw(file, read, Optional.empty(), each);
             return;
         }
-        com.ash.drishti.deltalake.NativeEngine ne = (com.ash.drishti.deltalake.NativeEngine) engine;
+        com.ash.lake.delta.NativeEngine ne = (com.ash.lake.delta.NativeEngine) engine;
         try (CloseableIterator<ColumnarBatch> batches = ne.readRowGroups(InternalScanFileUtils.getAddFileStatus(file), read, piece.from(),
                 piece.to())) {
             while (batches.hasNext()) {
@@ -911,14 +911,14 @@ final class DeltaTable {
     static String text(io.delta.kernel.data.ColumnVector v, int r) {
         io.delta.kernel.types.DataType t = v.getDataType();
         if (t instanceof io.delta.kernel.types.ArrayType) {
-            // a list attribute: its JSON text, as a column of text held it before (com.ash.drishti.api.ListValues reads both)
+            // a list attribute: its JSON text, as a column of text held it before (com.ash.lake.hostcompat.ListValues reads both)
             io.delta.kernel.data.ArrayValue a = v.getArray(r);
             io.delta.kernel.data.ColumnVector el = a.getElements();
             List<Object> items = new ArrayList<>(a.getSize());
             for (int i = 0; i < a.getSize(); i++) {
                 items.add(el.isNullAt(i) ? null : el.getDataType() instanceof StringType ? el.getString(i) : text(el, i));
             }
-            return com.ash.drishti.api.ListValues.json(items);
+            return com.ash.lake.hostcompat.ListValues.json(items);
         }
         if (t instanceof io.delta.kernel.types.LongType) {
             return Long.toString(v.getLong(r));
@@ -933,10 +933,10 @@ final class DeltaTable {
             return Byte.toString(v.getByte(r));
         }
         if (t instanceof io.delta.kernel.types.DoubleType) {
-            return com.ash.drishti.api.IdText.of(v.getDouble(r));
+            return com.ash.lake.hostcompat.IdText.of(v.getDouble(r));
         }
         if (t instanceof io.delta.kernel.types.FloatType) {
-            return com.ash.drishti.api.IdText.of(v.getFloat(r));
+            return com.ash.lake.hostcompat.IdText.of(v.getFloat(r));
         }
         if (t instanceof io.delta.kernel.types.DecimalType) {
             return v.getDecimal(r).stripTrailingZeros().toPlainString();

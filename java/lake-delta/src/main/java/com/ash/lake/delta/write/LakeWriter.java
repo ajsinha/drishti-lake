@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.deltalake.write;
+package com.ash.lake.delta.write;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -144,18 +144,18 @@ public final class LakeWriter {
      * loader, 2.9.6, which writes its Parquet files itself and hands Kernel their statuses).
      */
     public static Engine engineFor(String table, Map<String, String> settings) {
-        if (com.ash.drishti.lakeio.LocalPaths.isLocal(table)) {
+        if (com.ash.lake.io.LocalPaths.isLocal(table)) {
             return DefaultEngine.create(new LocalWriteFileIO(parquetConf()));
         }
-        if (com.ash.drishti.lakeio.StorageProviders.memoryOnly(table)) {
-            return DefaultEngine.create(new StorageWriteFileIO(com.ash.drishti.lakeio.S3Settings.from(Map.of()), memoryConf(settings)));
+        if (com.ash.lake.io.StorageProviders.memoryOnly(table)) {
+            return DefaultEngine.create(new StorageWriteFileIO(com.ash.lake.io.S3Settings.from(Map.of()), memoryConf(settings)));
         }
-        return DefaultEngine.create(new StorageWriteFileIO(com.ash.drishti.lakeio.S3Settings.from(settings), parquetConf()));
+        return DefaultEngine.create(new StorageWriteFileIO(com.ash.lake.io.S3Settings.from(settings), parquetConf()));
     }
 
     /** Writes the manifest's parts; {@code partsDone} is told after each part. */
     public Result write(LakeManifest m, IntConsumer partsDone) throws IOException {
-        if (com.ash.drishti.lakeio.LocalPaths.isLocal(m.table())) {
+        if (com.ash.lake.io.LocalPaths.isLocal(m.table())) {
             Files.createDirectories(LocalWriteFileIO.local(m.table()));
         }
         Table table = Table.forPath(engine, m.table());
@@ -468,7 +468,7 @@ public final class LakeWriter {
         private static String[] texts(JsonNode v) {
             JsonNode items = v;
             if (v.isTextual() && v.asText().startsWith("[")) {
-                java.util.List<String> parsed = com.ash.drishti.api.ListValues.of(v.asText());
+                java.util.List<String> parsed = com.ash.lake.hostcompat.ListValues.of(v.asText());
                 if (parsed != null) {
                     return parsed.toArray(new String[0]);
                 }
@@ -479,7 +479,7 @@ public final class LakeWriter {
             List<String> out = new ArrayList<>(items.size());
             for (JsonNode x : items) {
                 if (x != null && !x.isNull()) {
-                    out.add(x.isTextual() ? x.asText() : x.isNumber() ? com.ash.drishti.api.ListValues.text(x.numberValue()) : x.toString());
+                    out.add(x.isTextual() ? x.asText() : x.isNumber() ? com.ash.lake.hostcompat.ListValues.text(x.numberValue()) : x.toString());
                 }
             }
             return out.toArray(new String[0]);

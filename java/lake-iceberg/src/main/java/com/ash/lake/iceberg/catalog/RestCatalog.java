@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,16 +13,16 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.catalog;
+package com.ash.lake.iceberg.catalog;
 
-import com.ash.drishti.api.proxy.ProxySettings;
-import com.ash.drishti.iceberg.Table;
-import com.ash.drishti.iceberg.io.DrishtiFileIO;
-import com.ash.drishti.iceberg.io.FileAccess;
-import com.ash.drishti.iceberg.meta.Bridge;
-import com.ash.drishti.iceberg.meta.PartitionSpec;
-import com.ash.drishti.iceberg.meta.SortOrder;
-import com.ash.drishti.iceberg.types.Schema;
+import com.ash.lake.hostcompat.ProxySettings;
+import com.ash.lake.iceberg.Table;
+import com.ash.lake.iceberg.io.DrishtiFileIO;
+import com.ash.lake.iceberg.io.FileAccess;
+import com.ash.lake.iceberg.meta.Bridge;
+import com.ash.lake.iceberg.meta.PartitionSpec;
+import com.ash.lake.iceberg.meta.SortOrder;
+import com.ash.lake.iceberg.types.Schema;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -96,7 +96,7 @@ public final class RestCatalog implements Catalog {
             throw new IllegalStateException("the REST catalog at " + uri + " refused the credential: " + e.getMessage(), e);
         } catch (RuntimeException e) {
             io.close();
-            throw new IllegalStateException("cannot reach the REST catalog at " + uri + ": " + com.ash.drishti.iceberg.io.Reasons.of(e), e);
+            throw new IllegalStateException("cannot reach the REST catalog at " + uri + ": " + com.ash.lake.iceberg.io.Reasons.of(e), e);
         }
         String ns = s.getOrDefault("namespace", "").isBlank() ? domain : s.get("namespace");
         return new RestCatalog(c, ns.isBlank() ? Namespace.empty() : Namespace.of(ns.split("\\.")), io, uri, proxy);

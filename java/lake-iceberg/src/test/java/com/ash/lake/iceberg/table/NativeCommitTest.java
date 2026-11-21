@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,19 +13,19 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.drishti.iceberg.Table;
-import com.ash.drishti.iceberg.catalog.Catalog;
-import com.ash.drishti.iceberg.catalog.Catalogs;
-import com.ash.drishti.iceberg.expr.Expr;
-import com.ash.drishti.iceberg.manifest.DataFile;
-import com.ash.drishti.iceberg.scan.FileTask;
-import com.ash.drishti.iceberg.write.Operations;
-import com.ash.drishti.plugin.iceberg.IcebergLayout.Row;
+import com.ash.lake.iceberg.Table;
+import com.ash.lake.iceberg.catalog.Catalog;
+import com.ash.lake.iceberg.catalog.Catalogs;
+import com.ash.lake.iceberg.expr.Expr;
+import com.ash.lake.iceberg.manifest.DataFile;
+import com.ash.lake.iceberg.scan.FileTask;
+import com.ash.lake.iceberg.write.Operations;
+import com.ash.lake.iceberg.table.IcebergLayout.Row;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -120,7 +120,7 @@ class NativeCommitTest {
             Operations.append(t, NativeLayout.writeDay(t, day, rows("B", 3).iterator(), 1000), Map.of());
             List<DataFile> rewritten = NativeLayout.writeDay(t, day, rows("A", 10).iterator(), 1000);
             assertThatThrownBy(() -> Operations.rewriteFiles(t, readPaths, rewritten, f -> day.equals(NativeLayout.dateOf(t, f)), readPaths))
-                    .isInstanceOf(com.ash.drishti.iceberg.write.Operations.ValidationFailed.class).hasMessageContaining("1 added");
+                    .isInstanceOf(com.ash.lake.iceberg.write.Operations.ValidationFailed.class).hasMessageContaining("1 added");
             assertThat(liveRows(t, pool)).isEqualTo(13);                     // nothing lost
             // a rewrite of what is there now goes through
             Set<String> now = new HashSet<>();

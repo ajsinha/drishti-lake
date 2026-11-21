@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
-import com.ash.drishti.common.RowFeed;
-import com.ash.drishti.api.LoadGuard;
-import com.ash.drishti.plugin.iceberg.IcebergLayout.Row;
+import com.ash.lake.hostcompat.RowFeed;
+import com.ash.lake.hostcompat.LoadGuard;
+import com.ash.lake.iceberg.table.IcebergLayout.Row;
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
@@ -41,7 +41,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Loads JSON lines into Iceberg tables in {@link IcebergLayout}: {@code java -cp <plugin classpath>
- * com.ash.drishti.plugin.iceberg.IcebergLoader FILE|- [root] [options]}. Each line is {@code {"domain", "kind", "id",
+ * com.ash.lake.iceberg.table.IcebergLoader FILE|- [root] [options]}. Each line is {@code {"domain", "kind", "id",
  * "date", "doc", "columns": {path: value}}} ({@code columns}, the fields the pack promotes, is optional), as
  * {@code make_data.py --jsonl} and {@code bulk_trades.py --jsonl} write it; {@code -} reads a stream, so a book of
  * millions loads without a file of tens of gigabytes. A column whose value is a list of numbers (a P&amp;L vector, as
@@ -153,13 +153,13 @@ public final class IcebergLoader {
         }
         if (!catalog.isBlank() && refused != null) {
             // the reason in words, never ": null" (QA4-07: a ConnectException over a ClosedChannelException has no message)
-            return "cannot reach the REST catalog at " + catalog + " (" + com.ash.drishti.iceberg.io.Reasons.of(refused) + "): check --uri and that "
+            return "cannot reach the REST catalog at " + catalog + " (" + com.ash.lake.iceberg.io.Reasons.of(refused) + "): check --uri and that "
                     + "the catalog runs";
         }
         if (root instanceof java.net.ConnectException && !settings.getOrDefault("s3.endpoint", "").isBlank()) {
             return "cannot reach the object store at " + endpoint + " (" + root.getMessage() + "): check --set s3.endpoint and that the store runs";
         }
-        return "the load failed: " + first(all.isEmpty() ? com.ash.drishti.iceberg.io.Reasons.of(e) : all, 600) + " (" + root.getClass().getSimpleName()
+        return "the load failed: " + first(all.isEmpty() ? com.ash.lake.iceberg.io.Reasons.of(e) : all, 600) + " (" + root.getClass().getSimpleName()
                 + "; -Ddrishti.loader.trace=true prints the stack trace)";
     }
 
@@ -210,7 +210,7 @@ public final class IcebergLoader {
             i++;
         }
         if (!settings.containsKey("root") && !"rest".equalsIgnoreCase(settings.getOrDefault("catalog", ""))) {
-            settings.put("root", com.ash.drishti.api.DataDir.under("iceberg"));   // a folder catalog with no root given: the data folder's
+            settings.put("root", com.ash.lake.hostcompat.DataDir.under("iceberg"));   // a folder catalog with no root given: the data folder's
         }
         IcebergLoader.Run run = new IcebergLoader.Run(settings, fileRows, rowGroupBytes, budget, threads,
                 spill.resolve("drishti-iceberg-" + ProcessHandle.current().pid()), LoadGuard.fromArgs(args));

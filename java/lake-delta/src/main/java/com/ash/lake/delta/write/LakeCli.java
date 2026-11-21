@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.deltalake.write;
+package com.ash.lake.delta.write;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -38,7 +38,7 @@ public final class LakeCli {
 
     private LakeCli() {}
 
-    /** {@code java -cp <class path> com.ash.drishti.deltalake.write.LakeCli lake write --manifest M} (DRISHTI_LAKE_CLASSPATH). */
+    /** {@code java -cp <class path> com.ash.lake.delta.write.LakeCli lake write --manifest M} (DRISHTI_LAKE_CLASSPATH). */
     public static void main(String[] args) {
         System.exit(run(args, System.out, System.err));
     }

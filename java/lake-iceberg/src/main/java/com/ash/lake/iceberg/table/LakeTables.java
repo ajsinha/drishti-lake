@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
-import com.ash.drishti.api.proxy.ProxySettings;
-import com.ash.drishti.api.tls.TlsMaterial;
-import com.ash.drishti.iceberg.catalog.Catalog;
-import com.ash.drishti.iceberg.catalog.Catalogs;
-import com.ash.drishti.iceberg.catalog.RestCatalog;
+import com.ash.lake.hostcompat.ProxySettings;
+import com.ash.lake.hostcompat.TlsMaterial;
+import com.ash.lake.iceberg.catalog.Catalog;
+import com.ash.lake.iceberg.catalog.Catalogs;
+import com.ash.lake.iceberg.catalog.RestCatalog;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
@@ -132,12 +132,12 @@ interface LakeTables extends Closeable {
             String endpoint = settings.getOrDefault("s3.endpoint", "");
             TlsMaterial t = null;
             try {
-                t = com.ash.drishti.lakeio.S3Settings.from(settings).tls();
+                t = com.ash.lake.io.S3Settings.from(settings).tls();
             } catch (RuntimeException e) {
                 // reported when the store is first used
             }
             this.tls = t;
-            RestCatalog rest = catalog instanceof RestCatalog r ? r : com.ash.drishti.iceberg.catalog.S3Tables.restOf(catalog);
+            RestCatalog rest = catalog instanceof RestCatalog r ? r : com.ash.lake.iceberg.catalog.S3Tables.restOf(catalog);
             this.proxy = rest != null && rest.proxy().active() ? rest.proxy()
                     : ProxySettings.resolve(settings, endpoint.isBlank() ? "https://s3.amazonaws.com" : endpoint);
         }

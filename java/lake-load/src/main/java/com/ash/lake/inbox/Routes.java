@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,10 +13,10 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.dataload;
+package com.ash.lake.inbox;
 
-import com.ash.drishti.common.FileDates;
-import com.ash.drishti.lakeload.LakeLoad;
+import com.ash.lake.common.FileDates;
+import com.ash.lake.load.LakeLoad;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import java.io.IOException;
@@ -504,8 +504,8 @@ public final class Routes {
     private String[] byTable(String table, String givenPack, String givenKind) throws Unrouted {
         List<String> names = givenPack != null ? List.of(givenPack) : packs.names();
         String want = norm(table);
-        if (com.ash.drishti.lakeconfig.RemovedKinds.replacement(want) != null) {
-            throw new Unrouted(table + ": " + com.ash.drishti.lakeconfig.RemovedKinds.replacement(want));
+        if (com.ash.lake.config.RemovedKinds.replacement(want) != null) {
+            throw new Unrouted(table + ": " + com.ash.lake.config.RemovedKinds.replacement(want));
         }
         List<String[]> hits = new ArrayList<>();
         List<String> known = new ArrayList<>();
@@ -527,7 +527,7 @@ public final class Routes {
                 if (info == null) {
                     continue;
                 }
-                for (com.ash.drishti.lakeconfig.PackEntry.PackTable t : tablesOf(info)) {
+                for (com.ash.lake.config.PackEntry.PackTable t : tablesOf(info)) {
                     // a connector's own name (trade_wss: trade-wss), whatever table it writes: every source module that is on brings its
                     // connector, so its folder in a tar or its file name routes to it (a shared table's slice, LoadConfig.withSlice)
                     if (info.kinds().contains(t.kind()) && norm(t.connector()).equals(want) && !norm(t.table()).equals(want)
@@ -569,10 +569,10 @@ public final class Routes {
     }
 
     /** The pack's tables by connector (its pack.yaml read once per change of the file). */
-    private final Map<Path, Map.Entry<Long, List<com.ash.drishti.lakeconfig.PackEntry.PackTable>>> packTables =
+    private final Map<Path, Map.Entry<Long, List<com.ash.lake.config.PackEntry.PackTable>>> packTables =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    private List<com.ash.drishti.lakeconfig.PackEntry.PackTable> tablesOf(PackInfo info) {
+    private List<com.ash.lake.config.PackEntry.PackTable> tablesOf(PackInfo info) {
         if (info.dir() == null) {
             return List.of();
         }
@@ -583,7 +583,7 @@ public final class Routes {
             if (hit != null && hit.getKey() == stamp) {
                 return hit.getValue();
             }
-            List<com.ash.drishti.lakeconfig.PackEntry.PackTable> ts = com.ash.drishti.lakeconfig.PackEntry.tables(f);
+            List<com.ash.lake.config.PackEntry.PackTable> ts = com.ash.lake.config.PackEntry.tables(f);
             packTables.put(f, Map.entry(stamp, ts));
             return ts;
         } catch (IOException | RuntimeException e) {

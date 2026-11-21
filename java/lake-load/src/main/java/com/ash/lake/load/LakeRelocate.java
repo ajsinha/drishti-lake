@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.lakeconfig.Lake;
-import com.ash.drishti.lakeconfig.LakeTable;
-import com.ash.drishti.lakeconfig.Lakes;
-import com.ash.drishti.deltalake.write.LakeWriter;
-import com.ash.drishti.lakeio.LocalPaths;
+import com.ash.lake.config.Lake;
+import com.ash.lake.config.LakeTable;
+import com.ash.lake.config.Lakes;
+import com.ash.lake.delta.write.LakeWriter;
+import com.ash.lake.io.LocalPaths;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.delta.kernel.Snapshot;
@@ -117,7 +117,7 @@ public final class LakeRelocate {
         }
         Outcome o;
         try {
-            o = relocate(Lakes.read(Lakes.dir(), com.ash.drishti.settingsfile.Placeholders::process), name, dry, Faults.NONE);
+            o = relocate(Lakes.read(Lakes.dir(), com.ash.lake.hostcompat.Placeholders::process), name, dry, Faults.NONE);
         } catch (IllegalArgumentException | java.io.UncheckedIOException e) {
             o = new Outcome("refused", e.getMessage(), name, null, null, List.of(), Map.of());
         }
@@ -405,7 +405,7 @@ public final class LakeRelocate {
         org.apache.parquet.io.InputFile in = new org.apache.parquet.io.LocalInputFile(data);
         try (org.apache.parquet.io.SeekableInputStream stream = in.newStream()) {
             return org.apache.parquet.hadoop.ParquetFileReader.readFooter(in,
-                    org.apache.parquet.ParquetReadOptions.builder(com.ash.drishti.lakeio.ParquetFooters.PLAIN).build(), stream)
+                    org.apache.parquet.ParquetReadOptions.builder(com.ash.lake.io.ParquetFooters.PLAIN).build(), stream)
                     .getBlocks().stream().mapToLong(b -> b.getRowCount()).sum();
         }
     }

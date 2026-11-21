@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,18 +13,18 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.lakeload;
+package com.ash.lake.load;
 
-import com.ash.drishti.deltalake.write.LakeWriter;
-import com.ash.drishti.iceberg.io.FileAccess;
-import com.ash.drishti.iceberg.manifest.DataFile;
-import com.ash.drishti.iceberg.types.NestedField;
-import com.ash.drishti.iceberg.types.Schema;
-import com.ash.drishti.iceberg.types.Type;
-import com.ash.drishti.iceberg.types.Values;
-import com.ash.drishti.iceberg.write.ParquetDataWriter;
-import com.ash.drishti.lakeio.LocalPaths;
-import com.ash.drishti.lakeio.S3Settings;
+import com.ash.lake.delta.write.LakeWriter;
+import com.ash.lake.iceberg.io.FileAccess;
+import com.ash.lake.iceberg.manifest.DataFile;
+import com.ash.lake.iceberg.types.NestedField;
+import com.ash.lake.iceberg.types.Schema;
+import com.ash.lake.iceberg.types.Type;
+import com.ash.lake.iceberg.types.Values;
+import com.ash.lake.iceberg.write.ParquetDataWriter;
+import com.ash.lake.io.LocalPaths;
+import com.ash.lake.io.S3Settings;
 import io.delta.kernel.DataWriteContext;
 import io.delta.kernel.Operation;
 import io.delta.kernel.Snapshot;
@@ -112,7 +112,7 @@ final class DeltaTarget implements TableTarget {
         this.path = cfg.tablePath();
         Map<String, String> s3 = cfg.target().storage();
         this.engine = LakeWriter.engineFor(path, s3);
-        this.io = new FileAccess(S3Settings.from(s3), com.ash.drishti.iceberg.io.Relocation.none(), null);
+        this.io = new FileAccess(S3Settings.from(s3), com.ash.lake.iceberg.io.Relocation.none(), null);
         if (LocalPaths.isLocal(path)) {
             Files.createDirectories(Path.of(LocalPaths.toLocal(path, LocalPaths.WINDOWS)));
         }

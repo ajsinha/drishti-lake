@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,18 +13,18 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.deltalake;
+package com.ash.lake.delta;
 
-import com.ash.drishti.lakeio.RangeCursor;
-import com.ash.drishti.lakeio.RangeReader;
-import com.ash.drishti.lakeio.Storage;
+import com.ash.lake.io.RangeCursor;
+import com.ash.lake.io.RangeReader;
+import com.ash.lake.io.Storage;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
  * The streams Kernel reads through, over a {@link RangeReader}: Kernel's
  * {@link io.delta.kernel.defaults.engine.fileio.SeekableInputStream} (commit JSON, deletion vectors). Parquet's
- * streams (data and checkpoint files) are the shared module's ({@link com.ash.drishti.lakeio.ParquetInput}). Each
+ * streams (data and checkpoint files) are the shared module's ({@link com.ash.lake.io.ParquetInput}). Each
  * stream is used by one thread.
  */
 final class Streams {

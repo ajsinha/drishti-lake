@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,11 +13,11 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.deltalake;
+package com.ash.lake.delta;
 
-import com.ash.drishti.lakeio.PageDecodeException;
-import com.ash.drishti.lakeio.ParquetFooters;
-import com.ash.drishti.lakeio.UnsupportedCodec;
+import com.ash.lake.io.PageDecodeException;
+import com.ash.lake.io.ParquetFooters;
+import com.ash.lake.io.UnsupportedCodec;
 import io.delta.kernel.data.ColumnarBatch;
 import io.delta.kernel.defaults.internal.parquet.ParquetFileReader.BatchReadSupport;
 import io.delta.kernel.defaults.internal.parquet.ParquetFileReader.RowRecordCollector;

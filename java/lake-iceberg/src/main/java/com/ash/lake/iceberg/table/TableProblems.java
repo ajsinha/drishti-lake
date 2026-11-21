@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.plugin.iceberg;
+package com.ash.lake.iceberg.table;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,19 +44,19 @@ final class TableProblems {
     /** Where a kind's table is now (a path-based lake: {@code <root>/<domain>/<kind>}), or null when that is not known (a catalog). */
     private final Function<String, String> whereNow;
     /** The connector's {@code relocate} (none when not set). */
-    private final com.ash.drishti.iceberg.io.Relocation relocate;
+    private final com.ash.lake.iceberg.io.Relocation relocate;
     private final Map<String, String> byKind = new ConcurrentHashMap<>();
     /** Per kind with a moved table: the {@code relocate} pair that reads it, so a summary of several moved together gives one. */
     private final Map<String, String> movedBy = new ConcurrentHashMap<>();
 
     TableProblems(String source, Function<String, String> whereNow) {
-        this(source, whereNow, com.ash.drishti.iceberg.io.Relocation.none());
+        this(source, whereNow, com.ash.lake.iceberg.io.Relocation.none());
     }
 
-    TableProblems(String source, Function<String, String> whereNow, com.ash.drishti.iceberg.io.Relocation relocate) {
+    TableProblems(String source, Function<String, String> whereNow, com.ash.lake.iceberg.io.Relocation relocate) {
         this.source = source;
         this.whereNow = whereNow;
-        this.relocate = relocate == null ? com.ash.drishti.iceberg.io.Relocation.none() : relocate;
+        this.relocate = relocate == null ? com.ash.lake.iceberg.io.Relocation.none() : relocate;
     }
 
     /** Kinds whose table names files that are not there (moved, copied, or files removed). */
@@ -64,7 +64,7 @@ final class TableProblems {
 
     /**
      * Reading the kind's table failed with {@code e}: recorded, and logged in one line when the kind's problem is new or changed. Returns
-     * the failure to give the reader: for a table whose files are not there, {@link com.ash.drishti.api.UnreadableData} saying so in words
+     * the failure to give the reader: for a table whose files are not there, {@link com.ash.lake.hostcompat.UnreadableData} saying so in words
      * without a path (the 502 says what is wrong; Admin → Health has the folders and the fix), else {@code e} itself.
      */
     Throwable failed(String kind, Throwable e) {
@@ -75,7 +75,7 @@ final class TableProblems {
         }
         if (missing(e).isPresent()) {
             missingFiles.add(kind);
-            return new com.ash.drishti.api.UnreadableData(movedWords(kind), e);
+            return new com.ash.lake.hostcompat.UnreadableData(movedWords(kind), e);
         }
         missingFiles.remove(kind);
         return e;
@@ -161,9 +161,9 @@ final class TableProblems {
             if (m.find()) {
                 String old = m.group(1);
                 String now = whereNow.apply(kind);
-                String shownOld = com.ash.drishti.iceberg.io.Relocation.shown(old);
+                String shownOld = com.ash.lake.iceberg.io.Relocation.shown(old);
                 // the pair to copy: the folders where the two differ, in the plain form the setting reads (QA3B-04)
-                String pair = now == null ? null : com.ash.drishti.iceberg.io.Relocation.suggest(old, now).orElse(null);
+                String pair = now == null ? null : com.ash.lake.iceberg.io.Relocation.suggest(old, now).orElse(null);
                 if (pair != null && !relocate.targets(old)) {
                     movedBy.put(kind, pair);
                 } else {

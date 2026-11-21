@@ -1,5 +1,5 @@
 /*
- * Project Drishti · Any data. Any domain. One grammar.
+ * Drishti Lake · Delta, Iceberg and plain files, loaded and read as one lake.
  *
  * Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>.
  * All rights reserved.
@@ -13,13 +13,13 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.drishti.iceberg.catalog;
+package com.ash.lake.iceberg.catalog;
 
-import com.ash.drishti.iceberg.io.DrishtiFileIO;
-import com.ash.drishti.iceberg.io.FileAccess;
-import com.ash.drishti.lakeio.FileEntry;
-import com.ash.drishti.lakeio.S3Storage;
-import com.ash.drishti.lakeio.Storage;
+import com.ash.lake.iceberg.io.DrishtiFileIO;
+import com.ash.lake.iceberg.io.FileAccess;
+import com.ash.lake.io.FileEntry;
+import com.ash.lake.io.S3Storage;
+import com.ash.lake.io.Storage;
 import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -225,7 +225,7 @@ public final class PathTableOps implements TableOperations {
         }
         s.put(io.resolve(metadataDir() + "/version-hint.text"), String.valueOf(v).getBytes(StandardCharsets.UTF_8));
         // Hadoop's local file system keeps a checksum beside the hint it wrote; a stale one makes a Hadoop reader fail its check, so it goes
-        if ("file".equals(com.ash.drishti.lakeio.LocalPaths.scheme(location))) {
+        if ("file".equals(com.ash.lake.io.LocalPaths.scheme(location))) {
             s.delete(io.resolve(metadataDir() + "/.version-hint.text.crc"));
         }
         if (Boolean.parseBoolean(md.property("write.metadata.delete-after-commit.enabled", "false"))) {
@@ -254,7 +254,7 @@ public final class PathTableOps implements TableOperations {
         if (exclusive == null) {
             exclusive = s instanceof S3Storage s3 ? s3.exclusiveCreates(io.resolve(metadataDir())) : s.exclusiveCreates();
             if (!exclusive) {
-                System.getLogger("com.ash.drishti.iceberg").log(System.Logger.Level.WARNING,
+                System.getLogger("com.ash.lake.iceberg").log(System.Logger.Level.WARNING,
                         "drishti-iceberg: the object store of {0} does not honour conditional writes (If-None-Match): the table is single-writer;"
                                 + " two writers committing at once could lose a commit", location);
             }
