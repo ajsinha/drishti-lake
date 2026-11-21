@@ -1207,6 +1207,7 @@ com.ash.lake.spi.Column :: public final boolean com.ash.lake.spi.Column.equals(j
 com.ash.lake.spi.Column :: public final int com.ash.lake.spi.Column.hashCode()
 com.ash.lake.spi.Column :: public final java.lang.String com.ash.lake.spi.Column.toString()
 com.ash.lake.spi.Column :: public java.lang.String com.ash.lake.spi.Column.name()
+com.ash.lake.spi.ColumnType :: public boolean com.ash.lake.spi.ColumnType.vector()
 com.ash.lake.spi.ColumnType :: public static com.ash.lake.spi.ColumnType com.ash.lake.spi.ColumnType.valueOf(java.lang.String)
 com.ash.lake.spi.ColumnType :: public static com.ash.lake.spi.ColumnType[] com.ash.lake.spi.ColumnType.values()
 com.ash.lake.spi.ColumnType :: public static final com.ash.lake.spi.ColumnType com.ash.lake.spi.ColumnType.BINARY
@@ -1214,6 +1215,7 @@ com.ash.lake.spi.ColumnType :: public static final com.ash.lake.spi.ColumnType c
 com.ash.lake.spi.ColumnType :: public static final com.ash.lake.spi.ColumnType com.ash.lake.spi.ColumnType.DATE
 com.ash.lake.spi.ColumnType :: public static final com.ash.lake.spi.ColumnType com.ash.lake.spi.ColumnType.DOUBLE
 com.ash.lake.spi.ColumnType :: public static final com.ash.lake.spi.ColumnType com.ash.lake.spi.ColumnType.DOUBLE_LIST
+com.ash.lake.spi.ColumnType :: public static final com.ash.lake.spi.ColumnType com.ash.lake.spi.ColumnType.FLOAT_LIST
 com.ash.lake.spi.ColumnType :: public static final com.ash.lake.spi.ColumnType com.ash.lake.spi.ColumnType.INT
 com.ash.lake.spi.ColumnType :: public static final com.ash.lake.spi.ColumnType com.ash.lake.spi.ColumnType.LONG
 com.ash.lake.spi.ColumnType :: public static final com.ash.lake.spi.ColumnType com.ash.lake.spi.ColumnType.OTHER
@@ -1479,7 +1481,8 @@ com.ash.lake.spi.WriteSpec :: public java.util.Map<java.lang.String, java.lang.S
 com.ash.lake.spi.WriteSpec :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.spi.WriteSpec.slice()
 com.ash.lake.spi.WriteSpec :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.spi.WriteSpec.storage()
 com.ash.lake.spi.WriteSpec$FileLayout :: public boolean com.ash.lake.spi.WriteSpec$FileLayout.byteStreamSplit()
-com.ash.lake.spi.WriteSpec$FileLayout :: public com.ash.lake.spi.WriteSpec$FileLayout(java.lang.String,long,java.lang.String,boolean)
+com.ash.lake.spi.WriteSpec$FileLayout :: public boolean com.ash.lake.spi.WriteSpec$FileLayout.float32Vectors()
+com.ash.lake.spi.WriteSpec$FileLayout :: public com.ash.lake.spi.WriteSpec$FileLayout(java.lang.String,long,java.lang.String,boolean,boolean)
 com.ash.lake.spi.WriteSpec$FileLayout :: public final boolean com.ash.lake.spi.WriteSpec$FileLayout.equals(java.lang.Object)
 com.ash.lake.spi.WriteSpec$FileLayout :: public final int com.ash.lake.spi.WriteSpec$FileLayout.hashCode()
 com.ash.lake.spi.WriteSpec$FileLayout :: public final java.lang.String com.ash.lake.spi.WriteSpec$FileLayout.toString()

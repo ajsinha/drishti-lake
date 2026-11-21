@@ -38,12 +38,15 @@ class TableError(Exception):
 
 
 def _type(kind: str):
-    return {"double": pa.float64(), "list": pa.list_(pa.string()), "vector": pa.list_(pa.float64())}.get(kind, pa.string())
+    return {"double": pa.float64(), "list": pa.list_(pa.string()), "vector": pa.list_(pa.float64()),
+            "vector32": pa.list_(pa.float32())}.get(kind, pa.string())
 
 
 def _kind_of(t: pa.DataType) -> str:
     if pa.types.is_list(t) or pa.types.is_large_list(t):
-        return "list" if pa.types.is_string(t.value_type) or pa.types.is_large_string(t.value_type) else "vector"
+        if pa.types.is_string(t.value_type) or pa.types.is_large_string(t.value_type):
+            return "list"
+        return "vector32" if pa.types.is_float32(t.value_type) else "vector"
     if pa.types.is_floating(t):
         return "double"
     if pa.types.is_date(t):
@@ -54,7 +57,8 @@ def _kind_of(t: pa.DataType) -> str:
 class Writer:
     """The table of one load (module doc)."""
 
-    def __init__(self, path: str, plan: rowrule.Plan, kinds: list[str], vectors: list[str], batch_id: str | None, appends: bool):
+    def __init__(self, path: str, plan: rowrule.Plan, kinds: list[str], vectors: list[str], batch_id: str | None, appends: bool,
+                 float32: bool = False):
         from deltalake import DeltaTable
         self.path = path
         self.plan = plan
@@ -64,7 +68,7 @@ class Writer:
         wanted = [("id", "string"), ("doc", "string"), ("business_date", "date")]
         wanted += [(rowrule.column_name(p), "string") for p in plan.partition_by]
         wanted += [(rowrule.column_name(p), k) for p, k in zip(plan.promote, kinds)]
-        wanted += [(rowrule.column_name(v), "vector") for v in vectors]
+        wanted += [(rowrule.column_name(v), "vector32" if float32 else "vector") for v in vectors]   # target.layout.vector-type
         wanted += [(LOAD_ID, "string"), (SOURCE_FILE, "string")]
         self.table = DeltaTable(path) if DeltaTable.is_deltatable(path) else None
         self.left_out = []
@@ -83,7 +87,7 @@ class Writer:
         self.schema = pa.schema([pa.field(n, _type(k) if k != "date" else pa.date32(), True) for n, k in self.columns])
 
     def column_types(self) -> dict:
-        return {n: k for n, k in self.columns}
+        return {n: "vector" if k == "vector32" else k for n, k in self.columns}
 
     def appended(self, day: date) -> bool:
         """Whether this batch's append of ``day`` is committed already."""
@@ -118,10 +122,10 @@ class Writer:
             elif name in promote_index:
                 i = promote_index[name]
                 is_id = rowrule.is_id_field(self.plan.promote[i], self.plan.key)
-                data[name] = [rowrule.cell(r.promoted[i], kind if kind != "vector" else "none", is_id) for r in ordered]
+                data[name] = [rowrule.cell(r.promoted[i], kind if kind not in ("vector", "vector32") else "none", is_id) for r in ordered]
             elif name in vector_index:
                 i = vector_index[name]
-                data[name] = [r.vectors[i] for r in ordered] if kind == "vector" else [None] * len(ordered)
+                data[name] = [r.vectors[i] for r in ordered] if kind in ("vector", "vector32") else [None] * len(ordered)
             else:
                 data[name] = [None] * len(ordered)                 # a column of the table this load does not give
         if polars_installed():

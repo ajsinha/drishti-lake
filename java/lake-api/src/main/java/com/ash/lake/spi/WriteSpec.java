@@ -72,7 +72,8 @@ public record WriteSpec(LakeRuntime runtime, String format, String path, String 
 
     /**
      * The data files' encoding: the codec ({@code auto}: the format's default), row group bytes (0: the format's default), the vectors'
-     * codec and whether their doubles are written byte-stream-split.
+     * codec, whether their doubles are written byte-stream-split, and whether a new table's vectors are float32 ({@code list<float>},
+     * {@code target.layout.vector-type: float32}; an existing table keeps its own element type).
      */
-    public record FileLayout(String compression, long rowGroupBytes, String vectorCompression, boolean byteStreamSplit) {}
+    public record FileLayout(String compression, long rowGroupBytes, String vectorCompression, boolean byteStreamSplit, boolean float32Vectors) {}
 }

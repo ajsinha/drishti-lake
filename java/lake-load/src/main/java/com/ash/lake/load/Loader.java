@@ -489,7 +489,7 @@ final class Loader {
                 t.appends(), t.batchId(), cfg.source().slice(), plan.partition.stream().map(RowPlan::column).toList(),
                 plan.promoted.stream().map(RowPlan.Promoted::column).toList(), plan.vectors.stream().map(RowPlan.Vector::column).toList(),
                 plan.sortNames, plan.sortedById(), RowPlan.loadColumns, ids,
-                new WriteSpec.FileLayout(l.compression(), l.rowGroupBytes(), l.vectorCompression(), l.byteStreamSplit()));
+                new WriteSpec.FileLayout(l.compression(), l.rowGroupBytes(), l.vectorCompression(), l.byteStreamSplit(), l.float32Vectors()));
     }
 
     /**

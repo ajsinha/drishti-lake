@@ -310,7 +310,8 @@ class Loader:
             return
         if rep.accepted == 0:
             raise LoadError("no document could be loaded (every one was rejected: see rejects)")
-        w = delta.Writer(cfg.table_path, self.plan, types.kinds(), list(self.plan.vectors), cfg.batch_id, cfg.mode == "append")
+        w = delta.Writer(cfg.table_path, self.plan, types.kinds(), list(self.plan.vectors), cfg.batch_id, cfg.mode == "append",
+                         cfg.float32)
         rep.columns, rep.left_out = w.column_types(), w.left_out
         for day in sorted(by_date):
             d = rowrule.day_of(day)

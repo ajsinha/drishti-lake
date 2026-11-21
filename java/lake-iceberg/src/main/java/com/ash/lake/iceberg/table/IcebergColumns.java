@@ -53,7 +53,7 @@ public final class IcebergColumns {
             case BINARY, FIXED -> ColumnType.BINARY;
             case LIST -> {
                 Type e = ((Type.ListType) t).element();
-                yield e.id() == Type.Id.STRING ? ColumnType.STRING_LIST : e.id() == Type.Id.DOUBLE || e.id() == Type.Id.FLOAT ? ColumnType.DOUBLE_LIST
+                yield e.id() == Type.Id.STRING ? ColumnType.STRING_LIST : e.id() == Type.Id.DOUBLE ? ColumnType.DOUBLE_LIST : e.id() == Type.Id.FLOAT ? ColumnType.FLOAT_LIST
                         : ColumnType.OTHER;
             }
             default -> ColumnType.OTHER;

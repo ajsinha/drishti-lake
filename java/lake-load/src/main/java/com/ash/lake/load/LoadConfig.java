@@ -111,7 +111,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
      * boundary (the sort columns but the id) once a file holds a quarter of its size.
      */
     record Layout(List<String> sortBy, long fileBytes, long rowGroupBytes, String compression, String vectorCompression, boolean byteStreamSplit,
-            boolean shardAligned) {}
+            boolean shardAligned, boolean float32Vectors) {}
 
     /** Threads, and how large a range of a plain file one reader takes. */
     record Parallel(int readers, int parsers, int writers, long splitBytes) {}
@@ -143,7 +143,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
             "target", Set.of("format", "path", "lake", "domain", "kind", "table", "storage-options", "mode", "properties", "iceberg", "layout",
                     "batch-id", "default-mode"),
             "target.layout", Set.of("sort-by", "file-size-mb", "row-group-mb", "compression", "vector-compression", "byte-stream-split",
-                    "shard-aligned"),
+                    "shard-aligned", "vector-type"),
             "parallel", Set.of("readers", "parsers", "writers", "queue-mb", "split-mb"),
             "memory", Set.of("budget-mb", "sort-buffer-mb", "spill-dir", "check-spill-space"),
             "rejects", Set.of("file", "max-pct", "keep"),
@@ -354,6 +354,15 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         }
     }
 
+    /** {@code target.layout.vector-type}: {@code double} (the default) or {@code float32}; whether a new table's vectors are float32. */
+    private static boolean vectorType(String v) {
+        return switch (v.strip().toLowerCase(Locale.ROOT)) {
+            case "double", "float64" -> false;
+            case "float32", "float" -> true;
+            default -> throw new IllegalArgumentException("target.layout.vector-type " + v + ": give double (the default) or float32");
+        };
+    }
+
     private static LoadConfig single(com.ash.lake.LakeRuntime rt, ObjectNode tree) {
         Reader r = new Reader(rt);
         JsonNode s = tree.path("source");
@@ -534,7 +543,8 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         List<String> sortBy = l.has("sort-by") || pack == null ? r.list(l, "sort-by") : pack.sortBy();      // the pack's layout.<kind>.sort-by when not set
         Layout layout = new Layout(sortBy, mb(r, l, "file-size-mb", 256), l.has("row-group-mb") && !r.text(l, "row-group-mb", "auto").equals("auto")
                 ? mb(r, l, "row-group-mb", 1) : 0, r.text(l, "compression", "auto").toLowerCase(Locale.ROOT),
-                r.text(l, "vector-compression", "zstd").toLowerCase(Locale.ROOT), r.bool(l, "byte-stream-split", true), r.bool(l, "shard-aligned", true));
+                r.text(l, "vector-compression", "zstd").toLowerCase(Locale.ROOT), r.bool(l, "byte-stream-split", true), r.bool(l, "shard-aligned", true),
+                vectorType(r.text(l, "vector-type", "double")));
         String domain = r.text(t, "domain", entry != null ? entry.domain() : pack == null ? null : pack.domain());
         String table = r.text(t, "table", entry != null ? entry.folder() : pack == null ? null : pack.table());
         String path = r.text(t, "path", null);

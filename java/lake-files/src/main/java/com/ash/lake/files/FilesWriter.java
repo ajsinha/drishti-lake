@@ -68,7 +68,8 @@ final class FilesWriter implements TableWriter {
         for (int i = 0; i < c.promoted().size(); i++) {
             wanted.add(new Column(c.promoted().get(i), c.list()[i] ? ColumnType.STRING_LIST : c.numeric()[i] ? ColumnType.DOUBLE : ColumnType.STRING));
         }
-        spec.vectors().forEach(v -> wanted.add(new Column(v, ColumnType.DOUBLE_LIST)));
+        ColumnType vector = spec.layout().float32Vectors() ? ColumnType.FLOAT_LIST : ColumnType.DOUBLE_LIST;
+        spec.vectors().forEach(v -> wanted.add(new Column(v, vector)));
         if (spec.loadColumns()) {
             wanted.add(new Column(LOAD_ID, ColumnType.STRING));
             wanted.add(new Column(SOURCE_FILE, ColumnType.STRING));
@@ -162,7 +163,7 @@ final class FilesWriter implements TableWriter {
             int k = index[i];
             Object v = switch (kind[i]) {
                 case 'p' -> row.partition(k) == null || row.partition(k).isEmpty() ? null : row.partition(k);   // empty is null, as Delta's
-                case 'v' -> vector(row.vector(k));
+                case 'v' -> vector(row.vector(k), c.type() == ColumnType.FLOAT_LIST);
                 case 'l' -> text(row.loadId());
                 case 's' -> text(row.sourceFile());
                 case 'c' -> c.type() == ColumnType.DOUBLE ? PromotedValues.number(row, k)
@@ -176,13 +177,14 @@ final class FilesWriter implements TableWriter {
         return out;
     }
 
-    private static List<Double> vector(double[] v) {
+    /** A vector's elements (NaN: null); a float32 column's rounded to float as Parquet's {@code float} holds them, widened exactly. */
+    private static List<Double> vector(double[] v, boolean float32) {
         if (v == null) {
             return null;
         }
         List<Double> out = new ArrayList<>(v.length);
         for (double d : v) {
-            out.add(Double.isNaN(d) ? null : d);
+            out.add(Double.isNaN(d) ? null : float32 ? (double) (float) d : d);
         }
         return out;
     }
@@ -254,7 +256,7 @@ final class FilesWriter implements TableWriter {
                 case DOUBLE -> "double";
                 case DATE -> "date";
                 case STRING_LIST -> "list";
-                case DOUBLE_LIST -> "vector";
+                case DOUBLE_LIST, FLOAT_LIST -> "vector";
                 default -> "string";
             });
         }

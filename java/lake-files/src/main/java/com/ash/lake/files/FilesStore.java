@@ -323,7 +323,7 @@ public final class FilesStore implements TableStore {
                 v[i] = n == null || n.isNull() ? null : switch (all.get(i).type()) {
                     case DOUBLE -> n.asDouble();
                     case STRING_LIST -> { List<String> l = new ArrayList<>(); n.forEach(x -> l.add(x.asText())); yield l; }
-                    case DOUBLE_LIST -> { List<Double> l = new ArrayList<>(); n.forEach(x -> l.add(x.isNull() ? null : x.asDouble())); yield l; }
+                    case DOUBLE_LIST, FLOAT_LIST -> { List<Double> l = new ArrayList<>(); n.forEach(x -> l.add(x.isNull() ? null : x.asDouble())); yield l; }
                     default -> n.isTextual() ? n.asText() : n.toString();
                 };
             }

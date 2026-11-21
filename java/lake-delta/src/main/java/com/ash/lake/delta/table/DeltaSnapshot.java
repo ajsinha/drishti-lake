@@ -82,7 +82,7 @@ final class DeltaSnapshot implements TableSnapshot {
         Map<String, String> p = new LinkedHashMap<>();
         Set<String> v = new LinkedHashSet<>();
         for (var c : columns.all()) {
-            if (c.type() == ColumnType.DOUBLE_LIST) {
+            if (c.type().vector()) {
                 v.add(c.name());
             } else if (!BASE.contains(c.name()) && !c.name().equals(table.idColumn())) {
                 p.put(c.name().replace("__", "."), c.name());

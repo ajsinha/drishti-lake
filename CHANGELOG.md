@@ -5,6 +5,11 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **float32 vectors on every store**: `target.layout.vector-type: float32` (default `double`; Java and Python loaders) makes a new
+  table's vectors `list<float>` (Delta, Iceberg; the files store's column type `float_list`, its values rounded to float as Parquet holds
+  them); an existing table keeps its own element type. `ColumnType.FLOAT_LIST` (and `ColumnType.vector()`) in the SPI: Delta and Iceberg
+  report a float32 vector as such. Case `read/float32-and-null-vector` (exact widening, a null and an empty vector, a null element, an
+  append keeping float32) equal on every store and row: RA-S9's 20 cases complete.
 - **The newest load, one rule (`com.ash.lake.rows.LoadOrder`)**: two loads are ordered by their run's time; runs that started in the
   same millisecond by their commit (Delta: the version that added the file, read through the Kernel's commit range only then; Iceberg:
   the file's data sequence number; files: the line's place), never by the process id's text (`-77-9` sorted after `-77-10`); then by

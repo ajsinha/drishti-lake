@@ -70,7 +70,7 @@ Built (decisions RA-1 to RA-12 accepted): RA-S0 (section 10 checked, today's num
 `IcebergReadDeletesTest`), RA-S6 Iceberg `partition-by` (P1), RA-S7 pushdown and `ScanStats` (`Pruning`, one rule); the files store's
 read by id through a per-snapshot id index; Delta's newest-load order no longer depends on the load id's length, and loads of one millisecond go by commit order on every store (`LoadOrder`). 14 `read/*` cases and
 `layout/partition-by-beside-the-date` equal on every store and the memory rows; I2 (Iceberg row-group pieces) and of RA-S9 the cases
-(19 of 20: `float32-and-null-vector` waits for a loader setting that writes float32 vectors on every store), `TwoRuntimesTest` and
+(20 of 20; `float32-and-null-vector` with the loader's `target.layout.vector-type: float32` on every store), `TwoRuntimesTest` and
 `StartOnFewCoresTest`, `docs/BENCHMARK.md`. Open: Delta's and the files store's bench rows on a quiet machine (load under 6); the old
 entry points (`LakeStore`, `NewTables`: tests in `lake-load` still use them; the table packages are outside the API surface) after
 G4; RA-S8 last (RA-9, its half-page design first).

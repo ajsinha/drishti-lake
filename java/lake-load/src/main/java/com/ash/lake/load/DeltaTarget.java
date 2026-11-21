@@ -136,7 +136,7 @@ final class DeltaTarget implements TableWriter {
                     : c.numeric()[i] ? DoubleType.DOUBLE : StringType.STRING, true);
         }
         for (String v : spec.vectors()) {
-            wanted = wanted.add(v, new ArrayType(DoubleType.DOUBLE, true), true);
+            wanted = wanted.add(v, new ArrayType(spec.layout().float32Vectors() ? FloatType.FLOAT : DoubleType.DOUBLE, true), true);
         }
         if (spec.loadColumns()) {
             wanted = wanted.add(RowPlan.LOAD_ID, StringType.STRING, true).add(RowPlan.SOURCE_FILE, StringType.STRING, true);

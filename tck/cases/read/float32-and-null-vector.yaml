@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# a table whose vectors are float32 (target.layout.vector-type: float32: list<float>): the values are rounded to float once, on every
+# store, and read widened exactly; a row without the vector, or with an empty one, reads as a null vector (length -1) or an empty one;
+# a null element is NaN; an append keeps the table's own element type
+inputs:
+  pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"FX","SCENARIO_PV":[0.1,-2.5,1e-8,3.4028234663852886e38,1234567.891]}
+    {"POSITION_ID":"P-2","DESK":"FX"}
+    {"POSITION_ID":"P-3","DESK":"RATES","SCENARIO_PV":[]}
+    {"POSITION_ID":"P-4","DESK":"RATES","SCENARIO_PV":[1.0000001,null,-0.3333333333333333]}
+  more/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-5","DESK":"FX","SCENARIO_PV":[0.7,0.2]}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, layout: {vector-type: float32}}
+  more: |
+    source: {files: '${in}/more/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: append}
+steps:
+  - load: {args: [--run-id, 20261121T140000.000-1]}
+  - load: {config: more, args: [--run-id, 20261121T140001.000-1]}
+  - store: [read-vectors, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', SCENARIO_PV, DESK]
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t']
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']

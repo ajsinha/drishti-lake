@@ -22,6 +22,13 @@ public enum ColumnType {
     STRING_LIST,
     /** {@code list<double>}: a vector. */
     DOUBLE_LIST,
+    /** {@code list<float>}: a float32 vector (the loader's {@code target.layout.vector-type: float32}); read widened to doubles exactly. */
+    FLOAT_LIST,
     /** Anything else the format holds (a nested structure): read as its text. */
-    OTHER
+    OTHER;
+
+    /** Whether the column is a vector ({@link #DOUBLE_LIST} or {@link #FLOAT_LIST}). */
+    public boolean vector() {
+        return this == DOUBLE_LIST || this == FLOAT_LIST;
+    }
 }

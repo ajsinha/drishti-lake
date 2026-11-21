@@ -99,7 +99,7 @@ public final class DeltaRows {
         }
         if (t instanceof ArrayType a) {
             DataType e = a.getElementType();
-            return e instanceof StringType ? ColumnType.STRING_LIST : e instanceof DoubleType || e instanceof FloatType ? ColumnType.DOUBLE_LIST
+            return e instanceof StringType ? ColumnType.STRING_LIST : e instanceof DoubleType ? ColumnType.DOUBLE_LIST : e instanceof FloatType ? ColumnType.FLOAT_LIST
                     : ColumnType.OTHER;
         }
         return ColumnType.OTHER;
