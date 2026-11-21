@@ -66,12 +66,6 @@ public final class ConnectorLake {
         return settings.keySet().stream().filter(ConnectorLake::lakeKey).sorted().toList();
     }
 
-    /** Whether the settings describe the tables by an explicit path ({@code root:} and the rest) rather than by a lake's name. */
-    public static boolean legacy(Map<String, String> settings) {
-        return !settings.containsKey(LAKE) && settings.keySet().stream().anyMatch(k -> k.equals("root") || k.startsWith("table.")
-                || k.startsWith("layout.") && !k.endsWith(".type-ahead"));
-    }
-
     /**
      * The settings the plugin is given: unchanged for a connector of another plugin; for a Delta or Iceberg connector that names a lake,
      * its own reading settings plus what the lake file says of its kinds.

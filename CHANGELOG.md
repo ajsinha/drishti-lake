@@ -5,6 +5,9 @@ Entries are written per release; unreleased work is listed first.
 
 ## Unreleased (0.9.0): the move from Drishti
 
+- **Migration code removed (G4 shims)**: no customers, so no compatibility code. `LakesCli migrate-config` and `LakeFiles.migrate` /
+  `adoptDemo` / `demoRoot` (the rewrite of old connector files into lake files), `ConnectorLake.legacy` and its `LakeCheck` note are gone;
+  `api-surface.txt` shrinks by the same names. A connector's explicit form (`root`, `domain`, `table.<kind>`) stays: it is a way to name tables, not a leftover.
 - **Duplicate leftovers (i7b audit T10, E-tools)**: the guards' header, line-cap and API-surface checks are `drishti-tools`' published
   `tools-guards` test jar (`GuardFiles`, `HeaderAndLineCap`, `ApiSurface`), not copies in `lake-guards`; the files store's two temporary
   files (`columns-*.part`, `content-*.part`) come from a `tools-files` `TempFolder` made inside the table's own log folder (the same file system as

@@ -36,7 +36,6 @@ import java.util.stream.Stream;
  * dump           [--dir D]                                every lake and table (environment references resolved)
  * table          [--dir D] --lake L --kind K [--domain X] [--table T]  one table, or the refusal a writer gets when the lake file lacks it
  * (the checks of docs/architecture/DATA_ARCHITECTURE.md section 6 against the tables on disk: com.ash.lake.load.LakeCheck, which reads them through the official libraries)
- * migrate-config [--dir D] --connectors C [--write]       lake files from old connector files; a dry run unless --write
  * add-entry      [--dir D] --lake L --pack P --kind K [--connector N]   a pack's recommended entry copied into the lake file once
  * pack-tables    [--dir D] --lake L --packs P1,P2 [--write]   the tables the packs' connectors read from L that its file lacks; with
  *                --write added at the end of its tables, every other line kept (how config/lakes/demo.yaml is kept complete)
@@ -78,7 +77,7 @@ public final class LakesCli {
 
     static Object command(com.ash.lake.LakeRuntime rt, String[] args) throws java.io.IOException {
         if (args.length == 0) {
-            throw new IllegalArgumentException("give a command: dump, table, migrate-config, add-entry or pack-tables (check: com.ash.lake.load.LakeCheck)");
+            throw new IllegalArgumentException("give a command: dump, table, add-entry or pack-tables (check: com.ash.lake.load.LakeCheck)");
         }
         Map<String, String> o = options(args);
         Path dir = o.containsKey("dir") ? Path.of(o.get("dir")) : Lakes.dir(rt);
@@ -96,21 +95,6 @@ public final class LakesCli {
                 m.put("storage", l.storage());
                 m.put("catalog", l.catalog());
                 return m;
-            }
-            case "migrate-config" -> {
-                LakeFiles.Migration m = LakeFiles.migrate(rt, Path.of(need(o, "connectors")), dir, o.containsKey("write"));
-                Map<String, Object> r = new LinkedHashMap<>();
-                r.put("written", o.containsKey("write"));
-                r.put("lake-files", m.lakeFiles().keySet().stream().map(Path::toString).toList());
-                r.put("connector-files", m.connectorFiles().keySet().stream().map(Path::toString).toList());
-                r.put("notes", m.notes());
-                if (!o.containsKey("write")) {
-                    Map<String, String> texts = new LinkedHashMap<>();
-                    m.lakeFiles().forEach((p, t) -> texts.put(p.toString(), t));
-                    m.connectorFiles().forEach((p, t) -> texts.put(p.toString(), t));
-                    r.put("texts", texts);
-                }
-                return r;
             }
             case "add-entry" -> {
                 String lake = need(o, "lake");
@@ -135,7 +119,7 @@ public final class LakesCli {
                 return Map.of("lake", lake, "file", file.toString(), "tables", wanted.size(), "written", o.containsKey("write") && !added.isEmpty(),
                         "missing", added);
             }
-            default -> throw new IllegalArgumentException("unknown command " + args[0] + ": dump, table, migrate-config, add-entry or pack-tables (check: com.ash.lake.load.LakeCheck)");
+            default -> throw new IllegalArgumentException("unknown command " + args[0] + ": dump, table, add-entry or pack-tables (check: com.ash.lake.load.LakeCheck)");
         }
     }
 

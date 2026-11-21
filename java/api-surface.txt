@@ -115,7 +115,6 @@ class public static final class com.ash.lake.LakeOptions$Builder
 class public static final class com.ash.lake.LakeRuntime$Builder
 class public static final class com.ash.lake.inbox.Routes$Unrouted extends java.lang.Exception
 class public static final enum com.ash.lake.memory.Retention$Sink
-class public static final record com.ash.lake.config.LakeFiles$Migration
 class public static final record com.ash.lake.config.PackEntry$PackTable
 class public static final record com.ash.lake.inbox.Cycle$FileOutcome
 class public static final record com.ash.lake.inbox.Cycle$Report
@@ -244,7 +243,6 @@ com.ash.lake.PersistedNames :: public static java.lang.String com.ash.lake.Persi
 com.ash.lake.PersistedNames :: public static java.lang.String com.ash.lake.PersistedNames.get(java.util.Map<java.lang.String, java.lang.String>,java.lang.String,java.lang.String)
 com.ash.lake.PersistedNames :: public static java.lang.String com.ash.lake.PersistedNames.key(java.lang.String)
 com.ash.lake.config.ConnectorLake :: public static boolean com.ash.lake.config.ConnectorLake.lakeKey(java.lang.String)
-com.ash.lake.config.ConnectorLake :: public static boolean com.ash.lake.config.ConnectorLake.legacy(java.util.Map<java.lang.String, java.lang.String>)
 com.ash.lake.config.ConnectorLake :: public static final java.lang.String com.ash.lake.config.ConnectorLake.LAKE
 com.ash.lake.config.ConnectorLake :: public static final java.lang.String com.ash.lake.config.ConnectorLake.LAKE_NAME
 com.ash.lake.config.ConnectorLake :: public static final java.lang.String com.ash.lake.config.ConnectorLake.TABLES
@@ -276,21 +274,10 @@ com.ash.lake.config.Lake :: public java.util.Optional<com.ash.lake.config.LakeTa
 com.ash.lake.config.Lake :: public static final java.lang.String com.ash.lake.config.Lake.MEMORY_SCHEME
 com.ash.lake.config.LakeFiles :: public static boolean com.ash.lake.config.LakeFiles.addTable(java.nio.file.Path,com.ash.lake.config.LakeTable) throws java.io.IOException
 com.ash.lake.config.LakeFiles :: public static boolean com.ash.lake.config.LakeFiles.create(java.nio.file.Path,java.lang.String,java.util.List<com.ash.lake.config.LakeTable>,java.lang.String) throws java.io.IOException
-com.ash.lake.config.LakeFiles :: public static boolean com.ash.lake.config.LakeFiles.demoRoot(java.lang.String)
-com.ash.lake.config.LakeFiles :: public static com.ash.lake.config.LakeFiles$Migration com.ash.lake.config.LakeFiles.adoptDemo(com.ash.lake.LakeRuntime,java.nio.file.Path,java.nio.file.Path,boolean) throws java.io.IOException
-com.ash.lake.config.LakeFiles :: public static com.ash.lake.config.LakeFiles$Migration com.ash.lake.config.LakeFiles.adoptDemo(com.ash.lake.LakeRuntime,java.nio.file.Path,java.nio.file.Path,boolean,java.util.function.BinaryOperator<java.lang.String>) throws java.io.IOException
-com.ash.lake.config.LakeFiles :: public static com.ash.lake.config.LakeFiles$Migration com.ash.lake.config.LakeFiles.migrate(com.ash.lake.LakeRuntime,java.nio.file.Path,java.nio.file.Path,boolean) throws java.io.IOException
 com.ash.lake.config.LakeFiles :: public static java.util.List<java.lang.String> com.ash.lake.config.LakeFiles.addEntries(java.nio.file.Path,java.util.Map<java.lang.String, ? extends com.fasterxml.jackson.databind.JsonNode>) throws java.io.IOException
 com.ash.lake.config.LakeFiles :: public static java.util.List<java.lang.String> com.ash.lake.config.LakeFiles.missing(java.nio.file.Path,java.util.Map<java.lang.String, ? extends com.fasterxml.jackson.databind.JsonNode>) throws java.io.IOException
 com.ash.lake.config.LakeFiles :: public static java.util.List<java.nio.file.Path> com.ash.lake.config.LakeFiles.packFiles(com.ash.lake.LakeRuntime,java.util.List<java.nio.file.Path>) throws java.io.IOException
 com.ash.lake.config.LakeFiles :: public static java.util.Map<java.lang.String, com.fasterxml.jackson.databind.JsonNode> com.ash.lake.config.LakeFiles.packTables(com.ash.lake.LakeRuntime,java.util.List<java.nio.file.Path>,java.lang.String) throws java.io.IOException
-com.ash.lake.config.LakeFiles$Migration :: public com.ash.lake.config.LakeFiles$Migration(java.util.Map<java.nio.file.Path, java.lang.String>,java.util.Map<java.nio.file.Path, java.lang.String>,java.util.List<java.lang.String>)
-com.ash.lake.config.LakeFiles$Migration :: public final boolean com.ash.lake.config.LakeFiles$Migration.equals(java.lang.Object)
-com.ash.lake.config.LakeFiles$Migration :: public final int com.ash.lake.config.LakeFiles$Migration.hashCode()
-com.ash.lake.config.LakeFiles$Migration :: public final java.lang.String com.ash.lake.config.LakeFiles$Migration.toString()
-com.ash.lake.config.LakeFiles$Migration :: public java.util.List<java.lang.String> com.ash.lake.config.LakeFiles$Migration.notes()
-com.ash.lake.config.LakeFiles$Migration :: public java.util.Map<java.nio.file.Path, java.lang.String> com.ash.lake.config.LakeFiles$Migration.connectorFiles()
-com.ash.lake.config.LakeFiles$Migration :: public java.util.Map<java.nio.file.Path, java.lang.String> com.ash.lake.config.LakeFiles$Migration.lakeFiles()
 com.ash.lake.config.LakeTable :: public boolean com.ash.lake.config.LakeTable.appends()
 com.ash.lake.config.LakeTable :: public com.ash.lake.config.LakeTable com.ash.lake.config.LakeTable.withId(java.lang.String)
 com.ash.lake.config.LakeTable :: public com.ash.lake.config.LakeTable(java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.util.List<java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.lang.String>,java.util.Map<java.lang.String, java.lang.String>,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.util.List<java.lang.String>,java.util.Map<java.lang.String, java.lang.String>,java.lang.String,java.util.Map<java.lang.String, java.lang.String>,java.util.Map<java.lang.String, java.lang.String>,java.lang.String,java.util.Map<java.lang.String, java.lang.String>)

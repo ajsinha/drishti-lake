@@ -65,10 +65,7 @@ public final class LakeCheck {
             }
             String lake = c.getValue().get(ConnectorLake.LAKE);
             if (lake == null || lake.isBlank()) {
-                if (ConnectorLake.legacy(c.getValue())) {
-                    out.add(new Finding("note", "", "", "connector " + name + " names its tables by path (root " + c.getValue().get("root")
-                            + "), not by a lake: fine for tables no lake file describes; lake: <name> follows a lake's folder"));
-                }
+                return;                                        // the explicit form (root, domain, table.<kind>): no lake file to check
             } else if (!ConnectorLake.overridden(c.getValue()).isEmpty()) {
                 out.add(new Finding("note", lake, "", "connector " + name + " names lake " + lake + " and gives " + ConnectorLake.overridden(c.getValue())
                         + " itself: its own values win over the lake file's"));

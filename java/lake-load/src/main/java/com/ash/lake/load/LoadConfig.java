@@ -445,8 +445,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
                 agree(entry, "partition-by", r.list(s, "partition-by"), entry.partitionBy());
             }
         } else if (lakeRef != null && !lakeRef.isBlank()) {
-            warnOnce("target.lake " + lakeRef + " is a folder: name a lake of config/lakes/ instead (drishti.py lake migrate-config; "
-                    + "docs/guides/DATA_LAKE_GUIDE.md); a folder is read this way for one more release");
+            warnOnce("target.lake " + lakeRef + " is a folder: name a lake of config/lakes/ instead (docs/guides/DATA_LAKE_GUIDE.md); a folder is read this way for one more release");
         }
         List<String> vectors = new ArrayList<>(r.list(s, "vectors"));
         vectors.addAll(r.list(s, "vector"));
