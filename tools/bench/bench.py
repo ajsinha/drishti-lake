@@ -10,6 +10,8 @@ One heavy job at a time; not part of check.py; scratch removed on exit unless --
     python3 tools/bench/bench.py --ref-cp REFCP.txt [--sides ref,internal,api] [--stores delta,iceberg] [--keep DIR] [--out bench.jsonl]
         [--repeat 10]       # interleaved A/B: each round runs every side once (order reversed every other round); a summary per
                             # store, side and read: the median of the rounds' medians, its spread (min..max) and bytes per row
+        [--jfr DIR]         # a flight recording (settings=profile: allocation samples with stacks) per store, side and round in DIR;
+                            # read one with  $JAVA_HOME/bin/jfr view --width 220 allocation-by-site DIR/<store>-<side>-<round>.jfr
 """
 import argparse, json, os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
@@ -73,9 +75,10 @@ def root_of(lake, store):
     return str(lake / "delta") if store == "delta" and (lake / "delta").exists() else str(lake)
 
 
-def run(cp, classes, side, root, warm, runs):
-    cmd = [f"{JAVA_HOME}/bin/java", "-Xmx4g", "-Xms4g", "-XX:+UseG1GC", "-cp", f"{classes}{os.pathsep}{cp}", "bench.ReadBench", side, root,
-           "risk", "scenario-pv", DATE, str(warm), str(runs)]
+def run(cp, classes, side, root, warm, runs, jfr=None):
+    rec = [f"-XX:StartFlightRecording=settings=profile,filename={jfr}"] if jfr else []
+    cmd = [f"{JAVA_HOME}/bin/java", "-Xmx4g", "-Xms4g", "-XX:+UseG1GC"] + rec + ["-cp", f"{classes}{os.pathsep}{cp}", "bench.ReadBench", side,
+           root, "risk", "scenario-pv", DATE, str(warm), str(runs)]
     p = subprocess.run(cmd, capture_output=True, text=True)
     if p.returncode != 0:
         raise SystemExit(f"{side} on {root} failed:\n" + "\n".join(p.stderr.splitlines()[-30:]))
@@ -116,6 +119,7 @@ def main(argv=None):
     ap.add_argument("--keep", help="a scratch folder kept between runs (the lakes are reused)")
     ap.add_argument("--out", help="append the results here (JSON lines)")
     ap.add_argument("--repeat", type=int, default=1, help="rounds of every side, interleaved (one JVM per side and round)")
+    ap.add_argument("--jfr", help="a folder: one flight recording (allocation profile) per store, side and round")
     a = ap.parse_args(argv)
     work = Path(a.keep) if a.keep else Path(tempfile.mkdtemp(prefix="lake-bench-", dir=os.environ.get("LAKE_TCK_TMP")))
     work.mkdir(parents=True, exist_ok=True)
@@ -149,7 +153,11 @@ def main(argv=None):
                         continue                                 # the files store has only the read API (published, RA-10)
                     cp, classes = compiled[side]
                     cls = API + ":" + store if side == "api" else (HOST_SIDES if side == "ref" else SIDES)[store]
-                    for r in run(cp, classes, cls, root, a.warmups, a.runs):
+                    jfr = None
+                    if a.jfr:
+                        Path(a.jfr).mkdir(parents=True, exist_ok=True)
+                        jfr = str(Path(a.jfr).resolve() / f"{store}-{side}-{rnd}.jfr")
+                    for r in run(cp, classes, cls, root, a.warmups, a.runs, jfr):
                         r.update(store=store, side=side, round=rnd)
                         results.append(r)
                         if a.repeat == 1:

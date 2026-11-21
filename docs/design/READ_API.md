@@ -415,6 +415,45 @@ green on `tools/ci/check.py` and rewrites `java/api-surface.txt` in the same com
 Order: S0, S1; then S2, S3, S4 side by side; S5, S6, S7 side by side; S8; S9; S10. About 8 working days elapsed with three lanes.
 Drishti is not touched; its adapter rewrite (rehearsal L1, 5 bd, Opus) starts at G4 on the tagged pin.
 
+## RA-S8 half page: shaped reads of foreign tables (2026-11-21, before its build)
+
+**What it serves.** Drishti's `IcebergExternalPlugin` reads tables other engines wrote (Spark, Flink, Trino, Snowflake, Glue, dbt,
+pyiceberg) in their own layout: no `id`, `business_date`, `doc` columns. Today it imports the table layer's Iceberg types
+(`Table`, `Catalog`, `Catalogs`, `S3Tables`, `Expr`, `FileScanTask`, `JsonValues`), so LK-13 is not met until it reads through
+the API. RA-S8 adds one thing to the API: a **shape** that says how a foreign table's rows are a kind's documents. The layout
+readers are untouched; a shaped table is opened beside them and answers through the same `TableReader` and `TableSnapshot`.
+
+**API (own types, `com.ash.lake.read`).**
+
+| Type | Holds |
+|---|---|
+| `TableShape` (record, built from a connector's `tables.<kind>.*` settings by `TableShape.of(kind, settings)`) | `table` (namespace.table or name), `id` (columns; empty: the table's identifier fields), `idSeparator` (`:`), `date` (a date column, or a timestamp with `dateFromDay`; null: the partition spec's day), `dateZone` (a timestamptz's day, default UTC), `document` (`row`, or `column:<name>` holding the JSON), `exclude`, `rename`, `links`, `depth` (nested structs flattened into searchable paths, default 2), `values` (decimals as numbers or text, binary as base64) |
+| `LakeReader.foreign(String table, TableShape shape)` | a `TableReader` over a table not in the layout; its `snapshot()` resolves the shape against that snapshot's schema (refusals in words with an `LK-` code: no id, a date column that is not a date or timestamp, a timestamp without `date-from: day`) |
+| `TableSnapshot` (unchanged) | `dates()`, per date `DayFiles` (each `DataFile` marked `exact` or not: an inexact file may hold rows of other dates, so its rows are checked), `documents(..)`, `document(id)`, `idMap(..)`, `columns(..)` over the searchable paths, deletes applied |
+
+**One rule, written once (`lake-io`, internal).** A file's dates: the partition when it is the date (identity of a date column, or
+`day()` of a timestamp when the day is the zone's), else the date column's bounds (one day: exact; a span under 400 days: every day
+inexact), else the column read; the document from the row's columns (`ShapedDocument`: renamed, excluded, nested structs as objects,
+lists as arrays, timestamps ISO, decimals and binary as `values` says); an id from its columns joined by the separator, parsed back
+for pruning by partition, bounds and row-group statistics. Each store only lists files with their partition values and bounds, and
+reads columns (it already does both for the layout readers).
+
+**Per store.** Iceberg: iceberg-core planning, partition spec and bounds, delete files applied (as the layout reader, I1). Delta: a
+foreign Delta table (Spark, delta-rs) through the Kernel: partition columns and `stats` min/max, deletion vectors applied (D1).
+Files: a foreign JSON Lines folder (`<root>/<table>/`, one file per date or any files with a date field), the date from the file
+name (the loader's name rule) else the field; documents are the lines, `document: row` only. So the feature is the same on every
+store (owner rule), each with its format's own fast path.
+
+**Cases.** `read/foreign-table-shaped` on every store: a table written by the official writer of the format (pyiceberg, delta-rs:
+the uv pins; files: plain JSONL), with a date partition, a timestamptz day in a zone, an unpartitioned file spanning two days
+(inexact), a composite id, a renamed and an excluded column, a nested struct at depth 2, a deleted row; the answer is the same JSON
+on every store. Plus refusal cases for the three shape errors.
+
+**Steps.** S8a: `TableShape`, `LakeReader.foreign`, the shared rule and `ShapedDocument`, Iceberg, `IcebergForeignShapeTest`.
+S8b: Delta. S8c: files. S8d: the case on every store and row; the plugin's mapping for G4 (its `Shape`, `KindConfig`,
+`ExternalTable`, `JsonValues` replaced by `TableShape` and the API; `IdIndex`, caches and refresh stay in the adapter). About two
+days of an Opus builder; RA-9 stands (last; if it slips past G4, the plugin is an exemption with an end date).
+
 ## 9. Decisions RA-1 to RA-12
 
 | # | Decision | Recommendation |

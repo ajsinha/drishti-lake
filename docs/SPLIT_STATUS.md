@@ -73,7 +73,27 @@ Built (decisions RA-1 to RA-12 accepted): RA-S0 (section 10 checked, today's num
 read by id through a per-snapshot id index; Delta's newest-load order no longer depends on the load id's length, and loads of one millisecond go by commit order on every store (`LoadOrder`). 14 `read/*` cases and
 `layout/partition-by-beside-the-date` equal on every store and the memory rows; I2 (Iceberg row-group pieces) and of RA-S9 the cases
 (20 of 20; `float32-and-null-vector` with the loader's `target.layout.vector-type: float32` on every store), `TwoRuntimesTest` and
-`StartOnFewCoresTest`, `docs/BENCHMARK.md`. The old entry points are gone (G3): `NewTables` deleted, `LakeStore` package-private (the Delta reader's own), their test on the read API (`DeltaLakeOpenTest`). Open: Delta's and the files store's bench rows on a quiet machine (load under 6); RA-S8 last (RA-9, its half-page design first).
+`StartOnFewCoresTest`, `docs/BENCHMARK.md`. The old entry points are gone (G3): `NewTables` deleted, `LakeStore` package-private (the Delta reader's own), their test on the read API (`DeltaLakeOpenTest`). Open: Delta's and the files store's bench rows on a quiet machine (load under 6); RA-S8 last (RA-9: its half page is written,
+READ_API.md "RA-S8 half page"; S8a to S8d not built).
+
+**Left for the quiet window (load under 6 by `uptime`; it stayed 10 to 26 all of 2026-11-21's G3 lane): the Iceberg `columns` +1.4%
+allocation per row.** `KindTable.columns` and `NativeKindTable` are identical to the freeze but for I2's row-group range read
+(`t.rows(.., from, to)`), so the suspect is `ParquetRowReader`/`TaskReader`'s range path. The profile, exactly (JDK 21, one heavy job):
+
+```
+SCR=~/.cache/drishti-lanes/<lane>/prof; mkdir -p $SCR
+git clone -q --no-checkout ~/IdeaProjects/drishti $SCR/drishti-ref && git -C $SCR/drishti-ref checkout -q 9ce7c3170   # Drishti read only
+(cd $SCR/drishti-ref && ./mvnw -o -q package dependency:build-classpath -DskipTests -Dmaven.repo.local=$SCR/m2 \
+   -Dmaven.repo.local.tail=$HOME/.m2/repository -pl plugins/drishti-plugin-delta,plugins/drishti-plugin-iceberg -am \
+   -Dmdep.outputFile=$SCR/cp-part.txt)     # then the union of the two plugins' jars and class paths into $SCR/ref-classpath.txt (as RA-S0)
+python3 tools/bench/bench.py --ref-cp $SCR/ref-classpath.txt --sides ref,internal --stores iceberg --repeat 5 \
+   --jfr $SCR/jfr --keep $SCR/bench --out $SCR/alloc.jsonl
+$JAVA_HOME/bin/jfr view --width 220 allocation-by-site $SCR/jfr/iceberg-internal-0.jfr > $SCR/internal.txt
+$JAVA_HOME/bin/jfr view --width 220 allocation-by-site $SCR/jfr/iceberg-ref-0.jfr      > $SCR/ref.txt
+diff $SCR/ref.txt $SCR/internal.txt     # the site that grew: expect ParquetRowReader/TaskReader (the range path)
+rm -rf $SCR
+```
+
 
 
 Designed in [READ_API](design/READ_API.md): the API, every host call mapped to it, the defects each store closes, the cases, the
