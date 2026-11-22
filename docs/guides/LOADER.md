@@ -157,6 +157,21 @@ official libraries (Delta Kernel, iceberg-core), each step an ordinary commit:
 LakeMaintain --lake ROOT --format delta|iceberg|files --table domain/table
     [--keep-days N [--as-of D] [--zone Z] [--max-drop-share F] [--force-drop]] [--floor-days D]
     [--ttl 8h [--on FIELD] [--max-rows N]] [--relayout [--file-rows N] [--dates D,D|D..D] [--force]] [--compact [--target-file-mb 128]] [--checkpoint] [--vacuum-hours H] [--dry-run] [--json]
+    [--set key=value ...]
+```
+
+`--lake` is the lake's root, or the name of a lake file (its format, root, storage and `catalog:` are used). **An Iceberg lake held by a
+REST catalog** (AWS Glue's Iceberg endpoint, Polaris, Nessie, S3 Tables) has no root: name its lake file, or give the catalog's settings with
+`--set`, as the Iceberg connectors read them (`catalog`, `uri`, `warehouse`, `namespace`, `catalog.<REST client property>`, `s3.<key>`);
+every step then runs through the catalog, committed as any writer of that catalog commits. A secret (`credential`, `token`, `password`,
+`client-secret`, `s3.access-key`, `s3.secret-key`, `s3.session-token`) is taken from the environment only: give it as
+`'${AN_ENVIRONMENT_VARIABLE}'` (quoted, so the shell leaves it); a value is refused, as in a lake file.
+
+```text
+CATALOG_TOKEN=... LakeMaintain --format iceberg --table risk/scenario-pv --set catalog=rest \
+    --set uri=https://glue.us-east-1.amazonaws.com/iceberg --set warehouse=123456789012 --set catalog.rest.sigv4-enabled=true \
+    --set catalog.rest.signing-name=glue --set catalog.rest.signing-region=us-east-1 --compact --checkpoint
+LakeMaintain --lake glue-risk --table risk/scenario-pv --keep-days 260     # the same lake, from config/lakes/glue-risk.yaml
 ```
 
 | Step | Delta | Iceberg | Files |

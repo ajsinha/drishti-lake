@@ -19,6 +19,14 @@ Entries are written per release; unreleased work is listed first.
   a date) already held the order in their files. Kit cases `maintain/commit-order-reused-run-id` and `maintain/commit-order-expired-log`
   (kit verb `expire-log`: Delta's commit files before the checkpoint deleted, Iceberg's older snapshots expired) on every store and the
   Python path; LOADER.md states the rule.
+- **`lake maintain` on Iceberg lakes held by a REST catalog (AWS Glue, Polaris, Nessie, S3 Tables)**: `LakeMaintain` reached only path
+  tables under a root, so a host could not maintain a Glue lake. It now takes the catalog's settings with `--set key=value` (as the Iceberg
+  connectors read them: `catalog`, `uri`, `warehouse`, `namespace`, `catalog.*`, `s3.*`) or from a lake file named by `--lake <name>` (its
+  `catalog:`, storage and format), and runs every step (keep-days, row retention, relayout, compaction, manifests, vacuum) through the
+  catalog. A secret is taken from the environment only (`'${NAME}'`; a value on the command line is refused, as in a lake file).
+  `IcebergMaintenance`'s steps take a lake's settings (`at`). Tested against a REST catalog in the test process (iceberg-core's own
+  handlers over a local warehouse: `RestCatalogStub`): compaction and manifests through `--set`, keep-days through a lake file, the
+  token from the environment on every call, the refusals.
 
 ## 0.9.1 (2026-11-21): maintenance data safety
 

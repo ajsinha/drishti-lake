@@ -131,20 +131,7 @@ public final class ConnectorLake {
         if (!parent.isEmpty()) {
             out.put("domain", parent.substring(cut + 1));
         }
-        // storage keys are the object store's: s3.<key> for an S3 root or a catalog's warehouse; another scheme's keys as written
-        boolean s3 = lake.root().isEmpty() || lake.root().startsWith("s3://") || lake.root().startsWith("s3a://");
-        lake.storage().forEach((k, v) -> {
-            if (v != null && !v.isBlank()) {                   // a reference that resolved to nothing (a publisher's unset s3.region) is no setting
-                out.put(s3 && !k.startsWith("s3.") && !k.startsWith("tls.") && !k.startsWith("proxy.") ? "s3." + k : k, v);
-            }
-        });
-        lake.catalog().forEach((k, v) -> {
-            if (!k.equals("type")) {
-                out.put(k, v);
-            } else if (!v.equals("none")) {
-                out.put("catalog", v);
-            }
-        });
+        out.putAll(lake.storeSettings());                   // the object store's keys and the Iceberg catalog's (Lake.storeSettings)
         for (LakeTable t : tables) {
             if (!t.folder().equals(t.kind())) {
                 out.put("table." + t.kind(), t.folder());

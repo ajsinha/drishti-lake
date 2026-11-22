@@ -49,6 +49,29 @@ public record Lake(String name, String format, String root, Map<String, String> 
         tables = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(tables));
     }
 
+    /**
+     * The lake's object store and Iceberg catalog as the Iceberg catalogs and the connectors read them: the storage keys as
+     * {@code s3.<key>} for an S3 root or a catalog's warehouse (another scheme's as written), {@code catalog} (its {@code catalog.type}
+     * unless none) and the catalog's other settings as written. Blank values (a reference that resolved to nothing) are left out.
+     */
+    public Map<String, String> storeSettings() {
+        Map<String, String> out = new LinkedHashMap<>();
+        boolean s3 = root.isEmpty() || root.startsWith("s3://") || root.startsWith("s3a://");
+        storage.forEach((k, v) -> {
+            if (v != null && !v.isBlank()) {
+                out.put(s3 && !k.startsWith("s3.") && !k.startsWith("tls.") && !k.startsWith("proxy.") ? "s3." + k : k, v);
+            }
+        });
+        catalog.forEach((k, v) -> {
+            if (!k.equals("type")) {
+                out.put(k, v);
+            } else if (!v.equals("none")) {
+                out.put("catalog", v);
+            }
+        });
+        return out;
+    }
+
     /** Whether the lake is an in-memory store ({@code mem://<store>}). */
     public boolean inMemory() {
         return root.startsWith(MEMORY_SCHEME);

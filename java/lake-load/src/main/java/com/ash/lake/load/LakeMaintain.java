@@ -66,7 +66,12 @@ import java.util.SortedMap;
  *
  * <pre>LakeMaintain --lake ROOT --format delta|iceberg|files --table domain/table [--keep-days N [--as-of D] [--zone Z] [--max-drop-share F]
  *     [--force-drop]] [--floor-days D] [--ttl 8h [--on FIELD] [--max-rows N]] [--relayout [--file-rows N] [--dates D,D|D..D] [--force]] [--compact [--target-file-mb N]] [--checkpoint]
- *     [--vacuum-hours H] [--dry-run] [--json]</pre>
+ *     [--vacuum-hours H] [--dry-run] [--json] [--set key=value ...]</pre>
+ * {@code --lake} is a lake root, or a lake file's name (its format, root, storage and {@code catalog:}). An Iceberg lake whose tables a
+ * REST catalog holds (AWS Glue's Iceberg endpoint, Polaris, Nessie, S3 Tables) is named by its catalog's settings, from its lake file or
+ * {@code --set} ({@code --format iceberg --set catalog=rest --set uri=... --set warehouse=... --set namespace=...}, {@code catalog.*}
+ * for the REST client, {@code s3.*}): every step then runs through the catalog. A secret ({@code credential}, {@code token},
+ * {@code s3.secret-key}, ...) is given only as {@code ${AN_ENVIRONMENT_VARIABLE}}, never as a value on the command line.
  * The line it prints (without {@code --json}) is the same on every store: the dates and rows before and after and the steps run; with
  * {@code --json}, the whole answer of {@link #maintain} (each step's store-specific detail). Exit codes: 0 done, 1 failed.
  */
@@ -131,6 +136,7 @@ public final class LakeMaintain {
         Long vacuum = null;
         boolean dry = false;
         boolean json = false;
+        Map<String, String> sets = new LinkedHashMap<>();
         try {
             for (int i = 0; i < args.length; i++) {
                 switch (args[i]) {
@@ -156,22 +162,66 @@ public final class LakeMaintain {
                     case "--vacuum-hours" -> vacuum = Long.valueOf(value(args, ++i));
                     case "--dry-run" -> dry = true;
                     case "--json" -> json = true;
+                    case "--set" -> {
+                        String kv = value(args, ++i);
+                        int eq = kv.indexOf('=');
+                        if (eq <= 0) {
+                            throw new IllegalArgumentException("--set takes key=value (a catalog setting: catalog=rest, uri=..., warehouse=...): " + kv);
+                        }
+                        sets.put(kv.substring(0, eq).trim(), kv.substring(eq + 1).trim());
+                    }
                     default -> throw new IllegalArgumentException("unknown option " + args[i]);
                 }
             }
-            if (root == null || table == null) {
-                throw new IllegalArgumentException("give --lake ROOT and --table domain/table");
+            if (table == null || root == null && sets.isEmpty()) {
+                throw new IllegalArgumentException("give --lake ROOT (or a lake file's name, or --set for a catalog lake) and --table domain/table");
             }
+            boolean formatGiven = java.util.Arrays.asList(args).contains("--format");
+            Map<String, String> catalog = new LinkedHashMap<>();
+            java.util.Optional<com.ash.lake.config.Lake> named = root == null || !com.ash.lake.config.Lakes.validName(root) ? java.util.Optional.empty()
+                    : com.ash.lake.config.Lakes.current(runtime).find(root);
+            if (named.isPresent()) {                             // a lake file's name: its format, root, storage and catalog
+                com.ash.lake.config.Lake l = named.get();
+                if (formatGiven && !format.equals(l.format())) {
+                    throw new IllegalArgumentException("lake " + l.name() + " is " + l.format() + ", not " + format);
+                }
+                format = l.format();
+                if (l.storeSettings().containsKey("catalog")) {    // a catalog lake (rest, s3tables): its catalog and object store
+                    catalog.putAll(l.storeSettings());
+                }
+                root = l.root().isBlank() ? null : l.root();
+            }
+            catalog.putAll(secretsFromEnvironment(runtime, sets));
             Steps steps = new Steps(keepDays, asOf, zone, share, force, floor, new RowRetention(ttl, on, maxRows), relayout, fileRows, dates, forceRelayout, compact,
                     target, checkpoint,
                     vacuum);
-            Map<String, Object> done = maintain(runtime, root, format, table, steps, Instant.now(), dry);
+            Map<String, Object> done = maintain(runtime, root, format, table, catalog, steps, Instant.now(), dry);
             out.println(json ? JSON.writeValueAsString(done) : line(done, steps, dry));
             return 0;
         } catch (Exception e) {
             out.println("lakemaintain: " + e.getMessage());
             return 1;
         }
+    }
+
+    /** The settings names whose value is a secret: on the command line or in a lake file only as {@code ${AN_ENVIRONMENT_VARIABLE}}. */
+    static final java.util.Set<String> SECRETS = java.util.Set.of("credential", "token", "password", "client-secret", "access-key", "secret-key",
+            "session-token", "s3.access-key", "s3.secret-key", "s3.session-token");
+
+    /**
+     * {@code --set} settings with every {@code ${NAME}} reference resolved from the environment (the runtime's settings); a secret
+     * ({@link #SECRETS}) given as a value rather than a reference is refused, so it never stands in a process list or a shell's history.
+     */
+    static Map<String, String> secretsFromEnvironment(com.ash.lake.LakeRuntime runtime, Map<String, String> sets) {
+        Map<String, String> out = new LinkedHashMap<>();
+        sets.forEach((k, v) -> {
+            if (SECRETS.contains(k) && !v.matches("\\$\\{[^}]+}")) {
+                throw new IllegalArgumentException("--set " + k + ": a secret is never given on the command line; give '" + k
+                        + "=${AN_ENVIRONMENT_VARIABLE}' (quoted, so the shell leaves it) or use the platform's role");
+            }
+            out.put(k, com.ash.tools.settings.Placeholders.require(v, runtime.settings()));
+        });
+        return out;
     }
 
     /** A dates option: {@code a,b,c} or {@code from..to} (both included); every date when null or blank. */
@@ -208,34 +258,70 @@ public final class LakeMaintain {
      */
     public static Map<String, Object> maintain(com.ash.lake.LakeRuntime runtime, String root, String format, String table, Steps steps, Instant now,
             boolean dryRun) throws Exception {
+        return maintain(runtime, root, format, table, Map.of(), steps, now, dryRun);
+    }
+
+    /**
+     * As above, for a lake whose Iceberg catalog is given by {@code catalog} ({@code catalog} rest or s3tables, {@code uri},
+     * {@code warehouse}, {@code namespace}, {@code credential}, {@code s3.*}, {@code catalog.*}: as the Iceberg catalogs read them; a
+     * REST catalog such as AWS Glue's Iceberg endpoint holds the tables, {@code root} is then null): every step through the catalog, as on
+     * a path lake. Empty {@code catalog}: the tables are paths under {@code root}.
+     */
+    public static Map<String, Object> maintain(com.ash.lake.LakeRuntime runtime, String root, String format, String table, Map<String, String> catalog,
+            Steps steps, Instant now, boolean dryRun) throws Exception {
         int slash = table.indexOf('/');
         String domain = slash < 0 ? "" : table.substring(0, slash);
         String kind = table.substring(slash + 1);
-        var store = Stores.of(runtime, format);
-        TableRef ref = new TableRef(root, domain, kind);
-        if (!store.exists(runtime, ref)) {
-            throw new java.io.IOException("no table " + table + " in " + root);
+        boolean byCatalog = catalog != null && !catalog.isEmpty();
+        if (byCatalog && !format.equals("iceberg")) {
+            throw new IllegalArgumentException("catalog settings (--set) are Iceberg's; a " + format + " lake's tables are paths under its root");
         }
+        if (!byCatalog && (root == null || root.isBlank())) {
+            throw new IllegalArgumentException("give --lake ROOT, or the catalog's settings (--set catalog=rest --set uri=...)");
+        }
+        Map<String, String> lake = new LinkedHashMap<>(byCatalog ? catalog : Map.of());
+        if (root != null && !root.isBlank()) {
+            lake.put("root", root);
+        }
+        String where = byCatalog ? "the catalog at " + catalog.getOrDefault("uri", catalog.getOrDefault("catalog", "?")) : root;
+        var store = Stores.of(runtime, format);
+        TableRef ref = byCatalog ? null : new TableRef(root, domain, kind);
+        java.util.Optional<Map<String, String>> props = byCatalog
+                ? com.ash.lake.iceberg.table.IcebergMaintenance.properties(runtime, lake, domain, kind)
+                : store.exists(runtime, ref) ? java.util.Optional.of(store.properties(runtime, ref)) : java.util.Optional.empty();
+        if (props.isEmpty()) {
+            throw new java.io.IOException("no table " + table + " in " + where);
+        }
+        var effective = com.ash.lake.spi.TableProperties.effective(props.get());
+        java.util.concurrent.Callable<SortedMap<LocalDate, Long>> held = byCatalog ? () -> catalogDates(runtime, lake, domain, kind)
+                : () -> store.dates(runtime, ref);
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("table", table);
         m.put("format", format);
         m.put("dryRun", dryRun);
-        m.put("before", shape(runtime, store, root, domain, kind, store.dates(runtime, ref)));
-        String path = LakeRetention.tablePath(root, table);
+        m.put("before", byCatalog ? withLatest(held.call()) : shape(runtime, store, root, domain, kind, held.call()));
+        String path = byCatalog ? null : LakeRetention.tablePath(root, table);
         Long vacuum = steps.vacuumHours();
         if (vacuum != null && steps.floorDays() > 0 && vacuum < steps.floorDays() * 24L) {
             vacuum = steps.floorDays() * 24L;                    // time travel is kept as long as the dates are
         }
-        Long retention = vacuum == null ? null : com.ash.lake.spi.TableProperties.effective(store.properties(runtime, ref)).retentionHours();
+        Long retention = vacuum == null ? null : effective.retentionHours();
         if (retention != null && vacuum < retention) {
             vacuum = retention;                                  // the table's own retention (TableProperties): time travel reaches that far
             m.put("retentionHours", retention);
         }
         if (steps.keepDays() > 0) {
-            m.put("keepDays", keepDays(runtime, root, format, table, store.dates(runtime, ref), steps, dryRun));
+            Drop drop = byCatalog ? gone -> {
+                if (effective.appendOnly()) {
+                    com.ash.lake.spi.TableProperties.refuseRewrite(props.get(), table, "a delete of dates");
+                }
+                com.ash.lake.iceberg.table.IcebergMaintenance.dropDates(runtime, lake, domain, kind, gone::contains, false);
+            } : gone -> LakeRetention.dropDates(runtime, root, format, table, gone::contains, false);
+            m.put("keepDays", keepDays(runtime, table, held.call(), steps, dryRun, drop));
         }
         if (steps.rows().active()) {
-            m.put("rowRetention", LakeRetention.apply(runtime, root, format, table, steps.rows(), now, dryRun).get("dates"));
+            m.put("rowRetention", byCatalog ? catalogRetention(runtime, lake, domain, kind, table, props.get(), steps.rows(), dryRun)
+                    : LakeRetention.apply(runtime, root, format, table, steps.rows(), now, dryRun).get("dates"));
         }
         if (format.equals("delta") && (steps.compact() || steps.checkpoint())) {
             int stamped = DeltaUpkeep.stamp(runtime, path, dryRun);   // other writers' files: their commit order kept in the files
@@ -248,14 +334,14 @@ public final class LakeMaintain {
             m.put("relayout", switch (format) {
                 case "delta" -> Map.of("dates", DeltaUpkeep.relayout(runtime, store, root, domain, kind, path, steps.fileRows(),
                         steps.relayoutWanted(), steps.relayoutForce(), dryRun));
-                case "iceberg" -> Map.of("dates", com.ash.lake.iceberg.table.IcebergMaintenance.relayoutTable(runtime, root, domain, kind,
+                case "iceberg" -> Map.of("dates", com.ash.lake.iceberg.table.IcebergMaintenance.relayoutTable(runtime, lake, domain, kind,
                         steps.fileRows(), steps.relayoutWanted(), steps.relayoutForce(), dryRun, spill));
                 default -> Map.of("dates", com.ash.lake.files.FilesStore.relayout(runtime, root, domain, kind, steps.relayoutWanted(),
                         steps.relayoutForce(), dryRun));
             });
         }
         Map<String, Object> iceberg = format.equals("iceberg") && (steps.compact() || steps.checkpoint() || vacuum != null)
-                ? com.ash.lake.iceberg.table.IcebergMaintenance.maintainTable(runtime, root, domain, kind, steps.compact(), steps.checkpoint(), vacuum,
+                ? com.ash.lake.iceberg.table.IcebergMaintenance.maintainTable(runtime, lake, domain, kind, steps.compact(), steps.checkpoint(), vacuum,
                         dryRun, spill)
                 : Map.of();
         if (steps.compact()) {
@@ -280,7 +366,7 @@ public final class LakeMaintain {
                 default -> com.ash.lake.files.FilesStore.vacuum(runtime, root, domain, kind, vacuum, at, dryRun);
             });
         }
-        m.put("after", shape(runtime, store, root, domain, kind, store.dates(runtime, ref)));
+        m.put("after", byCatalog ? withLatest(held.call()) : shape(runtime, store, root, domain, kind, held.call()));
         return m;
     }
 
@@ -300,9 +386,14 @@ public final class LakeMaintain {
         return d;
     }
 
+    /** How a keep-days removes its dates: one commit. */
+    interface Drop {
+        void drop(java.util.Set<String> dates) throws Exception;
+    }
+
     /** The keep-days step: the dates before the cut removed in one commit, under the drop guard and the floor. */
-    static Map<String, Object> keepDays(com.ash.lake.LakeRuntime runtime, String root, String format, String table, SortedMap<LocalDate, Long> held,
-            Steps steps, boolean dryRun) throws Exception {
+    static Map<String, Object> keepDays(com.ash.lake.LakeRuntime runtime, String table, SortedMap<LocalDate, Long> held,
+            Steps steps, boolean dryRun, Drop drop) throws Exception {
         java.time.ZoneId zone = steps.zone() == null || steps.zone().isBlank() ? runtime.options().businessZone() : java.time.ZoneId.of(steps.zone());
         LoadGuard guard = new LoadGuard(zone, java.time.Clock.systemUTC(), steps.asOf(), 1, steps.maxDropShare(), steps.forceDrop());
         LocalDate floor = steps.floorDays() > 0 ? guard.asOf().minusDays(steps.floorDays() - 1L) : null;
@@ -335,10 +426,32 @@ public final class LakeMaintain {
             guard.checkDrop(table, dates.size(), held.size(), "business days");
         }
         if (!dryRun) {
-            java.util.Set<String> gone = new java.util.HashSet<>(dates);
-            LakeRetention.dropDates(runtime, root, format, table, gone::contains, false);
+            drop.drop(new java.util.HashSet<>(dates));
         }
         return out;
+    }
+
+    /** A catalog lake's table: its dates and rows, as the Iceberg delete reads them on a dry run. */
+    @SuppressWarnings("unchecked")
+    static SortedMap<LocalDate, Long> catalogDates(com.ash.lake.LakeRuntime runtime, Map<String, String> lake, String domain, String kind) throws Exception {
+        SortedMap<LocalDate, Long> out = new java.util.TreeMap<>();
+        Map<String, Object> got = com.ash.lake.iceberg.table.IcebergMaintenance.dropDates(runtime, lake, domain, kind, d -> true, true);
+        for (Map<String, Object> l : (List<Map<String, Object>>) got.get("dates")) {
+            out.put(LocalDate.parse(String.valueOf(l.get("date"))), ((Number) l.get("rows")).longValue());
+        }
+        return out;
+    }
+
+    /** A catalog lake's row retention ({@link LakeRetention#apply} on a path lake): a line per date changed; refused on an append-only table. */
+    static List<Map<String, Object>> catalogRetention(com.ash.lake.LakeRuntime runtime, Map<String, String> lake, String domain, String kind, String table,
+            Map<String, String> props, RowRetention r, boolean dryRun) throws Exception {
+        java.nio.file.Path spill = com.ash.lake.common.TempFiles.of(runtime).subDir("iceberg-retention");
+        if (!dryRun && com.ash.lake.spi.TableProperties.effective(props).appendOnly()
+                && com.ash.lake.iceberg.table.IcebergMaintenance.retentionTable(runtime, lake, domain, kind, r.ttl(), r.on(), r.maxRows(), true, spill)
+                        .stream().anyMatch(l -> ((Number) l.get("dropped")).longValue() > 0)) {
+            com.ash.lake.spi.TableProperties.refuseRewrite(Map.of(com.ash.lake.spi.TableProperties.APPEND_ONLY, "true"), table, "row retention");
+        }
+        return com.ash.lake.iceberg.table.IcebergMaintenance.retentionTable(runtime, lake, domain, kind, r.ttl(), r.on(), r.maxRows(), dryRun, spill);
     }
 
     /**
@@ -369,6 +482,16 @@ public final class LakeMaintain {
             }
         } catch (Exception e) {
             // the counts above stand alone: a store that cannot list its files here leaves files and mb out
+        }
+        return m;
+    }
+
+    /** A catalog lake's table's shape: {@link #shape(SortedMap)} with the latest date and its rows ({@code latestDate}, {@code latestRows}), as {@link #shape} gives them. */
+    private static Map<String, Object> withLatest(SortedMap<LocalDate, Long> dates) {
+        Map<String, Object> m = shape(dates);
+        if (!dates.isEmpty()) {
+            m.put("latestDate", dates.lastKey().toString());
+            m.put("latestRows", dates.get(dates.lastKey()));
         }
         return m;
     }

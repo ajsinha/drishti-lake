@@ -288,6 +288,7 @@ com.ash.lake.config.Lake :: public java.util.Map<java.lang.String, java.lang.Obj
 com.ash.lake.config.Lake :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.config.Lake.catalog()
 com.ash.lake.config.Lake :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.config.Lake.memory()
 com.ash.lake.config.Lake :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.config.Lake.storage()
+com.ash.lake.config.Lake :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.config.Lake.storeSettings()
 com.ash.lake.config.Lake :: public java.util.Optional<com.ash.lake.config.LakeTable> com.ash.lake.config.Lake.entry(java.lang.String)
 com.ash.lake.config.Lake :: public java.util.Optional<com.ash.lake.config.LakeTable> com.ash.lake.config.Lake.find(java.lang.String,java.lang.String,java.lang.String)
 com.ash.lake.config.Lake :: public java.util.Optional<com.ash.lake.config.LakeTable> com.ash.lake.config.Lake.table(java.lang.String)
@@ -826,6 +827,7 @@ com.ash.lake.load.LakeMaintain :: public static int com.ash.lake.load.LakeMainta
 com.ash.lake.load.LakeMaintain :: public static int com.ash.lake.load.LakeMaintain.run(java.lang.String[],java.io.PrintStream)
 com.ash.lake.load.LakeMaintain :: public static java.time.LocalDate com.ash.lake.load.LakeMaintain.keepFrom(java.time.LocalDate,int)
 com.ash.lake.load.LakeMaintain :: public static java.util.Map<java.lang.String, java.lang.Object> com.ash.lake.load.LakeMaintain.maintain(com.ash.lake.LakeRuntime,java.lang.String,java.lang.String,java.lang.String,com.ash.lake.load.LakeMaintain$Steps,java.time.Instant,boolean) throws java.lang.Exception
+com.ash.lake.load.LakeMaintain :: public static java.util.Map<java.lang.String, java.lang.Object> com.ash.lake.load.LakeMaintain.maintain(com.ash.lake.LakeRuntime,java.lang.String,java.lang.String,java.lang.String,java.util.Map<java.lang.String, java.lang.String>,com.ash.lake.load.LakeMaintain$Steps,java.time.Instant,boolean) throws java.lang.Exception
 com.ash.lake.load.LakeMaintain :: public static void com.ash.lake.load.LakeMaintain.main(java.lang.String[])
 com.ash.lake.load.LakeMaintain$Steps :: public boolean com.ash.lake.load.LakeMaintain$Steps.checkpoint()
 com.ash.lake.load.LakeMaintain$Steps :: public boolean com.ash.lake.load.LakeMaintain$Steps.compact()

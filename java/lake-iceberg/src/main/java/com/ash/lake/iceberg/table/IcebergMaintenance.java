@@ -102,6 +102,26 @@ public final class IcebergMaintenance {
     }
 
     /**
+     * The settings that open one domain of a lake for maintenance: {@code lake}'s (a path lake's {@code root}; a catalog lake's
+     * {@code catalog}, {@code uri}, {@code warehouse}, {@code namespace}, {@code s3.*}, ... as {@link com.ash.lake.iceberg.catalog.Catalogs}
+     * reads them), the domain, read and written with drishti-iceberg.
+     */
+    public static Map<String, String> at(Map<String, String> lake, String domain) {
+        Map<String, String> s = new HashMap<>(lake);
+        s.put("domain", domain);
+        s.put("engine", "native");
+        return s;
+    }
+
+    /** The table's properties, empty when the table {@code domain/kind} of the lake {@code lake} ({@link #at}) does not exist. */
+    public static java.util.Optional<Map<String, String>> properties(com.ash.lake.LakeRuntime runtime, Map<String, String> lake, String domain,
+            String kind) throws Exception {
+        try (LayoutLake view = LayoutLake.of(runtime, at(lake, domain))) {
+            return view.load(kind).map(t -> Map.copyOf(((LayoutLake.Native.Kind) t).t().metadata().properties()));
+        }
+    }
+
+    /**
      * Undoes load {@code id} in the one Iceberg table {@code domain/kind} of the lake at {@code root}: a line per date undone ({@code date},
      * {@code removed}, {@code restored}, {@code replaced}); none when the table is absent.
      */
@@ -126,7 +146,13 @@ public final class IcebergMaintenance {
      */
     public static List<Map<String, Object>> retentionTable(com.ash.lake.LakeRuntime runtime, String root, String domain, String kind, String ttl, String on, Integer maxRows,
             boolean dryRun, Path spillDir) throws Exception {
-        try (LayoutLake view = LayoutLake.of(runtime, new HashMap<>(Map.of("root", root, "domain", domain, "engine", "native")))) {
+        return retentionTable(runtime, Map.of("root", root), domain, kind, ttl, on, maxRows, dryRun, spillDir);
+    }
+
+    /** As above, the lake given by its settings ({@link #at}). */
+    public static List<Map<String, Object>> retentionTable(com.ash.lake.LakeRuntime runtime, Map<String, String> lake, String domain, String kind, String ttl, String on, Integer maxRows,
+            boolean dryRun, Path spillDir) throws Exception {
+        try (LayoutLake view = LayoutLake.of(runtime, at(lake, domain))) {
             var table = view.load(kind);
             if (table.isEmpty()) {
                 return List.of();
@@ -144,7 +170,13 @@ public final class IcebergMaintenance {
      */
     public static Map<String, Object> dropDates(com.ash.lake.LakeRuntime runtime, String root, String domain, String kind, java.util.function.Predicate<String> wanted, boolean dryRun)
             throws Exception {
-        try (LayoutLake view = LayoutLake.of(runtime, new HashMap<>(Map.of("root", root, "domain", domain, "engine", "native")))) {
+        return dropDates(runtime, Map.of("root", root), domain, kind, wanted, dryRun);
+    }
+
+    /** As above, the lake given by its settings ({@link #at}). */
+    public static Map<String, Object> dropDates(com.ash.lake.LakeRuntime runtime, Map<String, String> lake, String domain, String kind, java.util.function.Predicate<String> wanted, boolean dryRun)
+            throws Exception {
+        try (LayoutLake view = LayoutLake.of(runtime, at(lake, domain))) {
             var table = view.load(kind);
             if (table.isEmpty()) {
                 Map<String, Object> none = new java.util.LinkedHashMap<>();
@@ -174,7 +206,13 @@ public final class IcebergMaintenance {
      */
     public static List<String> relayoutTable(com.ash.lake.LakeRuntime runtime, String root, String domain, String kind, Integer fileRows,
             java.util.function.Predicate<LocalDate> wanted, boolean force, boolean dryRun, Path spillDir) throws Exception {
-        try (LayoutLake view = LayoutLake.of(runtime, new HashMap<>(Map.of("root", root, "domain", domain, "engine", "native")))) {
+        return relayoutTable(runtime, Map.of("root", root), domain, kind, fileRows, wanted, force, dryRun, spillDir);
+    }
+
+    /** As above, the lake given by its settings ({@link #at}). */
+    public static List<String> relayoutTable(com.ash.lake.LakeRuntime runtime, Map<String, String> lake, String domain, String kind, Integer fileRows,
+            java.util.function.Predicate<LocalDate> wanted, boolean force, boolean dryRun, Path spillDir) throws Exception {
+        try (LayoutLake view = LayoutLake.of(runtime, at(lake, domain))) {
             var table = view.load(kind);
             if (table.isEmpty()) {
                 return List.of();
@@ -186,8 +224,14 @@ public final class IcebergMaintenance {
 
     public static Map<String, Object> maintainTable(com.ash.lake.LakeRuntime runtime, String root, String domain, String kind, boolean compact,
             boolean checkpoint, Long vacuumHours, boolean dryRun, Path spillDir) throws Exception {
+        return maintainTable(runtime, Map.of("root", root), domain, kind, compact, checkpoint, vacuumHours, dryRun, spillDir);
+    }
+
+    /** As above, the lake given by its settings ({@link #at}). */
+    public static Map<String, Object> maintainTable(com.ash.lake.LakeRuntime runtime, Map<String, String> lake, String domain, String kind, boolean compact,
+            boolean checkpoint, Long vacuumHours, boolean dryRun, Path spillDir) throws Exception {
         Map<String, Object> out = new java.util.LinkedHashMap<>();
-        try (LayoutLake view = LayoutLake.of(runtime, new HashMap<>(Map.of("root", root, "domain", domain, "engine", "native")))) {
+        try (LayoutLake view = LayoutLake.of(runtime, at(lake, domain))) {
             var table = view.load(kind);
             if (table.isEmpty()) {
                 return out;
