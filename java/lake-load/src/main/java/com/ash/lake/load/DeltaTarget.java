@@ -82,7 +82,7 @@ import java.util.Optional;
  * A table laid out by more than the id ({@code sort-by}) says so in {@code lake.layout.sort-by}, as an Iceberg table does, so lake maintain
  * keeps its order. An existing table keeps its partitioning; a column the load sends that the table lacks (a promoted or vector column
  * first sent by a later load, the two load columns {@code _load_id} and {@code _source_file} of a table made before them) is added,
- * nullable, at the end in one metadata commit ({@link #withColumns}), as the Iceberg and files stores add it; the files are not
+ * nullable, at the end in one metadata commit ({@link LakeWriter#withColumns}), as the Iceberg and files stores add it; the files are not
  * rewritten, their rows read it as null. A column the load lacks is null.
  */
 final class DeltaTarget implements TableWriter {
@@ -154,7 +154,7 @@ final class DeltaTarget implements TableWriter {
                         + " (give the table's partition-by, or write a new table)");
             }
             com.ash.lake.spi.TableProperties.refuseReplace(((io.delta.kernel.internal.SnapshotImpl) before).getMetadata().getConfiguration(), spec);
-            before = withColumns(before, wanted);
+            before = LakeWriter.withColumns(engine, path, before, wanted);
             schema = before.getSchema();
             partitionColumns = before.getPartitionColumnNames();
             for (StructField f : wanted.fields()) {
@@ -184,63 +184,6 @@ final class DeltaTarget implements TableWriter {
         base.put("write.metadata.metrics.default", "full");             // Delta statistics: exact minimum and maximum
         base.put("write.metadata.metrics.column.doc", "none");
         options = TargetRules.writerOptions(base, spec.layout(), "snappy", vectors);
-    }
-
-    /**
-     * The table with the columns of {@code wanted} it lacks added, each nullable, at the end (schema evolution, as the Iceberg and files
-     * stores add them: a promoted or vector column first sent by a later load, the load columns of a table made before them): one commit
-     * of a {@code metaData} action whose schema is the table's grown (what Delta's merge-schema writes; Kernel itself evolves a schema only
-     * under column mapping). No file is rewritten: the rows written before read the new column as null. Written with put-if-absent through
-     * the engine; when another writer took the version, read again. A table under column mapping or in-commit timestamps (written by
-     * another engine) is not grown here: a data column it lacks refuses the load, naming it (never written and dropped); the load
-     * columns are left out, reported.
-     */
-    private Snapshot withColumns(Snapshot snap, StructType wanted) throws IOException {
-        for (int attempt = 0; ; attempt++) {
-            StructType s = snap.getSchema();
-            List<StructField> add = new ArrayList<>();
-            for (StructField f : wanted.fields()) {
-                if (s.indexOf(f.getName()) < 0) {
-                    add.add(f);
-                }
-            }
-            if (add.isEmpty()) {
-                return snap;
-            }
-            SnapshotImpl si = (SnapshotImpl) snap;
-            Metadata meta = si.getMetadata();
-            Map<String, String> conf = meta.getConfiguration();
-            if (ColumnMapping.isColumnMappingModeEnabled(ColumnMapping.getColumnMappingMode(conf))
-                    || "true".equalsIgnoreCase(conf.get("delta.enableInCommitTimestamps"))) {
-                List<String> data = new ArrayList<>();
-                add.forEach(f -> {
-                    if (!f.getName().equals(RowPlan.LOAD_ID) && !f.getName().equals(RowPlan.SOURCE_FILE)) {
-                        data.add(f.getName());
-                    }
-                });
-                if (!data.isEmpty()) {
-                    throw new IllegalStateException(path + " has no column " + String.join(", ", data) + " and is a table under column mapping "
-                            + "or in-commit timestamps, which the loader does not widen: add the column with the engine that wrote the table, "
-                            + "or leave it out of promote and vectors; nothing was written");
-                }
-                return snap;                                            // the load columns: left out by open(), the report lists them
-            }
-            StructType grown = s;
-            for (StructField f : add) {
-                grown = grown.add(f.getName(), f.getDataType(), true);
-            }
-            Row action = SingleAction.createMetadataSingleAction(meta.withNewSchema(grown).toRow());
-            String file = FileNames.deltaFile(si.getLogPath(), si.getVersion() + 1);
-            try {
-                engine.getJsonHandler().writeJsonFileAtomically(file, Utils.singletonCloseableIterator(action), false);
-            } catch (java.nio.file.FileAlreadyExistsException e) {
-                if (attempt >= 10) {
-                    throw new IOException(path + ": the columns " + add.stream().map(StructField::getName).toList() + " could not be added "
-                            + "(the table changed ten times meanwhile)", e);
-                }
-            }
-            snap = table.getLatestSnapshot(engine);
-        }
     }
 
     private static Type icebergType(StructField f, int elementId) {
