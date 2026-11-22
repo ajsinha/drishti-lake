@@ -24,6 +24,10 @@
   <artifactId>lake-iceberg</artifactId>
   <name>Drishti Lake: Iceberg tables on iceberg-core (native reader and writer), the table layer</name>
 
+  <properties>
+    <lake.java.root>${project.basedir}/..</lake.java.root>
+  </properties>
+
   <dependencies>
     <dependency><groupId>com.ash.tools</groupId><artifactId>tools-net</artifactId></dependency>
     <dependency><groupId>com.ash.tools</groupId><artifactId>tools-concurrent</artifactId></dependency>

@@ -26,6 +26,7 @@
   <name>Drishti Lake: bill of materials</name>
 
   <properties>
+    <lake.java.root>${project.basedir}/..</lake.java.root>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- Third-party versions: those of the host at the freeze commit (Drishti main 9ce7c3170), so the moved code runs on what it was
          tested with (design section 6). -->

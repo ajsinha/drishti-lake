@@ -24,6 +24,10 @@
   <artifactId>lake-io</artifactId>
   <name>Drishti Lake: storage (local, S3), ranged reads, Parquet footers, codecs</name>
 
+  <properties>
+    <lake.java.root>${project.basedir}/..</lake.java.root>
+  </properties>
+
   <dependencies>
     <dependency><groupId>com.ash.tools</groupId><artifactId>tools-settings</artifactId></dependency>
     <dependency><groupId>com.ash.tools</groupId><artifactId>tools-net</artifactId></dependency>

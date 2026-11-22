@@ -24,6 +24,10 @@
   <artifactId>lake-files</artifactId>
   <name>Drishti Lake: the files store (one JSON-lines file per table and business date)</name>
 
+  <properties>
+    <lake.java.root>${project.basedir}/..</lake.java.root>
+  </properties>
+
   <dependencies>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-io</artifactId></dependency>
     <dependency><groupId>com.ash.tools</groupId><artifactId>tools-files</artifactId></dependency>

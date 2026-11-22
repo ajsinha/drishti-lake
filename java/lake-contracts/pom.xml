@@ -24,6 +24,10 @@
   <artifactId>lake-contracts</artifactId>
   <name>Drishti Lake: data contracts (the reader and the record checker)</name>
 
+  <properties>
+    <lake.java.root>${project.basedir}/..</lake.java.root>
+  </properties>
+
   <dependencies>
     <dependency><groupId>com.fasterxml.jackson.dataformat</groupId><artifactId>jackson-dataformat-yaml</artifactId></dependency>
     <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>

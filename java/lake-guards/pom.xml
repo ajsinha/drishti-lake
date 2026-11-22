@@ -25,6 +25,7 @@
   <name>Drishti Lake: the repository's guards (names no host, exemptions only shrink, header, file cap, API surface)</name>
 
   <properties>
+    <lake.java.root>${project.basedir}/..</lake.java.root>
     <lake.api.surface.write>false</lake.api.surface.write>
   </properties>
 
@@ -45,7 +46,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <systemPropertyVariables>
-            <lake.repo.root>${project.rootDirectory}/..</lake.repo.root>
+            <lake.repo.root>${lake.java.root}/..</lake.repo.root>
             <lake.api.surface.write>${lake.api.surface.write}</lake.api.surface.write>
           </systemPropertyVariables>
         </configuration>

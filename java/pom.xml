@@ -44,6 +44,8 @@
   </modules>
 
   <properties>
+    <!-- the product's own root, from this module's folder (a property inherited from the parent would be read from the module's folder too, so every module names its own): ${project.basedir} here, ${project.basedir}/.. in a module -->
+    <lake.java.root>${project.basedir}</lake.java.root>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.build.outputTimestamp>2026-01-01T00:00:00Z</project.build.outputTimestamp>
@@ -124,7 +126,7 @@
             <!-- the product's own roots (LakeOptions); every root is absolute (explicit paths) -->
             <lake.data.dir>${project.build.directory}/test-data</lake.data.dir>
             <lake.home>${project.basedir}</lake.home>
-            <lake.repo.root>${project.rootDirectory}/..</lake.repo.root>
+            <lake.repo.root>${lake.java.root}/..</lake.repo.root>
             <lake.module.root>${project.basedir}</lake.module.root>
           </systemPropertyVariables>
         </configuration>

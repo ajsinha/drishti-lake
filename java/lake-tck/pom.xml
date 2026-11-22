@@ -24,6 +24,10 @@
   <artifactId>lake-tck</artifactId>
   <name>Drishti Lake: test support (S3 mock and simulators, TLS and proxy fixtures, rows); the conformance kit grows here (L2, L9)</name>
 
+  <properties>
+    <lake.java.root>${project.basedir}/..</lake.java.root>
+  </properties>
+
   <dependencies>
     <dependency><groupId>com.ash.tools</groupId><artifactId>tools-settings</artifactId></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-api</artifactId></dependency>

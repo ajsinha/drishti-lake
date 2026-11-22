@@ -24,6 +24,10 @@
   <artifactId>lake-memory</artifactId>
   <name>Drishti Lake: the memory lake (mem:// stores, memory tables and their replenish jobs)</name>
 
+  <properties>
+    <lake.java.root>${project.basedir}/..</lake.java.root>
+  </properties>
+
   <dependencies>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-io</artifactId></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-config</artifactId></dependency>

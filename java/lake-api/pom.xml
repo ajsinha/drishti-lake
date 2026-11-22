@@ -24,6 +24,10 @@
   <artifactId>lake-api</artifactId>
   <name>Drishti Lake: the public options and settings (the JDK and Drishti Tools settings only)</name>
 
+  <properties>
+    <lake.java.root>${project.basedir}/..</lake.java.root>
+  </properties>
+
   <dependencies>
     <dependency><groupId>com.ash.tools</groupId><artifactId>tools-settings</artifactId></dependency>
     <dependency><groupId>com.ash.tools</groupId><artifactId>tools-codec</artifactId></dependency>

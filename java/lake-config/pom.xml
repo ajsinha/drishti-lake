@@ -24,6 +24,10 @@
   <artifactId>lake-config</artifactId>
   <name>Drishti Lake: the lake file: model, checks, locations (the host's pack half leaves at L5)</name>
 
+  <properties>
+    <lake.java.root>${project.basedir}/..</lake.java.root>
+  </properties>
+
   <dependencies>
     <dependency><groupId>com.ash.tools</groupId><artifactId>tools-settings</artifactId></dependency>
     <dependency><groupId>com.ash.lake</groupId><artifactId>lake-api</artifactId></dependency>
