@@ -319,7 +319,7 @@ final class NativeMaintenance {
                 continue;
             }
             boolean older = k.olderCopies(day, f);
-            String head = layer + String.format("%020d", k.sequence(day, f)) + (older ? '0' : '1');
+            String head = layer + String.format("%019d", k.sequence(day, f)) + (older ? '0' : '1');
             String file = String.format("%010d", f);
             long[] at = {0};
             copyWhere(k, l, day, f, promoted, all, budget, r -> {
