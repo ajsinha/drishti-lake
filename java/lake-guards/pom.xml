@@ -45,7 +45,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <systemPropertyVariables>
-            <lake.repo.root>${maven.multiModuleProjectDirectory}/..</lake.repo.root>
+            <lake.repo.root>${project.rootDirectory}/..</lake.repo.root>
             <lake.api.surface.write>${lake.api.surface.write}</lake.api.surface.write>
           </systemPropertyVariables>
         </configuration>

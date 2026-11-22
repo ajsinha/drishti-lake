@@ -124,7 +124,7 @@
             <!-- the product's own roots (LakeOptions); every root is absolute (explicit paths) -->
             <lake.data.dir>${project.build.directory}/test-data</lake.data.dir>
             <lake.home>${project.basedir}</lake.home>
-            <lake.repo.root>${maven.multiModuleProjectDirectory}/..</lake.repo.root>
+            <lake.repo.root>${project.rootDirectory}/..</lake.repo.root>
             <lake.module.root>${project.basedir}</lake.module.root>
           </systemPropertyVariables>
         </configuration>
