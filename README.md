@@ -15,7 +15,11 @@ docs: [docs/BUILD_AND_IDE.md, docs/guides/, docs/design/]
 licence: proprietary (LICENSE)
 ---
 
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="brand/drishti_lake-logo.svg"><img src="brand/drishti_lake-logo-light.svg" alt="Drishti Lake" width="330"></picture></p>
+
 # Drishti Lake
+
+<p align="center"><b>One lake. Every store.</b></p>
 
 **Delta, Iceberg and plain files, loaded and read as one lake.**
 
