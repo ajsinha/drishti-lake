@@ -18,7 +18,8 @@ Entries are written per release; unreleased work is listed first.
   orders copies by the data sequence number always (before, only when the date held two runs). Undo skips the commits that rewrote the
   same rows (removes with `dataChange: false`) when it looks for the load's own commit. Kit cases `maintain/compact-commit-order` (loads
   committed opposite to their run ids; compaction, a second run, undo, compaction again; what readers see equal to a table loaded with
-  the expected rows alone) and `retention/ttl-keeps-commit-order`, on every store, local, memory and S3, and the Python path.
+  the expected rows alone; kit verb `undo-rows`: an undo's dates and rows without the version) and `retention/ttl-keeps-commit-order`,
+  on every store, local, memory and S3, and the Python path.
 - **A new promoted column is added, never dropped (G4 F21, accuracy defect)**: on Delta (the Java loader and the Python path) and on the
   files store, a promoted or vector column first sent by a later load of an existing table was left out with no word (Iceberg added it);
   Drishti's VaR read a matured position's `MATURITY_DATE` as missing. Now every store adds it, nullable, at the end (Delta: one metadata

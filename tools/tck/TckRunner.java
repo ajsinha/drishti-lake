@@ -474,6 +474,7 @@ public final class TckRunner {
         try {   // lake-only
             Object done = switch (a[0]) {   // lake-only
                 case "undo" -> store.undo(RT, t, a[5], false);   // lake-only
+                case "undo-rows" -> store.undo(RT, t, a[5], false).stream().map(c -> c.date() + ": removed=" + c.removed() + " restored=" + c.restored()).toList();   // lake-only: without the version (a store whose maintenance committed nothing counts its versions apart)
                 case "delete" -> store.deleteDates(RT, t, java.util.Set.of(LocalDate.parse(a[5])), false);   // lake-only
                 case "dates" -> store.dates(RT, t);   // lake-only
                 case "versions" -> store.versions(RT, t).size() + " versions";   // lake-only

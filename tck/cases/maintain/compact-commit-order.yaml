@@ -63,7 +63,7 @@ steps:
   - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact]
   - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
   - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want-before]
-  - undo: [--lake, '${lake}', --load-id, 20261121T131450.000-4-1.1, --table, risk/scenario-pv]
+  - store: [undo-rows, '${store}', '${lake}', risk, scenario-pv, 20261121T131450.000-4-1.1]
   - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
   - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t', 'BASE_PV:n']
   - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want-undone]
