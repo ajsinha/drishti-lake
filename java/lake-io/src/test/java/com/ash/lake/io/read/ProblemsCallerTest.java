@@ -18,7 +18,7 @@ package com.ash.lake.io.read;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.lake.common.LakeException;
+import com.ash.lake.LakeException;
 import com.ash.lake.read.VectorSink;
 import java.time.LocalDate;
 import java.util.concurrent.CompletableFuture;

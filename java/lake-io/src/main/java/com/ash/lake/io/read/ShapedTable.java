@@ -15,8 +15,8 @@
  */
 package com.ash.lake.io.read;
 
-import com.ash.lake.common.LakeError;
-import com.ash.lake.common.LakeException;
+import com.ash.lake.LakeError;
+import com.ash.lake.LakeException;
 import com.ash.lake.read.TableShape;
 import java.math.BigDecimal;
 import java.time.Instant;

@@ -30,6 +30,26 @@ Entries are written per release; unreleased work is listed first.
   appended copy could lose to the older one), files the day file that holds an id twice. A table laid out by more than the id
   (`lake.layout.sort-by`, which a Delta table now records too) is left in its order. The id map reports sorted-and-filed on every store
   after maintenance; kit case `maintain/sorted-layout`, kit verb `read-layout`.
+- **A moved Iceberg table is said again (regression in 0.9.0's read API)**: a table moved or copied after it was written (its metadata
+  still names the old folder) was reported as `File does not exist: …avro`, with no `relocate` to copy. The Iceberg reader words it again
+  (`TableProblems`, now the reader's `Problems.Classifier`): the read problem (a host's Health) names the old folder and the pair that reads
+  it (`relocate: '/data/ice1 -> /data/ice2'`, or that a `relocate` set sends reads where the files are not either); the failure thrown
+  is `LK-1006` in words without a folder ("the table cva names files that are not there …"), so a host shows it as one line, never a stack
+  trace or a path. A read problem keeps up to 1,000 characters (300 cut the pair). Delta and the plain-file store keep paths relative to the
+  table, so a moved Delta or files table reads where it is. `IcebergMovedTableTest`.
+- **lake maintain --relayout of several dates (G4 defect)**: relayout commits each date on its own, and the second date found relayout's own
+  first commit and refused with "another writer committed while relayout read the date" (every Delta table with more than one drifted date,
+  whoever wrote it). The next date now expects the version relayout itself committed; another writer's commit between two dates still
+  stops it, nothing written. Kit case `maintain/relayout-several-dates` (two drifted dates: every date laid out, what readers see the
+  same, one copy an id, a second run has nothing to do).
+- **The public surface a host needs (G4 F6)**: `LakeException` and `LakeError` are `com.ash.lake` (were `com.ash.lake.common`); `RowFeed`
+  (a host's store loader's input by the load rules) is `com.ash.lake.load` (was `com.ash.lake.common`); new `com.ash.lake.load.LakeStorage`
+  (local disk, S3 with the runtime's and the caller's `s3.*` settings, `mem://`: a `Storage` to write or check files beside the tables, with
+  `isLocal`/`localPath`). Not public, with what to call instead: the Delta manifest writer (`LakeWriter`, `LakeManifest`, `LakeCli`) and
+  the Iceberg appender (`IcebergAppender`): the loader (`LakeLoad.run(runtime, args, out)` with `source.format: loader-rows`,
+  `target.mode: append`, `target.properties`, the version from `--summary`); `S3Storage`, `S3Settings`, `LocalPaths`: `LakeStorage`;
+  `PageDecodeException`, `UnsupportedCodec`: every read wraps them as `LakeException` with `LakeError.UNREADABLE`, its message the
+  words. `java/api-surface.txt` updated; the design's section 3.1 lists them. The dead Delta `TableProblems` is removed.
 - **lake maintain's report**: `before` and `after` give `files`, `mb`, `latestDate` and `latestRows` as well, on every store.
 - **A caller's refusal is its own (G4 triage)**: an exception thrown by the caller's sink inside a read (a vector, document or row sink:
   a host refusing a duplicate trade, say) leaves the read as it was thrown, unchanged, and records no read problem; before, every store

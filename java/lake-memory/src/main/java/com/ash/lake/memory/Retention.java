@@ -15,8 +15,8 @@
  */
 package com.ash.lake.memory;
 
-import com.ash.lake.common.LakeError;
-import com.ash.lake.common.LakeException;
+import com.ash.lake.LakeError;
+import com.ash.lake.LakeException;
 import com.ash.lake.spi.RowSource;
 import java.util.Collection;
 import java.util.HashMap;

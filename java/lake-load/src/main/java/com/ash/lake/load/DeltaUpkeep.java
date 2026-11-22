@@ -235,9 +235,12 @@ final class DeltaUpkeep {
                     dates.add(d);
                 }
             }
+            // each date is one commit of its own: the next date expects the version relayout itself just committed, so only another
+            // writer's commit between two dates (or while a date is read) stops it
+            long expected = snap.version();
             for (java.time.LocalDate d : dates) {
                 if (!dryRun) {
-                    relayDate(runtime, engine, path, snap, d, fileRows);
+                    expected = relayDate(runtime, engine, path, snap, expected, d, fileRows);
                 }
                 done.add(d.toString());
             }
@@ -245,11 +248,16 @@ final class DeltaUpkeep {
         return done;
     }
 
-    /** One date rewritten as readers see it: each id's winning copy (the read API's id map), sorted by id, files of {@code fileRows}. */
-    private static void relayDate(com.ash.lake.LakeRuntime runtime, Engine engine, String path, com.ash.lake.read.TableSnapshot snap,
-            java.time.LocalDate date, int fileRows) throws IOException {
+    /**
+     * One date rewritten as readers see it: each id's winning copy (the read API's id map of {@code snap}), sorted by id, files of
+     * {@code fileRows}; returns the version committed. The table must be at {@code expected}: {@code snap}'s version, or the version an
+     * earlier date of the same relayout committed (that commit touched no other date, so {@code snap}'s files and ids of this date are
+     * still the table's). Any other version is another writer's commit: nothing is written.
+     */
+    private static long relayDate(com.ash.lake.LakeRuntime runtime, Engine engine, String path, com.ash.lake.read.TableSnapshot snap,
+            long expected, java.time.LocalDate date, int fileRows) throws IOException {
         Snapshot s = Table.forPath(engine, path).getLatestSnapshot(engine);
-        if (s.getVersion() != snap.version()) {
+        if (s.getVersion() != expected) {
             throw new IOException(path + " " + date + ": another writer committed while relayout read the date; run it again");
         }
         List<com.ash.lake.read.DataFile> files = snap.day(date).orElseThrow().files();
@@ -276,7 +284,7 @@ final class DeltaUpkeep {
             throw new IOException(path + " " + day + ": " + (winner.size() - kept.size()) + " id(s) of the date were not found in their "
                     + "files; nothing was rewritten");
         }
-        LakeUndo.rewriteSorted(runtime, engine, path, s, day, new ArrayList<>(kept.values()), fileRows);
+        return LakeUndo.rewriteSorted(runtime, engine, path, s, day, new ArrayList<>(kept.values()), fileRows);
     }
 
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
