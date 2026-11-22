@@ -19,7 +19,7 @@ import os
 import socket
 import sys
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from . import config as configs
 from . import archives, delta, filedate, inputs, rowrule
@@ -27,7 +27,8 @@ from . import archives, delta, filedate, inputs, rowrule
 OK, FAILED, PARTIAL, LOCKED = 0, 1, 2, 3
 STATE = "_drishti-lake"
 USAGE = ("usage: python -m drishti_lake load --config FILE [--set key.path=value ...] [--as-of YYYY-MM-DD] [--table T] [--kind K] "
-         "[--mode append|replace] [--key FIELD] [--date-from auto|name] [--plan] [--summary FILE] [--progress FILE] [--no-lock] "
+         "[--mode append|replace] [--key FIELD] [--date-from auto|name] [--plan] [--summary FILE] [--progress FILE] "
+         "[--future-days N] [--zone Z] [--max-drop-share F] [--force-drop] [--no-lock] "
          "[--no-run-log] [--dry-run] [--run-id ID] [--json] [-q]")
 
 
@@ -51,7 +52,8 @@ def main(argv: list[str], out=None) -> int:
     cfg_file, sets, json_out, quiet, given_run = None, [], False, False, None
     flags = {"--summary": "report.summary", "--progress": "report.progress", "--dataset": "source.dataset", "--as-of": "source.as-of",
              "--table": "target.table", "--pack": "source.pack", "--kind": "target.kind", "--mode": "target.mode", "--key": "source.id",
-             "--date-from": "source.date-from"}
+             "--date-from": "source.date-from", "--future-days": "guard.future-days", "--zone": "guard.zone",
+             "--max-drop-share": "guard.max-drop-share"}
     try:
         i = 0
         while i < len(argv):
@@ -69,6 +71,8 @@ def main(argv: list[str], out=None) -> int:
                     given_run = v
                 else:
                     sets.append(f"{flags[a]}={v.lower() if a == '--table' else v}")
+            elif a == "--force-drop":
+                sets.append("guard.force-drop=true")
             elif a == "--no-lock":
                 sets.append("lock=false")
             elif a == "--no-run-log":
@@ -95,10 +99,11 @@ def main(argv: list[str], out=None) -> int:
     except (OSError, ValueError) as e:
         print(f"lakeload: the configuration: {e}", file=out)
         return FAILED
-    today = filedate.today()
+    today = filedate.today(cfg.zone)
+    latest = today + timedelta(days=cfg.future_days)
     notes = []
     try:
-        files = inputs.resolve(cfg.files, cfg.recursive, today, cfg.limits, cfg.dataset, cfg.table, cfg.as_of, notes)
+        files = inputs.resolve(cfg.files, cfg.recursive, latest, cfg.limits, cfg.dataset, cfg.table, cfg.as_of, notes)
     except archives.ArchiveError as e:
         print(f"lakeload: {e}", file=out)
         return FAILED
@@ -113,6 +118,7 @@ def main(argv: list[str], out=None) -> int:
         for n in notes:
             print(f"  {n}", file=out)
     report = Report(cfg, given_run or run_id(), today)
+    report.latest = latest
     error, lock = None, None
     try:
         if cfg.lock and not cfg.dry_run:
@@ -205,6 +211,7 @@ class Report:
         self.skipped: list = []
         self.columns: dict = {}
         self.left_out: list = []
+        self.latest = today                         # the latest business date allowed (today plus guard.future-days)
 
     def reject(self, reason: str, where: str):
         self.rejected += 1
@@ -254,10 +261,10 @@ class Loader:
                                  flatten=dict(cfg.flatten), vectors=tuple(vectors), latest_by=latest)
 
     def run(self):
-        cfg, rep, today = self.cfg, self.report, self.report.today
+        cfg, rep, today, latest = self.cfg, self.report, self.report.today, self.report.latest
         decided = []
         for f in self.files:
-            d = self.decide(f, today)
+            d = self.decide(f, today, latest)
             if d.error:
                 raise LoadError(d.error + " (nothing was loaded)")
             decided.append(d)
@@ -300,11 +307,13 @@ class Loader:
         self.check_row_dates(row_days, decided)
         for fd, d in zip(rep.file_dates, decided):
             fd.update({"date": d.date.isoformat() if d.date else None, "source": d.source})
-        future = sorted(day for day in by_date if day > rowrule.epoch_day(today))
+        future = sorted(day for day in by_date if day > rowrule.epoch_day(latest))
         if future:
             more = len(future) - 1
-            raise LoadError(filedate.future_error(rowrule.day_of(future[-1]), today)
-                            + (f" (and {more} other future date{'s' if more > 1 else ''})" if more else "") + " (nothing was written)")
+            raise LoadError(filedate.future_error(rowrule.day_of(future[-1]), latest)
+                            + (f" (and {more} other future date{'s' if more > 1 else ''})" if more else "")
+                            + ("" if latest == today else f" (the latest allowed is {latest.isoformat()}: today {today.isoformat()} plus "
+                               "guard.future-days)") + " (nothing was written)")
         rep.documents, rep.accepted, rep.rejected = read.documents, read.accepted, read.rejected
         rep.by_reason, rep.first = read.by_reason, read.first
         for day, rows in by_date.items():
@@ -312,6 +321,7 @@ class Loader:
         if rep.documents > 0 and rep.rejected * 100.0 / rep.documents > cfg.max_pct:
             raise LoadError(f"{rep.rejected:,} of {rep.documents:,} documents rejected ({rep.rejected * 100.0 / rep.documents:.2f}%), more than "
                             f"rejects.max-pct {float(cfg.max_pct)}: nothing was written")
+        drop_guard(cfg, {rowrule.day_of(day): len(rows) for day, rows in by_date.items()})
         if cfg.dry_run:
             rep.status = "dry-run"
             return
@@ -331,12 +341,13 @@ class Loader:
             rep.commits[d.isoformat()] = {"version": version, "rows": table.num_rows}
         rep.status = "partial" if rep.rejected > 0 else "ok"
 
-    def decide(self, f, today: date) -> filedate.Decided:
+    def decide(self, f, today: date, latest: date | None = None) -> filedate.Decided:
         """A file's business date (``ParseWorker.decide``): a tar member's folder; else given, the ``.ready`` file, the name, today."""
         if f.folder_date is not None:
             return filedate.Decided(f.folder_date, "folder")
+        latest = latest or today
         given = self.cfg.as_of if self.cfg.as_of is not None else filedate.ready_date(f.top)
-        d = filedate.decide(given, filedate.of(f.dated_name, today), self.cfg.date_from, today, f.dated_name)
+        d = filedate.decide(given, filedate.of(f.dated_name, latest), self.cfg.date_from, today, f.dated_name, latest)
         if d.error is None and self.cfg.as_of is None and given is not None:
             return filedate.Decided(d.date, "ready")
         return d
@@ -373,6 +384,25 @@ class Loader:
                                "file, or give the date (--as-of, business-date)")
         if refused:
             raise LoadError("; ".join(refused) + " (nothing was written)")
+
+
+def drop_guard(cfg, loading: dict) -> None:
+    """The drop guard (Java: DropGuard; ``guard.max-drop-share``, ``--force-drop``): before a replace writes anything, a date that would
+    lose more than the share of the rows the table holds for it refuses the whole load, every such date named. Off without a share, for
+    an append, and with force-drop; a date the table does not hold drops nothing."""
+    share = cfg.max_drop_share
+    if share is None or cfg.force_drop or cfg.mode == "append" or not loading:
+        return
+    held = delta.rows_per_date(cfg.table_path, set(loading))
+    refused = []
+    for d in sorted(loading):
+        before, rows = held.get(d, 0), loading[d]
+        dropping = max(0, before - rows)
+        if before > 0 and dropping > share * before:
+            refused.append(f"{d.isoformat()} holds {before:,} rows, the load brings {rows:,} ({dropping * 100.0 / before:.0f}% fewer)")
+    if refused:
+        raise LoadError(f"{cfg.domain}/{cfg.table}: " + "; ".join(refused) + f": more than guard.max-drop-share {float(share)} of a date's rows "
+                        "would go; nothing was written. Check the input, or pass --force-drop")
 
 
 def _day_words(m: dict, field: str) -> str:

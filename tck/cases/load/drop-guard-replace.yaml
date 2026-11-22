@@ -1,0 +1,39 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# the drop guard (the old Iceberg loader's --max-drop-share and --force-drop, now the one loader's on every store and the Python path):
+# a replace that would leave a date with more than the share fewer rows is refused before anything is written, every such date named
+# (a dry run too); a smaller drop, force-drop, an append and a new date pass; off unless a share is set
+inputs:
+  full/pv.2026-10-27.jsonl: {pv: {n: 12, scenarios: 2, seed: 1}}
+  full/pv.2026-10-28.jsonl: {pv: {n: 10, scenarios: 2, seed: 2, start: '2026-10-28'}}
+  short/pv.2026-10-27.jsonl: {pv: {n: 4, scenarios: 2, seed: 3}}
+  short/pv.2026-10-28.jsonl: {pv: {n: 3, scenarios: 2, seed: 4, start: '2026-10-28'}}
+  short/pv.2026-10-29.jsonl: {pv: {n: 2, scenarios: 2, seed: 5, start: '2026-10-29'}}
+  one/pv.2026-10-27.jsonl: {pv: {n: 1, scenarios: 2, seed: 6}}
+configs:
+  full: |
+    source: {files: '${in}/full/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+  short: |
+    source: {files: '${in}/short/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+  share: |
+    source: {files: '${in}/short/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+    guard: {max-drop-share: 0.75}
+  append: |
+    source: {files: '${in}/one/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: append}
+    guard: {max-drop-share: 0.1}
+  force: |
+    source: {files: '${in}/one/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+    guard: {max-drop-share: 0.1, force-drop: true}
+steps:
+  - load: {config: full}
+  - load: {config: short, args: [--max-drop-share, '0.5']}
+  - load: {config: short, args: [--max-drop-share, '0.5', --dry-run]}
+  - load: {config: short, args: [--max-drop-share, '2']}
+  - load: {config: share}
+  - load: {config: append}
+  - load: {config: force}
+  - load: {config: full, args: [--max-drop-share, '0.5', --force-drop]}

@@ -210,6 +210,11 @@ final class Archives {
 
     /** The archive's datasets by the rule, every check that needs no reading made. {@code dataset}: the name of a folderless one. */
     static Plan plan(FileAccess io, String path, long size, String dataset, Limits limits) throws IOException {
+        return plan(io, path, size, dataset, limits, null);
+    }
+
+    /** As above, a tar's folder dated up to {@code latest} allowed (the load's today plus {@code guard.future-days}; null: today). */
+    static Plan plan(FileAccess io, String path, long size, String dataset, Limits limits, java.time.LocalDate latest) throws IOException {
         String name = Inputs.name(path);
         Kind kind = kind(name);
         List<Entry> entries;
@@ -228,7 +233,7 @@ final class Archives {
                     + " (a zip bomb?); nothing was read");
         }
         if (kind != Kind.ZIP) {
-            return tarFeed(path, name, kind, size, entries, FileDates.today(io.runtime().options().businessZone()));
+            return tarFeed(path, name, kind, size, entries, latest != null ? latest : FileDates.today(io.runtime().options().businessZone()));
         }
         List<String> notes = new ArrayList<>();
         List<Member> loose = new ArrayList<>();

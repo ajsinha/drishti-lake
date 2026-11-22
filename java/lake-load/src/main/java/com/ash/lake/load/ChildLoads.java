@@ -154,7 +154,8 @@ final class ChildLoads {
             throws IOException, InterruptedException {
         Map<String, Long> rows = new LinkedHashMap<>();
         Map<String, BufferedWriter> writers = new HashMap<>();
-        RowPlan plan = new RowPlan(cfg.source(), cfg.target().layout().sortBy(), FileDates.today(cfg.runtime().options().businessZone()));
+        LocalDate today = cfg.guard().today(cfg.runtime());
+        RowPlan plan = new RowPlan(cfg.source(), cfg.target().layout().sortBy(), today, today.plusDays(cfg.guard().futureDays()));
         Meter meter = new Meter("children", 1);
         try (FileAccess io = new FileAccess(cfg.runtime(), S3Settings.from(cfg.runtime(), cfg.source().storage()), Relocation.none(), null)) {
             List<InputFile> files = given != null ? given : Inputs.resolve(cfg.source().files(), cfg.source().recursive(), io);

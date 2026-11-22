@@ -20,6 +20,7 @@ The class path is the `lake-load` module's run-time class path (`./mvnw package 
 | `--config FILE` | the load's YAML (below); `--set key.path=value` overrides any key (the value is read as YAML; repeatable) |
 | `--as-of YYYY-MM-DD` | the business date of every file that does not carry its own |
 | `--table T`, `--kind K`, `--pack DIR`, `--key FIELD`, `--mode append\|replace`, `--date-from auto\|name`, `--dataset NAME` | the keys `target.table`, `target.kind`, `source.pack`, `source.id`, `target.mode`, `source.date-from`, `source.dataset` |
+| `--future-days N`, `--zone Z`, `--max-drop-share F`, `--force-drop` | the guards: `guard.future-days`, `guard.zone`, `guard.max-drop-share`, `guard.force-drop` (below) |
 | `--dry-run`, `--plan` | read and check everything, write nothing |
 | `--summary FILE`, `--progress FILE`, `--no-lock`, `--no-run-log`, `--run-id ID`, `--json`, `-q` | reporting and locking |
 
@@ -27,7 +28,7 @@ The class path is the `lake-load` module's run-time class path (`./mvnw package 
 
 ## The configuration
 
-A mapping of `source`, `target`, `parallel`, `memory`, `rejects`, `report`, `lock`, `datasets`. An unknown key is refused. A value may be
+A mapping of `source`, `target`, `parallel`, `memory`, `rejects`, `report`, `guard`, `lock`, `datasets`. An unknown key is refused. A value may be
 `${NAME}` (an environment variable); keys and secrets are never taken from the file (S3 credentials come from the AWS default chain).
 
 | Section | Keys |
@@ -40,6 +41,7 @@ A mapping of `source`, `target`, `parallel`, `memory`, `rejects`, `report`, `loc
 | `memory` | `budget-mb` (default half the heap, shared by the reader queue, the parsers' sort buffers and the writers), `sort-buffer-mb`, `spill-dir`, `check-spill-space` |
 | `rejects` | `file`, `max-pct` (the share of rejected rows a load may have and still commit), `keep` |
 | `report` | `summary`, `manifest`, `progress`, `run-log`, `dry-run` |
+| `guard` | `future-days` (0), `zone`, `max-drop-share` (off unless set), `force-drop` (false): the accuracy guards below |
 
 When `target.lake` names a lake file ([STORAGE.md](STORAGE.md)), the table is that file's entry for `target.kind` (location, format,
 partitioning, promoted columns, vectors, id, date, latest-by, sort, layout, load mode); a load key that says otherwise is refused with both
@@ -50,6 +52,14 @@ values named; a kind the lake file lacks is refused.
 - **Business date of a file**, in order: the date given (`--as-of`, a `.ready` file's `business-date`), the date in the file name, a tar's
   folder, the business today. A file name is `<table>.<date>.<format>[.<compression>]` (`trades.2026-11-20.jsonl.gz`); anything else is refused
   with the reason, never guessed. **No date after today** (the business zone's, `lake.business.zone`) is ever loaded.
+- **Guards** (`guard:`, the same on every store and on the Python path). The **date guard**: a business date after today plus
+  `guard.future-days` (0) is refused, whatever gave it (the name, a tar's folder, `--as-of`, a `.ready` file, the rows), before anything is
+  written; `guard.zone` names the zone whose today it is (default `lake.business.zone`). The **drop guard**: with `guard.max-drop-share F`,
+  a replace that would leave a date (this load's slice of a shared table) with more than F fewer rows than the table holds for it now is
+  refused before anything is written, every such date named (`<date> holds N rows, the load brings M (P% fewer)`), a dry run too;
+  `guard.force-drop` (or `--force-drop`) lets it through. An append, and a date the table does not hold yet, drop nothing. Off unless a
+  share is set: set it for a feed whose dates must not shrink by accident (0.5: half a date). Retention's own guard is
+  `lake maintain --keep-days` (below). Kit cases: `load/date-guard-future-days-and-zone`, `load/drop-guard-replace`.
 - **Archives.** A `zip` is one table and one business date, its JSON Lines files loose, dated by the archive's name. A tar
   (`.tar`, `.tar.gz`, `.tgz`) is `<table>/<YYYY-MM-DD>/<file>.jsonl[.gz|.zst]`: every member dated by its folder, each table loaded, and any
   other layout refuses the whole archive listing every problem. Absolute or `..` names, links, devices, encrypted members and nested archives

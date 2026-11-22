@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# the date guard's settings (the old Iceberg loader's --future-days and --zone, now the one loader's on every store and the Python
+# path): a date after today is refused (load/future-date-refused) unless guard.future-days reaches it; the zone names the business
+# today; a negative number of days and an unknown zone are refused before a row is read
+inputs:
+  later/pv.2999-01-04.jsonl: {pv: {n: 6, scenarios: 2, seed: 2, start: '2999-01-04'}}
+configs:
+  main: |
+    source: {files: '${in}/later/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  set: |
+    source: {files: '${in}/later/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+    guard: {future-days: 400000, zone: Pacific/Kiritimati}
+steps:
+  - load: {config: main, args: [--future-days, '-1']}
+  - load: {config: main, args: [--zone, Mars/Olympus]}
+  - load: {config: main, args: [--zone, UTC]}
+  - load: {config: main, args: [--future-days, '400000', --zone, Pacific/Kiritimati]}
+  - load: {config: set}

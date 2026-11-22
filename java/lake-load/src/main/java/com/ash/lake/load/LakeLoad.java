@@ -147,6 +147,10 @@ public final class LakeLoad {
                     case "--mode" -> sets.add("target.mode=" + next(args, ++i, a));
                     case "--key" -> sets.add("source.id=" + next(args, ++i, a));
                     case "--date-from" -> sets.add("source.date-from=" + next(args, ++i, a));
+                    case "--future-days" -> sets.add("guard.future-days=" + next(args, ++i, a));
+                    case "--zone" -> sets.add("guard.zone=" + next(args, ++i, a));
+                    case "--max-drop-share" -> sets.add("guard.max-drop-share=" + next(args, ++i, a));
+                    case "--force-drop" -> sets.add("guard.force-drop=true");
                     case "--plan" -> sets.add("report.dry-run=true");
                     case "--run-id" -> i++;                     // read by run(): the run's id (its rows' load ids are <run-id>.<file>)
                     case "--json" -> json = true;
@@ -154,7 +158,7 @@ public final class LakeLoad {
                     case "-h", "--help" -> {
                         out.println("usage: LakeLoad --config FILE [--set key.path=value ...] [--as-of YYYY-MM-DD] [--table T] [--pack DIR] "
                                 + "[--kind K] [--mode append|replace] [--key FIELD] [--date-from auto|name] [--plan] [--summary FILE] [--progress FILE] "
-                                + "[--no-lock] [--no-run-log] [--dry-run] [--dataset NAME] [--json] [-q]   (docs/guides/CLI_REFERENCE.md section 4.13, "
+                                + "[--future-days N] [--zone Z] [--max-drop-share F] [--force-drop] [--no-lock] [--no-run-log] [--dry-run] [--dataset NAME] [--json] [-q]   (docs/guides/CLI_REFERENCE.md section 4.13, "
                                 + "docs/guides/DATA_LAKE_GUIDE.md)");
                         return OK;
                     }

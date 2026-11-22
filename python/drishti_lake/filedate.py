@@ -177,16 +177,19 @@ def future_error(day: date, now: date, source: str | None = None) -> str | None:
     return f"business date {day.isoformat()}" + ("" if source is None else " " + source) + " is in the future: a load for a future date is refused"
 
 
-def decide(given: date | None, name_date: date | None, date_from: str = "auto", today: date | None = None, name: str = "") -> Decided:
+def decide(given: date | None, name_date: date | None, date_from: str = "auto", today: date | None = None, name: str = "",
+           latest: date | None = None) -> Decided:
     """The business date of one plain file (module doc). ``name``: the name the date was read from; a bad date part in it refuses the
-    file whatever else is given (a wrong date is never replaced by --as-of, the .ready file or today)."""
+    file whatever else is given (a wrong date is never replaced by --as-of, the .ready file or today). ``latest``: the latest date
+    allowed (today plus the loader's ``guard.future-days``; default today); a file without a date still goes under today."""
     day = today or _zone_today()
-    why = date_error(name, day) if name else None
+    last = latest or day
+    why = date_error(name, last) if name else None
     if why:
         return Decided(None, "name", why)
     if given is not None:
-        if given > day:
-            return Decided(None, "given", future_error(given, day, "given (--as-of, the .ready file's business-date)"))
+        if given > last:
+            return Decided(None, "given", future_error(given, last, "given (--as-of, the .ready file's business-date)"))
         return Decided(given, "given")
     if name_date is not None:
         return Decided(name_date, "name")

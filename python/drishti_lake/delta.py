@@ -33,6 +33,19 @@ def polars_installed() -> bool:
         return False
 
 
+def rows_per_date(path: str, dates: set) -> dict:
+    """The rows the Delta table at ``path`` holds on each of ``dates`` (counted, the table read through delta-rs); none when absent."""
+    from deltalake import DeltaTable
+    if not DeltaTable.is_deltatable(path):
+        return {}
+    import pyarrow.compute as pc
+    t = DeltaTable(path).to_pyarrow_table(columns=["business_date"], partitions=[("business_date", "in", [d.isoformat() for d in sorted(dates)])])
+    out = {}
+    for d, n in zip(*[c.to_pylist() for c in pc.value_counts(t.column("business_date")).flatten()]):
+        out[d] = n
+    return out
+
+
 class TableError(Exception):
     """The table refuses the load (its partitioning, its state): the Java loader's words."""
 

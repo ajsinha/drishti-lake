@@ -15,6 +15,8 @@ layout/partition-by-beside-the-date
 load/append-batch-once
 load/append-without-batch
 load/contract-rejects-rows
+load/date-guard-future-days-and-zone
+load/drop-guard-replace
 load/future-date-refused
 load/loader-rows
 load/rerun-replaces-the-date

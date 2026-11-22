@@ -210,12 +210,20 @@ public final class FileDates {
      * file whatever else is given (a wrong date is never replaced by {@code as-of}, the {@code .ready} file or today).
      */
     public static Decided decide(LocalDate given, LocalDate nameDate, String dateFrom, LocalDate today, String name) {
-        String why = name == null ? null : dateError(name, today);
+        return decide(given, nameDate, dateFrom, today, today, name);
+    }
+
+    /**
+     * As {@link #decide(LocalDate, LocalDate, String, LocalDate, String)}, a date up to {@code latest} allowed (today plus the loader's
+     * {@code guard.future-days}); a file without a date still goes under {@code today}.
+     */
+    public static Decided decide(LocalDate given, LocalDate nameDate, String dateFrom, LocalDate today, LocalDate latest, String name) {
+        String why = name == null ? null : dateError(name, latest);
         if (why != null) {
             return new Decided(null, "name", why);
         }
         if (given != null) {
-            return given.isAfter(today) ? new Decided(null, "given", futureError(given, today, "given (--as-of, the .ready file's business-date)"))
+            return given.isAfter(latest) ? new Decided(null, "given", futureError(given, latest, "given (--as-of, the .ready file's business-date)"))
                     : new Decided(given, "given", null);
         }
         if (nameDate != null) {

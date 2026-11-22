@@ -81,7 +81,8 @@ final class Loader {
     Loader(LoadConfig cfg, List<InputFile> files) {
         this.cfg = cfg;
         this.given = files;
-        this.plan = new RowPlan(cfg.source(), cfg.target().layout().sortBy(), FileDates.today(cfg.runtime().options().businessZone()));
+        java.time.LocalDate today = cfg.guard().today(cfg.runtime());
+        this.plan = new RowPlan(cfg.source(), cfg.target().layout().sortBy(), today, today.plusDays(cfg.guard().futureDays()));
         this.plan.contract = cfg.target().contract();
         this.report = new LoadReport(cfg, plan);
     }
@@ -127,13 +128,14 @@ final class Loader {
             read(io, splits, readers, spillDir, workers, read, decompress, parse, spill, lines);
             report.readSeconds = (System.nanoTime() - t0) / 1e9;
             checkRowDates(workers);
-            checkFutureDates(workers, plan.today);
+            checkFutureDates(workers, plan.today, plan.latest);
             report.collect(workers, splits, lines);
             progress.phase("read");
             if (report.documents > 0 && report.rejected * 100.0 / report.documents > cfg.rejects().maxPct()) {
                 throw new LoadException(String.format(java.util.Locale.ROOT, "%,d of %,d documents rejected (%.2f%%), more than rejects.max-pct %s: "
                         + "nothing was written", report.rejected, report.documents, report.rejected * 100.0 / report.documents, cfg.rejects().maxPct()));
             }
+            DropGuard.check(cfg, rowsByDate(workers));
             if (cfg.report().dryRun()) {
                 report.status = "dry-run";
                 return report;
@@ -230,16 +232,26 @@ final class Loader {
      * No business date in the future, whatever gave it (the name, a folder, {@code as-of}, a {@code .ready} file, the rows' own date, a
      * loader row's date) and whatever the store: a load that would write a date after {@code today} is refused before anything is written.
      */
-    private static void checkFutureDates(List<ParseWorker> workers, LocalDate today) {
+    private static void checkFutureDates(List<ParseWorker> workers, LocalDate today, LocalDate latest) {
         java.util.TreeSet<Integer> future = new java.util.TreeSet<>();
         for (ParseWorker w : workers) {
-            w.dates.keySet().stream().filter(day -> day > today.toEpochDay()).forEach(future::add);
+            w.dates.keySet().stream().filter(day -> day > latest.toEpochDay()).forEach(future::add);
         }
         if (!future.isEmpty()) {
-            throw new LoadException(FileDates.futureError(LocalDate.ofEpochDay(future.last()), today, null)
+            throw new LoadException(FileDates.futureError(LocalDate.ofEpochDay(future.last()), latest, null)
                     + (future.size() > 1 ? " (and " + (future.size() - 1) + " other future date" + (future.size() > 2 ? "s" : "") + ")" : "")
+                    + (latest.equals(today) ? "" : " (the latest allowed is " + latest + ": today " + today + " plus guard.future-days)")
                     + " (nothing was written)");
         }
+    }
+
+    /** The rows this load writes per business date (every worker's). */
+    private static java.util.SortedMap<LocalDate, Long> rowsByDate(List<ParseWorker> workers) {
+        java.util.SortedMap<LocalDate, Long> out = new java.util.TreeMap<>();
+        for (ParseWorker w : workers) {
+            w.dates.forEach((day, rows) -> out.merge(LocalDate.ofEpochDay(day), rows.rows, Long::sum));
+        }
+        return out;
     }
 
     /** {@code 2026-11-12 in 300 rows, 2026-11-13 in 2 rows, none in 5 rows}. */

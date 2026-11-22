@@ -17,7 +17,8 @@ python -m drishti_lake --help
 
 ```text
 python -m drishti_lake load --config FILE [--set key.path=value ...] [--as-of YYYY-MM-DD] [--table T] [--kind K] [--mode append|replace]
-        [--key FIELD] [--date-from auto|name] [--plan] [--summary FILE] [--progress FILE] [--no-lock] [--no-run-log] [--dry-run] [--run-id ID] [--json] [-q]
+        [--key FIELD] [--date-from auto|name] [--plan] [--summary FILE] [--progress FILE] [--future-days N] [--zone Z] [--max-drop-share F]
+        [--force-drop] [--no-lock] [--no-run-log] [--dry-run] [--run-id ID] [--json] [-q]
 python -m drishti_lake contracts check|pages ...            (CONTRACTS.md)
 python -m drishti_lake undo|retention|check|maintain|lakes ...    the Java tools, below
 ```

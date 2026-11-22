@@ -187,9 +187,9 @@ final class ParseWorker implements Callable<Void> {
             return new FileDates.Decided(f.member().date(), "folder", null);
         }
         String dated = f.member() != null ? f.member().archiveName() : f.name();          // the name the date is read from
-        java.time.LocalDate named = FileDates.of(dated, today);
+        java.time.LocalDate named = FileDates.of(dated, plan.latest);
         java.time.LocalDate given = plan.asOf != null ? plan.asOf : FileDates.readyDate(f.member() != null ? f.member().archive() : f.path());
-        FileDates.Decided d = FileDates.decide(given, named, plan.dateFrom, today, dated);
+        FileDates.Decided d = FileDates.decide(given, named, plan.dateFrom, today, plan.latest, dated);
         return d.error() == null && plan.asOf == null && given != null ? new FileDates.Decided(d.date(), "ready", null) : d;
     }
 

@@ -58,6 +58,8 @@ final class RowPlan {
     final java.time.LocalDate asOf;
     /** The load's today: the calendar date in the runtime's business zone when the load began (one for every file of it). */
     final java.time.LocalDate today;
+    /** The latest business date the load may write: {@link #today} plus {@code guard.future-days} (LoadConfig.Guard). */
+    final java.time.LocalDate latest;
     /** {@code auto} or {@code name}: how a file without {@code as-of} gets its business date ({@link FileDates#decide}). */
     final String dateFrom;
     /**
@@ -94,7 +96,12 @@ final class RowPlan {
     final List<String> sortNames = new ArrayList<>();
 
     RowPlan(LoadConfig.Source s, List<String> sortBy, java.time.LocalDate today) {
+        this(s, sortBy, today, today);
+    }
+
+    RowPlan(LoadConfig.Source s, List<String> sortBy, java.time.LocalDate today, java.time.LocalDate latest) {
         this.today = java.util.Objects.requireNonNull(today, "today");
+        this.latest = java.util.Objects.requireNonNull(latest, "latest");
         this.loaderRowsOf = s.loaderRowsOf();
         this.key = s.id();
         this.keyTop = !key.contains(".");

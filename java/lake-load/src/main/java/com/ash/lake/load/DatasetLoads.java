@@ -74,7 +74,8 @@ final class DatasetLoads {
                     plain.add(f);
                     continue;
                 }
-                Archives.Plan p = Archives.plan(io, f.path(), f.size(), cfg.archive().dataset(), cfg.archive().limits());
+                Archives.Plan p = Archives.plan(io, f.path(), f.size(), cfg.archive().dataset(), cfg.archive().limits(),
+                        cfg.guard().today(cfg.runtime()).plusDays(cfg.guard().futureDays()));
                 if (!quiet) {
                     p.notes().forEach(n -> out.println("  " + p.archiveName() + ": " + n));
                 }

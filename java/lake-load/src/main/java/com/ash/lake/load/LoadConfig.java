@@ -49,7 +49,7 @@ import java.util.function.Function;
  * ({@code ${MINIO_ENDPOINT}}); keys and secrets are never taken from the file: S3 credentials come from the AWS default chain.
  */
 record LoadConfig(Source source, Target target, Parallel parallel, Memory memory, Rejects rejects, Report report, boolean lock, Archive archive,
-        Map<String, LoadConfig> datasets, String datasetsSummary, ObjectNode tree, com.ash.lake.LakeRuntime runtime) {
+        Guard guard, Map<String, LoadConfig> datasets, String datasetsSummary, ObjectNode tree, com.ash.lake.LakeRuntime runtime) {
 
     /**
      * Archives in the input (DATA_GUIDE.md section 2.7): the name of a folderless archive's dataset ({@code source.dataset}), the caps
@@ -127,6 +127,22 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
 
     record Rejects(String file, double maxPct, int keep) {}
 
+    /**
+     * The accuracy guards (LOADER.md "Guards"): the date guard, no business date after today in {@code zone} (null: the runtime's
+     * business zone) plus {@code futureDays} (0); the drop guard, when {@code maxDropShare} is set, a replace that would leave a date
+     * (this load's slice of it) with fewer rows than {@code 1 - maxDropShare} of what it held is refused before anything is written,
+     * unless {@code forceDrop}.
+     */
+    record Guard(int futureDays, java.time.ZoneId zone, Double maxDropShare, boolean forceDrop) {
+
+        static final Guard NONE = new Guard(0, null, null, false);
+
+        /** Today in the guard's business zone (the runtime's when none is given). */
+        LocalDate today(com.ash.lake.LakeRuntime rt) {
+            return com.ash.lake.common.FileDates.today(zone != null ? zone : rt.options().businessZone());
+        }
+    }
+
     record Report(String summary, String manifest, String progress, boolean runLog, boolean dryRun) {}
 
     /** The timestamp field that decides which of an id's records on one date is kept (CLI_REFERENCE.md section 4.13); blank: the last read. */
@@ -137,7 +153,8 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
     private static final Set<String> SECRETS = Set.of("access-key", "secret-key", "s3.access-key", "s3.secret-key", "session-token",
             "s3.session-token", "credential", "token");
     private static final Map<String, Set<String>> KEYS = Map.of(
-            "", Set.of("source", "target", "parallel", "memory", "rejects", "report", "lock", "datasets"),
+            "", Set.of("source", "target", "parallel", "memory", "rejects", "report", "lock", "datasets", "guard"),
+            "guard", Set.of("future-days", "zone", "max-drop-share", "force-drop"),
             "source", Set.of("files", "recursive", "storage-options", "format", "id", "date", "as-of", "date-from", "promote", "vectors", "vector", "flatten",
                     "partition-by", "pack", "connector", "latest-by", "dataset", "archive"),
             "source.archive", Set.of("max-mb", "max-ratio", "max-members", "validate"),
@@ -193,7 +210,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
             Map<String, LoadConfig> each = datasets(rt, tree, ds);
             LoadConfig first = each.values().iterator().next();
             return new LoadConfig(first.source, first.target, first.parallel, first.memory, first.rejects, first.report, first.lock, first.archive,
-                    each, new Reader(rt).text(tree.path("report"), "summary", null), tree, rt);
+                    first.guard, each, new Reader(rt).text(tree.path("report"), "summary", null), tree, rt);
         }
         return single(rt, tree);
     }
@@ -290,7 +307,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
     /** This configuration as a dry run (read and checked, nothing written, no run log). */
     LoadConfig dryRun() {
         Report r = new Report(report.summary(), report.manifest(), report.progress(), false, true);
-        return new LoadConfig(source, target, parallel, memory, rejects, r, lock, archive, datasets, datasetsSummary, tree, runtime);
+        return new LoadConfig(source, target, parallel, memory, rejects, r, lock, archive, guard, datasets, datasetsSummary, tree, runtime);
     }
 
     /**
@@ -586,7 +603,43 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         Rejects rej = new Rejects(r.text(rj, "file", null), rj.has("max-pct") ? rj.get("max-pct").asDouble() : 100.0, rj.path("keep").asInt(50));
         Report rep = new Report(r.text(rp, "summary", null), r.text(rp, "manifest", null), r.text(rp, "progress", null), r.bool(rp, "run-log", true),
                 r.bool(rp, "dry-run", false));
-        return new LoadConfig(src, tgt, par, memory, rej, rep, tree.path("lock").asBoolean(true), archive(r, s), Map.of(), null, tree, rt);
+        return new LoadConfig(src, tgt, par, memory, rej, rep, tree.path("lock").asBoolean(true), archive(r, s), guard(r, tree.path("guard")), Map.of(),
+                null, tree, rt);
+    }
+
+    /** {@code guard:} ({@link Guard}): {@code future-days}, {@code zone}, {@code max-drop-share}, {@code force-drop}. */
+    static Guard guard(Reader r, JsonNode g) {
+        int future;
+        try {
+            future = Integer.parseInt(r.text(g, "future-days", "0").strip());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("guard.future-days " + r.text(g, "future-days", "") + ": a whole number of days, 0 or more");
+        }
+        if (future < 0) {
+            throw new IllegalArgumentException("guard.future-days " + future + ": 0 or more (0: no business date after today)");
+        }
+        String zoneText = r.text(g, "zone", null);
+        java.time.ZoneId zone = null;
+        if (zoneText != null && !zoneText.isBlank()) {
+            try {
+                zone = java.time.ZoneId.of(zoneText.strip());
+            } catch (java.time.DateTimeException e) {
+                throw new IllegalArgumentException("guard.zone " + zoneText + ": not a time zone (America/New_York, Europe/London, UTC)");
+            }
+        }
+        Double share = null;
+        String shareText = r.text(g, "max-drop-share", null);
+        if (shareText != null && !shareText.isBlank()) {
+            try {
+                share = Double.valueOf(shareText.strip());
+            } catch (NumberFormatException e) {
+                share = Double.NaN;
+            }
+            if (!(share >= 0 && share <= 1)) {
+                throw new IllegalArgumentException("guard.max-drop-share " + shareText + ": a share between 0 and 1 (0.5: half a date's rows)");
+            }
+        }
+        return new Guard(future, zone, share, r.bool(g, "force-drop", false));
     }
 
     /**

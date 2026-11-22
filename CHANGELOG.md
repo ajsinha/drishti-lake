@@ -5,6 +5,13 @@ Entries are written per release; unreleased work is listed first.
 
 ## 0.9.0 (2026-11-21): the move from Drishti
 
+- **The loader's accuracy guards (G4 lake gap b)**: the old Iceberg loader's date guard and drop guard are the one loader's, on every
+  store and on the Python path: `guard.future-days` / `--future-days` (a business date up to today plus N; 0 by default, the rule as
+  before) and `guard.zone` / `--zone` (the business zone whose today it is), and `guard.max-drop-share` / `--max-drop-share` with
+  `guard.force-drop` / `--force-drop` (a replace that would leave a date with more than the share fewer rows than the table holds is
+  refused before anything is written, each date named; off unless set). The rows held are counted through the store's scan
+  (`DropGuard`; Python: `delta.rows_per_date`); a tar's folders and a `.ready` date are held to the same latest date. Kit cases
+  `load/date-guard-future-days-and-zone`, `load/drop-guard-replace` (the Python row equal).
 - **One table maintenance for every store (`lake maintain`, G4 lake gap)**: `LakeMaintain` (and `python -m drishti_lake maintain`) keeps
   a Delta, Iceberg or files table by the same options, in one order: keep-days under the drop guard (`--max-drop-share`, `--force-drop`)
   and the retention floor (`--floor-days`), row retention, compaction, checkpoint and vacuum. Delta through Delta Kernel alone (no delta-rs):

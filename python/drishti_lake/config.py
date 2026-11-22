@@ -16,7 +16,8 @@ from datetime import date
 import yaml
 
 KEYS = {
-    "": {"source", "target", "parallel", "memory", "rejects", "report", "lock", "datasets"},
+    "": {"source", "target", "parallel", "memory", "rejects", "report", "lock", "datasets", "guard"},
+    "guard": {"future-days", "zone", "max-drop-share", "force-drop"},
     "source": {"files", "recursive", "storage-options", "format", "id", "date", "as-of", "date-from", "promote", "vectors", "vector", "flatten",
                "partition-by", "pack", "connector", "latest-by", "dataset", "archive"},
     "source.archive": {"max-mb", "max-ratio", "max-members", "validate"},
@@ -73,6 +74,10 @@ class LoadConfig:
     contract: object = None    # contracts.Contract (target.contract): every row checked against it before the first write
     limits: object = None      # archives.Limits (source.archive, else lake.archive.*)
     dataset: str | None = None
+    future_days: int = 0       # guard.future-days: a business date up to today plus this many days (the date guard)
+    zone: str | None = None    # guard.zone: the business zone whose today it is (default lake.business.zone)
+    max_drop_share: float | None = None   # guard.max-drop-share: the drop guard (off when None)
+    force_drop: bool = False   # guard.force-drop
 
 
 def _check(section: str, n):
@@ -147,7 +152,7 @@ def read(file: str | None, sets: list[str]) -> LoadConfig:
 
 def of(tree: dict) -> LoadConfig:
     _check("", tree)
-    for sec in ("source", "target", "parallel", "memory", "rejects", "report"):
+    for sec in ("source", "target", "parallel", "memory", "rejects", "report", "guard"):
         _check(sec, tree.get(sec))
     s, t = tree.get("source") or {}, tree.get("target") or {}
     _check("source.archive", s.get("archive"))
@@ -234,7 +239,36 @@ def of(tree: dict) -> LoadConfig:
         summary=_text(rp, "summary"), progress=_text(rp, "progress"), run_log=_bool(rp, "run-log", True), dry_run=_bool(rp, "dry-run", False),
         lock=_bool(tree, "lock", True), sort_by=sort_by or list(DEFAULT_SORT),
         loader_rows_of=loader_rows_of, float32=_vector_type(_text(lay, "vector-type", "double")), contract=_contract(_text(t, "contract")),
-        limits=_limits(s.get("archive") or {}), dataset=_dataset(_text(s, "dataset")))
+        limits=_limits(s.get("archive") or {}), dataset=_dataset(_text(s, "dataset")), **_guard(tree.get("guard") or {}))
+
+
+def _guard(g: dict) -> dict:
+    """``guard:`` (Java: LoadConfig.guard): the date guard (``future-days``, ``zone``) and the drop guard (``max-drop-share``,
+    ``force-drop``), in the Java loader's words."""
+    text = _text(g, "future-days", "0")
+    try:
+        future = int(text)
+    except ValueError:
+        raise ConfigError(f"guard.future-days {text}: a whole number of days, 0 or more") from None
+    if future < 0:
+        raise ConfigError(f"guard.future-days {future}: 0 or more (0: no business date after today)")
+    zone = _text(g, "zone")
+    if zone is not None:
+        from . import filedate
+        try:
+            filedate.business_zone(zone)
+        except ValueError:
+            raise ConfigError(f"guard.zone {zone}: not a time zone (America/New_York, Europe/London, UTC)") from None
+    share_text = _text(g, "max-drop-share")
+    share = None
+    if share_text is not None:
+        try:
+            share = float(share_text)
+        except ValueError:
+            share = float("nan")
+        if not 0 <= share <= 1:
+            raise ConfigError(f"guard.max-drop-share {share_text}: a share between 0 and 1 (0.5: half a date's rows)")
+    return {"future_days": future, "zone": zone, "max_drop_share": share, "force_drop": _bool(g, "force-drop", False)}
 
 
 _LAKE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
