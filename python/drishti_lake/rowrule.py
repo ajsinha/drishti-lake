@@ -156,7 +156,8 @@ def row(plan: Plan, line: str, file_day: int | None, today_day: int, rows_or_tod
     """One line's outcome: a ``Row`` or the reason it is rejected. ``file_day``: the file's business date (epoch day) when it has one;
     ``rows_or_today``: no date given or named, the row's own date decides (else today). ``wrapped``: ``<domain>/<kind>`` for loader
     rows (``{domain, kind, id, date, doc, columns}`` a line: the document ``doc``, the id and the row's own date the wrapper's, a
-    promoted value the document lacks the wrapper's ``columns`` value). ``contract``: a ``contracts.Contract`` the document must keep."""
+    promoted value the document lacks the wrapper's ``columns`` value, a vector the document holds in its stored form
+    ``{"$vector": "<column>"}`` the wrapper's ``columns`` list). ``contract``: a ``contracts.Contract`` the document must keep."""
     try:
         doc = json.loads(line, parse_constant=_no_constant)
     except json.JSONDecodeError as e:
@@ -217,8 +218,16 @@ def row(plan: Plan, line: str, file_day: int | None, today_day: int, rows_or_tod
         return "no business date"
     vectors = []
     bad = None
+    cols = wrapper.get("columns") if wrapper is not None and isinstance(wrapper.get("columns"), dict) else {}
     for p in plan.vectors:
         v = get(doc, p)
+        if wrapper is not None and "." not in p and v == {"$vector": column_name(p)}:
+            # a loader row's stored form (the row as a lake keeps it): the numbers are the wrapper's column; null there is no vector
+            v = cols.get(column_name(p), cols.get(p, MISSING))
+            if v is MISSING:
+                bad = bad or p
+                vectors.append(None)
+                continue
         if v is MISSING or v is None:
             vectors.append(None)
             continue
@@ -244,7 +253,6 @@ def row(plan: Plan, line: str, file_day: int | None, today_day: int, rows_or_tod
     partitions = tuple(scalar_text(get(doc, p)) for p in plan.partition_by)
     promoted = tuple(None if (v := get(doc, p)) is MISSING else v for p in plan.promote)
     if wrapper is not None:                            # a promoted value the document lacks: the wrapper's columns (a scalar)
-        cols = wrapper.get("columns") if isinstance(wrapper.get("columns"), dict) else {}
         promoted = tuple(v if get(doc, p) is not MISSING else _scalar(cols.get(column_name(p), cols.get(p)))
                          for p, v in zip(plan.promote, promoted))
     latest = None

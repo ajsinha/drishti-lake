@@ -21,6 +21,7 @@ load/drop-guard-replace
 load/future-date-refused
 load/lake-folder-refused
 load/loader-rows
+load/loader-rows-stored-vectors
 load/rerun-replaces-the-date
 load/two-dates
 load/vector-nulls-and-text

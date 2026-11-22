@@ -98,6 +98,9 @@ final class RowParser {
     private final Set<String> topNames;
     private final DoubleList[] vectors;
     private final boolean[] vectorPresent;
+    /** Loader rows: per vector, the document held the stored form {@code {"$vector": "<column>"}} (its numbers are the wrapper's column). */
+    private final boolean[] vectorStored;
+    private final Node[] vectorNodes;
     private String badVector;
     /** {@code target.contract} (null: none), and the current document's bytes as read (the contract checks the document as sent). */
     private final com.ash.lake.contract.Contract contract;
@@ -179,9 +182,12 @@ final class RowParser {
         }
         vectors = new DoubleList[plan.vectors.size()];
         vectorPresent = new boolean[vectors.length];
+        vectorStored = new boolean[vectors.length];
+        vectorNodes = new Node[vectors.length];
         for (int i = 0; i < vectors.length; i++) {
             RowPlan.Vector v = plan.vectors.get(i);
             Node n = node(v.path(), false);
+            vectorNodes[i] = n;
             n.vector = i;
             n.top = v.top();
             vectors[i] = new DoubleList();
@@ -306,7 +312,50 @@ final class RowParser {
             }
             wrapped(wrapColumns[i], v != null && v.isContainerNode() ? null : v);
         }
+        for (int i = 0; i < vectors.length; i++) {
+            if (vectorStored[i]) {
+                RowPlan.Vector v = plan.vectors.get(i);
+                com.fasterxml.jackson.databind.JsonNode c = cols.get(v.column());
+                wrappedVector(i, v, c == null ? cols.get(v.path()) : c);
+            }
+        }
         return row();
+    }
+
+    /**
+     * A vector the document holds in its stored form ({@code {"$vector": "<column>"}}, the row as a lake keeps it): its numbers are the
+     * wrapper's {@code columns} value; null there is no vector, a missing or other value is not a list of numbers.
+     */
+    private void wrappedVector(int i, RowPlan.Vector v, com.fasterxml.jackson.databind.JsonNode c) {
+        if (c != null && c.isNull()) {
+            return;
+        }
+        if (c == null || !c.isArray()) {
+            if (badVector == null) {
+                badVector = v.path();
+            }
+            return;
+        }
+        DoubleList vec = vectors[i];
+        vectorPresent[i] = true;
+        Node node = vectorNodes[i];
+        for (int j = 0; j < c.size(); j++) {
+            com.fasterxml.jackson.databind.JsonNode e = c.get(j);
+            Node child = node.items == null ? null : node.items.get(j);
+            if (e.isNumber()) {
+                vec.add(e.asDouble());
+                if (child != null && child.slot >= 0) {
+                    wrapped(caps[child.slot], e);
+                }
+            } else if (e.isNull()) {
+                vec.add(Double.NaN);
+                if (child != null && child.slot >= 0) {
+                    caps[child.slot].kind = Cap.NULLV;
+                }
+            } else if (badVector == null) {
+                badVector = v.path();
+            }
+        }
     }
 
     /** A wrapper's scalar value as a caught one (missing for none). */
@@ -340,6 +389,7 @@ final class RowParser {
         for (int i = 0; i < vectors.length; i++) {
             vectors[i].n = 0;
             vectorPresent[i] = false;
+            vectorStored[i] = false;
         }
         badVector = null;
         doc.clear();
@@ -549,8 +599,15 @@ final class RowParser {
             doc.ascii("null");
             return;
         }
+        if (t == JsonToken.START_OBJECT && wrapColumns != null && storedForm(p, v)) {
+            vectorStored[node.vector] = true;              // a loader row's stored form: the numbers are the wrapper's column (loaderRow)
+            doc.ascii("{\"$vector\":");
+            PyJson.string(doc, v.column());
+            doc.put('}');
+            return;
+        }
         if (t != JsonToken.START_ARRAY) {
-            p.skipChildren();
+            p.skipChildren();                              // at the object's end already when storedForm read it
             doc.ascii("null");
             if (badVector == null) {
                 badVector = v.path();
@@ -588,6 +645,23 @@ final class RowParser {
         doc.ascii("{\"$vector\":");
         PyJson.string(doc, v.column());
         doc.put('}');
+    }
+
+    /**
+     * Reads the object the parser is at to its end: whether it is exactly {@code {"$vector": "<the vector's column>"}}. Leaves the parser
+     * at the object's END_OBJECT either way.
+     */
+    private static boolean storedForm(JsonParser p, RowPlan.Vector v) throws IOException {
+        int fields = 0;
+        boolean named = false;
+        while (p.nextToken() == JsonToken.FIELD_NAME) {
+            String name = p.currentName();
+            JsonToken val = p.nextToken();
+            named = fields == 0 && "$vector".equals(name) && val == JsonToken.VALUE_STRING && v.column().equals(p.getText());
+            p.skipChildren();
+            fields++;
+        }
+        return fields == 1 && named;
     }
 
     /** A caught value as JSON text (a flattened field appended to the document). */

@@ -5,6 +5,11 @@ Entries are written per release; unreleased work is listed first.
 
 ## 0.9.0 (2026-11-21): the move from Drishti
 
+- **Loader rows keep their vectors (G4 triage)**: a loader row (`source.format: loader-rows`) whose document holds a vector in its stored
+  form `{"$vector": "<column>"}` (the row as a lake keeps it, the form Drishti's fixtures and exports write) takes the vector's numbers from
+  the wrapper's `columns` list, as the loader Drishti had before the move did; a null there is no vector, a missing or non-list value is
+  rejected (`the vector field ... is not a list of numbers`). Before, every such row was rejected, so P&L vectors handed over as loader rows
+  never loaded. Java loader and Python path alike; kit case `load/loader-rows-stored-vectors`.
 - **One form for a table's place (G4 shims)**: the loader no longer reads a folder as `target.lake` (the warn-once old form is gone, in
   the Java loader and the Python path): `target.lake` names a lake file, `target.path` is the table's folder; a folder as `target.lake` is
   refused before a row is read, naming both forms. `datasets:` loads into a lake file's tables; the inbox turns its lake folder into the

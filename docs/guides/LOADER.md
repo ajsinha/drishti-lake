@@ -33,7 +33,7 @@ A mapping of `source`, `target`, `parallel`, `memory`, `rejects`, `report`, `gua
 
 | Section | Keys |
 |---|---|
-| `source` | `files` (a file, folder or glob `*` `?` `**`; a list), `recursive`, `storage-options`, `format` (documents, or `loader-rows`), `id` (the id field), `date`, `as-of`, `date-from`, `promote` (columns beside the document), `vectors`, `flatten`, `partition-by`, `latest-by`, `pack`, `connector`, `dataset`, `archive` |
+| `source` | `files` (a file, folder or glob `*` `?` `**`; a list), `recursive`, `storage-options`, `format` (documents, or `loader-rows`: `{domain, kind, id, date, doc, columns}` a line, a row as a lake keeps it; a promoted value the document lacks is the `columns` value, and a vector the document holds in its stored form `{"$vector": "<column>"}` takes its numbers from the `columns` list, a null there no vector, a missing or other value rejected), `id` (the id field), `date`, `as-of`, `date-from`, `promote` (columns beside the document), `vectors`, `flatten`, `partition-by`, `latest-by`, `pack`, `connector`, `dataset`, `archive` |
 | `source.archive` | `max-mb`, `max-ratio`, `max-members` (zip-bomb caps), `validate` (`rows`, the default, or `structure`) |
 | `target` | `format` (`delta`, `iceberg`, `files`), `lake` (a lake file's name), `path` (the table's folder), `domain`, `kind`, `table`, `storage-options`, `mode`, `default-mode`, `batch-id`, `properties`, `iceberg`, `layout`, `contract` |
 | `target.layout` | `sort-by`, `file-size-mb`, `row-group-mb`, `compression`, `vector-compression`, `byte-stream-split`, `shard-aligned`, `vector-type` |

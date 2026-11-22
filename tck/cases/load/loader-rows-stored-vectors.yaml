@@ -1,0 +1,28 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# loader rows as a lake keeps them (a Delta row's id, document and columns): a vector the document holds in its stored form
+# {"$vector": "<column>"} takes its numbers from the wrapper's columns (a null element kept null, a null column no vector); the stored
+# form with no such column, a non-list column value, or a stored form naming another column is not a list of numbers and is rejected
+inputs:
+  rows.2026-10-27.jsonl: |
+    {"domain":"risk","kind":"pnl-vector","id":"T-1","date":"2026-10-27","doc":"{\"TRADE_ID\":\"T-1\",\"DESK\":\"DESK-X\",\"PNL\":{\"$vector\":\"PNL\"}}","columns":{"DESK":"DESK-X","PNL":[1.5,-2,null,0.25]}}
+    {"domain":"risk","kind":"pnl-vector","id":"T-2","date":"2026-10-27","doc":{"TRADE_ID":"T-2","DESK":"DESK-Y","PNL":{"$vector":"PNL"}},"columns":{"PNL":[3,4,5,6]}}
+    {"domain":"risk","kind":"pnl-vector","id":"T-3","date":"2026-10-27","doc":"{\"TRADE_ID\":\"T-3\",\"DESK\":\"DESK-Y\",\"PNL\":{\"$vector\":\"PNL\"}}","columns":{"DESK":"DESK-Y","PNL":null}}
+    {"domain":"risk","kind":"pnl-vector","id":"T-4","date":"2026-10-27","doc":"{\"TRADE_ID\":\"T-4\",\"DESK\":\"DESK-X\",\"PNL\":[7,8]}","columns":{"PNL":[9,9]}}
+    {"domain":"risk","kind":"pnl-vector","id":"T-5","date":"2026-10-27","doc":"{\"TRADE_ID\":\"T-5\",\"PNL\":{\"$vector\":\"PNL\"}}","columns":{"DESK":"DESK-X"}}
+    {"domain":"risk","kind":"pnl-vector","id":"T-6","date":"2026-10-27","doc":"{\"TRADE_ID\":\"T-6\",\"PNL\":{\"$vector\":\"PNL\"}}","columns":{"PNL":"[1,2]"}}
+    {"domain":"risk","kind":"pnl-vector","id":"T-7","date":"2026-10-27","doc":"{\"TRADE_ID\":\"T-7\",\"PNL\":{\"$vector\":\"OTHER\"}}","columns":{"PNL":[1,2]}}
+config: |
+  source:
+    files: '${in}/*'
+    format: loader-rows
+    promote: [DESK]
+    vectors: [PNL]
+  target:
+    format: ${store}
+    path: '${lake}/risk/pnl-vector'
+    domain: risk
+    kind: pnl-vector
+  rejects:
+    max-pct: 50
+steps:
+  - load: []
