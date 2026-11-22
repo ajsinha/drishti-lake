@@ -149,8 +149,78 @@ public final class LakeWriter {
         return DefaultEngine.create(new StorageWriteFileIO(runtime, com.ash.lake.io.S3Settings.from(runtime, settings), parquetConf(runtime)));
     }
 
+    /** The load columns (as the loader's RowPlan names them): a table made before them gains them. */
+    static final String LOAD_ID = "_load_id";
+    static final String SOURCE_FILE = "_source_file";
+
+    /**
+     * The table with the columns of {@code wanted} it lacks added, each nullable, at the end (schema evolution, as the Iceberg and files
+     * stores add them: a promoted or vector column first sent by a later load, the load columns of a table made before them): one commit
+     * of a {@code metaData} action whose schema is the table's grown (what Delta's merge-schema writes; Kernel itself evolves a schema only
+     * under column mapping). No file is rewritten: the rows written before read the new column as null. Written with put-if-absent through
+     * the engine; when another writer took the version, read again. A table under column mapping or in-commit timestamps (written by
+     * another engine) is not grown here: a data column it lacks refuses the load, naming it (never written and dropped); the load
+     * columns are left out, reported.
+     */
+    public static Snapshot withColumns(Engine engine, String path, Snapshot snap, StructType wanted) throws IOException {
+        for (int attempt = 0; ; attempt++) {
+            StructType s = snap.getSchema();
+            List<io.delta.kernel.types.StructField> add = new ArrayList<>();
+            for (io.delta.kernel.types.StructField f : wanted.fields()) {
+                if (s.indexOf(f.getName()) < 0) {
+                    add.add(f);
+                }
+            }
+            if (add.isEmpty()) {
+                return snap;
+            }
+            io.delta.kernel.internal.SnapshotImpl si = (io.delta.kernel.internal.SnapshotImpl) snap;
+            io.delta.kernel.internal.actions.Metadata meta = si.getMetadata();
+            Map<String, String> conf = meta.getConfiguration();
+            if (io.delta.kernel.internal.util.ColumnMapping.isColumnMappingModeEnabled(io.delta.kernel.internal.util.ColumnMapping.getColumnMappingMode(conf))
+                    || "true".equalsIgnoreCase(conf.get("delta.enableInCommitTimestamps"))) {
+                List<String> data = new ArrayList<>();
+                add.forEach(f -> {
+                    if (!f.getName().equals(LOAD_ID) && !f.getName().equals(SOURCE_FILE)) {
+                        data.add(f.getName());
+                    }
+                });
+                if (!data.isEmpty()) {
+                    throw new IllegalStateException(path + " has no column " + String.join(", ", data) + " and is a table under column mapping "
+                            + "or in-commit timestamps, which the loader does not widen: add the column with the engine that wrote the table, "
+                            + "or leave it out of promote and vectors; nothing was written");
+                }
+                return snap;                                            // the load columns: left out by open(), the report lists them
+            }
+            StructType grown = s;
+            for (io.delta.kernel.types.StructField f : add) {
+                grown = grown.add(f.getName(), f.getDataType(), true);
+            }
+            Row action = io.delta.kernel.internal.actions.SingleAction.createMetadataSingleAction(meta.withNewSchema(grown).toRow());
+            String file = io.delta.kernel.internal.util.FileNames.deltaFile(si.getLogPath(), si.getVersion() + 1);
+            try {
+                engine.getJsonHandler().writeJsonFileAtomically(file, io.delta.kernel.internal.util.Utils.singletonCloseableIterator(action), false);
+            } catch (java.nio.file.FileAlreadyExistsException e) {
+                if (attempt >= 10) {
+                    throw new IOException(path + ": the columns " + add.stream().map(io.delta.kernel.types.StructField::getName).toList() + " could not be added "
+                            + "(the table changed ten times meanwhile)", e);
+                }
+            }
+            snap = Table.forPath(engine, path).getLatestSnapshot(engine);
+        }
+    }
+
     /** Writes the manifest's parts; {@code partsDone} is told after each part. */
     public Result write(LakeManifest m, IntConsumer partsDone) throws IOException {
+        return write(m, partsDone, p -> false);
+    }
+
+    /**
+     * As {@link #write(LakeManifest, IntConsumer)}, the files of the parts {@code older} accepts tagged as files of older copies (their add
+     * actions' tag {@code lake.copies: older}, {@link com.ash.lake.rows.LoadOrder#OLDER_TAG}): a rewrite of a date that keeps an id's
+     * older copies beside the rows readers see, in the same commit, so the readers' order still puts them first.
+     */
+    public Result write(LakeManifest m, IntConsumer partsDone, java.util.function.Predicate<LakeManifest.Part> older) throws IOException {
         if (com.ash.lake.io.LocalPaths.isLocal(m.table())) {
             Files.createDirectories(LocalWriteFileIO.local(m.table()));
         }
@@ -174,7 +244,8 @@ public final class LakeWriter {
                 throw new IllegalStateException(m.table() + " is partitioned by " + before.getPartitionColumnNames() + ", this load by "
                         + m.partitionColumns());
             }
-            tb = table.createTransactionBuilder(engine, ENGINE_INFO, Operation.WRITE);
+            before = withColumns(engine, m.table(), before, wanted);     // a column the manifest adds: the table grows, never drops it
+            tb = Table.forPath(engine, m.table()).createTransactionBuilder(engine, ENGINE_INFO, Operation.WRITE);
         }
         Transaction txn = tb.build(engine);
         StructType schema = txn.getSchema(engine);
@@ -206,8 +277,9 @@ public final class LakeWriter {
                  CloseableIterator<FilteredColumnarBatch> physical = Transaction.transformLogicalData(engine, state, data, pv);
                  CloseableIterator<DataFileStatus> written = engine.getParquetHandler().writeParquetFiles(targetDirectory(ctx), physical, stats);
                  CloseableIterator<Row> adds = Transaction.generateAppendActions(engine, state, written, ctx)) {
+                boolean mark = older.test(part);
                 while (adds.hasNext()) {
-                    actions.add(adds.next());
+                    actions.add(mark ? olderCopies(adds.next()) : adds.next());
                     files++;
                 }
                 rows += data.rows;
@@ -223,6 +295,39 @@ public final class LakeWriter {
             }
         }
         return new Result(result.getVersion(), files, rows, removed, leftOut);
+    }
+
+    /** An add action (a single action row) with the tag of a file of older copies added to its tags. */
+    static Row olderCopies(Row single) {
+        int at = single.getSchema().indexOf("add");
+        Row add = single.getStruct(at);
+        StructType s = add.getSchema();
+        Map<Integer, Object> values = new HashMap<>();
+        for (int i = 0; i < s.length(); i++) {
+            if (add.isNullAt(i)) {
+                continue;
+            }
+            io.delta.kernel.types.DataType t = s.at(i).getDataType();
+            values.put(i, t instanceof StringType ? add.getString(i) : t instanceof LongType ? (Object) add.getLong(i)
+                    : t instanceof io.delta.kernel.types.IntegerType ? (Object) add.getInt(i)
+                    : t instanceof io.delta.kernel.types.BooleanType ? (Object) add.getBoolean(i)
+                    : t instanceof io.delta.kernel.types.MapType ? add.getMap(i) : t instanceof StructType ? add.getStruct(i)
+                    : t instanceof ArrayType ? add.getArray(i) : null);
+            if (values.get(i) == null) {
+                throw new IllegalStateException("an add action's field " + s.at(i).getName() + " of type " + t + " is not carried");
+            }
+        }
+        Map<String, String> tags = new java.util.LinkedHashMap<>();
+        int ti = s.indexOf("tags");
+        if (ti < 0) {
+            throw new IllegalStateException("Delta Kernel's add action has no tags field");
+        }
+        if (!add.isNullAt(ti)) {
+            tags.putAll(io.delta.kernel.internal.util.VectorUtils.toJavaMap(add.getMap(ti)));
+        }
+        tags.put(com.ash.lake.rows.LoadOrder.OLDER_TAG, com.ash.lake.rows.LoadOrder.OLDER_VALUE);
+        values.put(ti, io.delta.kernel.internal.util.VectorUtils.stringStringMapValue(tags));
+        return io.delta.kernel.internal.actions.SingleAction.createAddFileSingleAction(new io.delta.kernel.internal.data.GenericRow(s, values));
     }
 
     /** The table's columns: id, doc, business_date, the partition columns, the promoted columns. */

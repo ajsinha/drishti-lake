@@ -92,6 +92,11 @@ final class NativeKindTable extends KindTable {
     }
 
     @Override
+    boolean olderCopies(Day day, int file) {
+        return com.ash.lake.rows.LoadOrder.olderByName(tasks(day).get(file).file().path());
+    }
+
+    @Override
     Optional<Long> refresh() {
         Optional<Table> t = table();
         if (t.isEmpty()) {

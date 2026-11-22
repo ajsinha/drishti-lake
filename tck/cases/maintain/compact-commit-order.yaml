@@ -1,0 +1,72 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# the newest copy of an id is the one COMMITTED last, never the one whose run id (a loader's clock) is later: four appends of one date
+# committed in the order opposite to their run ids (c, a, b, d). Readers see P-1 = 12 (d), P-2 = 21 (b), P-3 before lake maintain
+# --compact, after it (same as want-before=true), after a second run (nothing to do), after undoing d (P-1 = 11: b was committed after a),
+# and after compacting that again; every row the table holds stays (raw-digest) through each compaction. The expected answers are
+# tables loaded with those rows alone (want-before, want-undone: same as want…=true)
+inputs:
+  c/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-3","DESK":"C","BASE_PV":3}
+  a/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"A","BASE_PV":10}
+    {"POSITION_ID":"P-2","DESK":"A","BASE_PV":20}
+  b/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"B","BASE_PV":11}
+    {"POSITION_ID":"P-2","DESK":"B","BASE_PV":21}
+  d/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"D","BASE_PV":12}
+  want-before/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-3","DESK":"C","BASE_PV":3}
+    {"POSITION_ID":"P-2","DESK":"B","BASE_PV":21}
+    {"POSITION_ID":"P-1","DESK":"D","BASE_PV":12}
+  want-undone/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-3","DESK":"C","BASE_PV":3}
+    {"POSITION_ID":"P-1","DESK":"B","BASE_PV":11}
+    {"POSITION_ID":"P-2","DESK":"B","BASE_PV":21}
+configs:
+  c: |
+    source: {files: '${in}/c/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  a: |
+    source: {files: '${in}/a/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  b: |
+    source: {files: '${in}/b/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  d: |
+    source: {files: '${in}/d/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  want-before: |
+    source: {files: '${in}/want-before/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/want-before', domain: risk, kind: want-before}
+  want-undone: |
+    source: {files: '${in}/want-undone/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/want-undone', domain: risk, kind: want-undone}
+steps:
+  - load: {config: want-before}
+  - load: {config: want-undone}
+  - store: [read-visible, '${store}', '${lake}', risk, want-before, want-before]
+  - store: [read-visible, '${store}', '${lake}', risk, want-undone, want-undone]
+  - load: {config: c, args: [--run-id, 20261121T131440.000-3-1]}
+  - load: {config: a, args: [--run-id, 20261121T131510.000-1-1]}
+  - load: {config: b, args: [--run-id, 20261121T131500.000-2-1]}
+  - load: {config: d, args: [--run-id, 20261121T131450.000-4-1]}
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t', 'BASE_PV:n']
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want-before]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact]
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t', 'BASE_PV:n']
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want-before]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact]
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want-before]
+  - store: [undo-rows, '${store}', '${lake}', risk, scenario-pv, 20261121T131450.000-4-1.1]
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t', 'BASE_PV:n']
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want-undone]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact]
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want-undone]

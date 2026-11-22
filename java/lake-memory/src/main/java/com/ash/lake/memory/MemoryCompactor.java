@@ -176,30 +176,38 @@ final class MemoryCompactor {
             String path = t.spec.path();
             MemoryStorage store = lake.memory().store(t.spec.store());
             Engine engine = LakeWriter.engineFor(lake.runtime(), path, Map.of("codec", t.spec.codec()));
-            List<TableUpkeep.Staged> rows = TableUpkeep.rows(engine, path, pv -> true);
-            if (rows == null) {
+            io.delta.kernel.Snapshot snap = io.delta.kernel.Table.forPath(engine, path).getLatestSnapshot(engine);
+            List<TableUpkeep.Ranked> ranked = TableUpkeep.ranked(engine, path, snap, pv -> true, 1, null, null);
+            if (ranked == null) {
                 return false;                                 // a column a staged line cannot carry: left as it is
             }
             int dropped = 0;
             if (t.spec.retention() != null) {
-                int before0 = rows.size();
-                rows = t.spec.retention().keep(rows, s -> t.spec.retention().ageOfLine(s.line(), null), Instant.now());
-                dropped = before0 - rows.size();
+                int before0 = ranked.size();
+                ranked = t.spec.retention().keep(ranked, s -> t.spec.retention().ageOfLine(s.row().line(), null), Instant.now());
+                dropped = before0 - ranked.size();
             }
             long before = store.bytesUnder(path);
             List<String> partitionColumns = TableUpkeep.partitionColumns(engine, path);
-            Map<Map<String, String>, List<String[]>> groups = new LinkedHashMap<>();
-            for (TableUpkeep.Staged s : rows) {
-                groups.computeIfAbsent(new TreeMap<>(s.partitionValues()), k -> new ArrayList<>()).add(new String[] {sortKey(t, s.line()), s.line()});
-            }
+            // the rows readers see (each id's newest copy by commit) sorted by sort-by, every older copy in files of older copies of their own
+            List<List<TableUpkeep.Staged>> generations = TableUpkeep.generations(ranked, Comparator.comparing((TableUpkeep.Staged s) -> sortKey(t, s.line())));
             List<LakeManifest.Part> parts = new ArrayList<>();
-            for (Map.Entry<Map<String, String>, List<String[]>> g : groups.entrySet()) {
-                List<String[]> lines = g.getValue();
-                lines.sort(Comparator.comparing(a -> a[0]));
-                StringBuilder b = new StringBuilder();
-                lines.forEach(a -> b.append(a[1]).append('\n'));
-                String text = b.toString();
-                parts.add(LakeManifest.Part.inMemory(() -> new StringReader(text), lines.size(), g.getKey()));
+            java.util.Set<LakeManifest.Part> older = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+            for (int gen = 0; gen < generations.size(); gen++) {
+                Map<Map<String, String>, List<String>> groups = new LinkedHashMap<>();
+                for (TableUpkeep.Staged s : generations.get(gen)) {
+                    groups.computeIfAbsent(new TreeMap<>(s.partitionValues()), k -> new ArrayList<>()).add(s.line());
+                }
+                for (Map.Entry<Map<String, String>, List<String>> g : groups.entrySet()) {
+                    StringBuilder b = new StringBuilder();
+                    g.getValue().forEach(line -> b.append(line).append('\n'));
+                    String text = b.toString();
+                    LakeManifest.Part part = LakeManifest.Part.inMemory(() -> new StringReader(text), g.getValue().size(), g.getKey());
+                    parts.add(part);
+                    if (gen > 0) {
+                        older.add(part);
+                    }
+                }
             }
             if (parts.isEmpty() && dropped > 0) {
                 // every row expired: an empty table (one commit removing every file)
@@ -215,7 +223,7 @@ final class MemoryCompactor {
             stats.addAll(partitionColumns.stream().filter(c -> !c.equals("id")).toList());
             stats.addAll(promoted);
             LakeManifest m = new LakeManifest(path, partitionColumns, columns, promoted, "replace", 5_000, stats.stream().distinct().toList(), parts);
-            LakeWriter.Result r = LakeWriter.forTable(lake.runtime(), path, Map.of("codec", t.spec.codec())).write(m, n -> { });
+            LakeWriter.Result r = LakeWriter.forTable(lake.runtime(), path, Map.of("codec", t.spec.codec())).write(m, n -> { }, older::contains);
             MemoryUpkeep.expire(engine, store, path, 1);       // the old files go now; a reader on them keeps its chunks until it ends
             long after = store.bytesUnder(path);
             long saved = before - after;

@@ -5,6 +5,29 @@ Entries are written per release; unreleased work is listed first.
 
 ## 0.9.1 (2026-11-21): maintenance data safety
 
+- **The newest copy is the one committed last, after every rewrite (G4 F20, accuracy defect)**: when the load committed last had an
+  earlier run id than an older load of the same date (two loads that overlap, an inbox's one run id for an archive, clocks that differ
+  or go back), `lake maintain --compact` on Delta and Iceberg made readers answer the superseded copies: both of its files came from one
+  commit and the tie fell to the run ids. An undo or row retention of such a date had the same fault, and worse: Delta's undo wrote every
+  remaining copy into one file (readers then saw an id twice) and took a compaction's commit for a replace ("rows of the date before it
+  restored"), Iceberg's undo and retention kept one copy an id by file name and dropped the others. Now the rule is one, on every store:
+  the later commit, whatever the clocks said; a run id is a name. A rewrite of a date (compaction, undo, retention; Delta, Iceberg, the
+  in-memory lake's compactor) ranks every copy in the readers' own order, writes each id's newest copy into the date's files and every
+  older copy (by id, in that order) into files of older copies, marked so the readers put them first in the one commit: on Delta the add
+  action's tag `lake.copies: older`, on Iceberg `-older-` in the file's name (`LoadOrder.OLDER_TAG`, `OLDER_NAME`). The Iceberg reader
+  orders copies by the data sequence number always (before, only when the date held two runs). Undo skips the commits that rewrote the
+  same rows (removes with `dataChange: false`) when it looks for the load's own commit. Kit cases `maintain/compact-commit-order` (loads
+  committed opposite to their run ids; compaction, a second run, undo, compaction again; what readers see equal to a table loaded with
+  the expected rows alone; kit verb `undo-rows`: an undo's dates and rows without the version) and `retention/ttl-keeps-commit-order`,
+  on every store, local, memory and S3, and the Python path.
+- **A new promoted column is added, never dropped (G4 F21, accuracy defect)**: on Delta (the Java loader and the Python path) and on the
+  files store, a promoted or vector column first sent by a later load of an existing table was left out with no word (Iceberg added it);
+  Drishti's VaR read a matured position's `MATURITY_DATE` as missing. Now every store adds it, nullable, at the end (Delta: one metadata
+  commit, as merge-schema writes it; the Python path through delta-rs's add-columns; files: its column list); no file is rewritten and
+  the rows written before read it as null. A Delta table under column mapping or in-commit timestamps (another engine's) is not widened:
+  such a load is refused naming the column, nothing written. A files-store load with a partition column the table lacks is refused, as
+  on Delta and Iceberg. Iceberg compaction no longer fills an added column of older rows from their documents (maintenance changed what
+  readers saw). LOADER.md says the rule; kit case `load/new-promoted-column` (a column in load 2 and 3, compaction after: no row changes).
 - **Compaction keeps what readers see (accuracy defect in 0.9.0)**: in 0.9.0, `lake maintain --compact` on a Delta or Iceberg date that
   appends had written with repeated ids merged every copy into one file; the rows were all kept, but readers then answered wrongly: a
   whole-day read returned the superseded copies as well (Delta and Iceberg), and on Iceberg the id map held each such id twice and a
