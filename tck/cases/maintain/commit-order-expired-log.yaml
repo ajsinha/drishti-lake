@@ -1,0 +1,58 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# the commit order outlives the log: four appends of one date committed in the order opposite to their run ids (c, a, b, d), the last
+# two under one run id; then a checkpoint and the log expired (Delta: every commit file before the checkpoint deleted, as the log's
+# retention does; Iceberg: the older snapshots expired; files: the date is one file, its lines in commit order). Readers still see
+# P-1 = 12 (d), P-2 = 21 (b), P-3; the same after lake maintain --compact (every row kept: raw-digest), and the same as before the
+# expiry. On the Python row (delta-rs writes no lake.commit tag) lake maintain --checkpoint stamps the files before the log goes.
+# local-only: the log is expired by deleting its files on the local disk
+local-only: true
+inputs:
+  c/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-3","DESK":"C","BASE_PV":3}
+  a/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"A","BASE_PV":10}
+    {"POSITION_ID":"P-2","DESK":"A","BASE_PV":20}
+  b/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"B","BASE_PV":11}
+    {"POSITION_ID":"P-2","DESK":"B","BASE_PV":21}
+  d/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"D","BASE_PV":12}
+  want/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-3","DESK":"C","BASE_PV":3}
+    {"POSITION_ID":"P-2","DESK":"B","BASE_PV":21}
+    {"POSITION_ID":"P-1","DESK":"D","BASE_PV":12}
+configs:
+  c: |
+    source: {files: '${in}/c/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  a: |
+    source: {files: '${in}/a/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  b: |
+    source: {files: '${in}/b/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  d: |
+    source: {files: '${in}/d/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  want: |
+    source: {files: '${in}/want/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/want', domain: risk, kind: want}
+steps:
+  - load: {config: want}
+  - store: [read-visible, '${store}', '${lake}', risk, want, want]
+  - load: {config: c, args: [--run-id, 20261121T131440.000-3-1]}
+  - load: {config: a, args: [--run-id, 20261121T131510.000-1-1]}
+  - load: {config: b, args: [--run-id, 20261121T131450.000-4-1]}
+  - load: {config: d, args: [--run-id, 20261121T131450.000-4-1]}
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --checkpoint]
+  - store: [expire-log, '${store}', '${lake}', risk, scenario-pv]
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t', 'BASE_PV:n']
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact]
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want]

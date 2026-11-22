@@ -92,6 +92,32 @@ final class DeltaUpkeep {
         return out;
     }
 
+    /**
+     * Whether the date's files were all added by one commit (one {@code lake.commit} version on every file): what compaction leaves. Files
+     * of two commits (two loads, even of one run id or in as few files as compaction would make) are rewritten into one commit, so their
+     * order is held by the files themselves.
+     */
+    static boolean oneCommit(Engine engine, Snapshot s, String date) throws IOException {
+        Set<Long> versions = new HashSet<>();
+        try (CloseableIterator<FilteredColumnarBatch> it = s.getScanBuilder().build().getScanFiles(engine)) {
+            while (it.hasNext()) {
+                try (CloseableIterator<Row> rows = it.next().getRows()) {
+                    while (rows.hasNext()) {
+                        Row r = rows.next();
+                        if (date.equals(String.valueOf(InternalScanFileUtils.getPartitionValues(r).get("business_date")))) {
+                            long v = com.ash.lake.delta.write.CommitOrder.tagged(r.getStruct(InternalScanFileUtils.ADD_FILE_ORDINAL));
+                            if (v < 0) {
+                                return false;
+                            }
+                            versions.add(v);
+                        }
+                    }
+                }
+            }
+        }
+        return versions.size() <= 1;
+    }
+
     /** The dates compaction rewrites: two or more files, two or more of them under {@code targetBytes}. */
     static List<String> toCompact(SortedMap<String, List<Long>> files, long targetBytes) {
         List<String> out = new ArrayList<>();
@@ -118,8 +144,8 @@ final class DeltaUpkeep {
                     break;                                       // another writer replaced or removed the date meanwhile: nothing to do
                 }
                 List<List<TableUpkeep.Staged>> groups = compacted(engine, path, s, date);
-                if (groups != null && !groups.isEmpty() && groups.size() >= files.size()) {
-                    break;                                       // already as few files as compaction makes (the rows readers see, the older copies)
+                if (groups != null && !groups.isEmpty() && groups.size() >= files.size() && oneCommit(engine, s, date)) {
+                    break;                                       // already as compaction leaves it: one commit's files (the rows readers see, the older copies)
                 }
                 if (dryRun && groups != null && !groups.isEmpty()) {
                     done.add(date);
@@ -335,6 +361,15 @@ final class DeltaUpkeep {
     }
 
     /** Writes a checkpoint of the latest version: the version (one that has one already is left as it is). */
+    /**
+     * The files another writer added (delta-rs, Spark, the Python path) stamped with the version of the commit that added each, read from
+     * the log while it holds it ({@link com.ash.lake.delta.write.CommitOrder#stamp}): run before compaction and the checkpoint, after
+     * which the log's expiry may drop those commits. The number of files stamped.
+     */
+    static int stamp(com.ash.lake.LakeRuntime runtime, String path, boolean dryRun) throws IOException {
+        return com.ash.lake.delta.write.CommitOrder.stamp(LakeWriter.engineFor(runtime, path, Map.of()), path, dryRun);
+    }
+
     static long checkpoint(com.ash.lake.LakeRuntime runtime, String path) throws IOException {
         Engine engine = LakeWriter.engineFor(runtime, path, Map.of());
         Table t = Table.forPath(engine, path);

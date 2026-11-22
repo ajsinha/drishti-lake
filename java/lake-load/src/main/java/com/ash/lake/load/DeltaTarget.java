@@ -35,7 +35,6 @@ import io.delta.kernel.Snapshot;
 import io.delta.kernel.Table;
 import io.delta.kernel.Transaction;
 import io.delta.kernel.TransactionBuilder;
-import io.delta.kernel.TransactionCommitResult;
 import io.delta.kernel.data.Row;
 import io.delta.kernel.internal.SnapshotImpl;
 import io.delta.kernel.internal.actions.Metadata;
@@ -58,7 +57,6 @@ import io.delta.kernel.types.LongType;
 import io.delta.kernel.types.StringType;
 import io.delta.kernel.types.StructField;
 import io.delta.kernel.types.StructType;
-import io.delta.kernel.utils.CloseableIterable;
 import io.delta.kernel.utils.CloseableIterator;
 import io.delta.kernel.utils.DataFileStatus;
 import java.io.IOException;
@@ -237,7 +235,7 @@ final class DeltaTarget implements TableWriter {
         if (spec.appends() && spec.batchId() != null) {   // the batch's id in the commit: Delta's guard against a second commit
             tb = tb.withTransactionId(engine, appId(date), 1);
         }
-        txn = tb.build(engine);
+        txn = tb.withMaxRetries(0).build(engine);                  // CommitOrder retries, each attempt tagged with its version
         if (!spec.appends()) {
             before = lostOrBase(date);
         }
@@ -325,16 +323,23 @@ final class DeltaTarget implements TableWriter {
                 }
             }
         }
-        TransactionCommitResult result;
+        com.ash.lake.delta.write.CommitOrder.Committed result;
+        java.util.function.Supplier<Transaction> again = txn.getReadTableVersion() < 0 ? null : () -> {
+            TransactionBuilder b = table.createTransactionBuilder(engine, ENGINE_INFO, Operation.WRITE).withMaxRetries(0);
+            if (spec.appends() && spec.batchId() != null) {
+                b = b.withTransactionId(engine, appId(date), 1);
+            }
+            return b.build(engine);
+        };
         try {
-            result = txn.commit(engine, CloseableIterable.inMemoryIterable(iterator(actions)));
+            result = com.ash.lake.delta.write.CommitOrder.commit(engine, table.getPath(engine), txn, again, actions);
         } catch (io.delta.kernel.exceptions.ConcurrentWriteException e) {
             if (spec.appends()) {
                 throw e;
             }
             throw new TableWriter.LostReplace(spec.domain() + "/" + spec.table(), date);           // committed by another writer after this transaction read the table
         }
-        for (PostCommitHook hook : result.getPostCommitHooks()) {
+        for (PostCommitHook hook : result.hooks()) {
             try {
                 hook.threadSafeInvoke(engine);                     // a checkpoint every so many versions, as lake build's writer
             } catch (IOException | RuntimeException e) {
@@ -342,7 +347,7 @@ final class DeltaTarget implements TableWriter {
             }
         }
         before = snapshot();
-        return result.getVersion();
+        return result.version();
     }
 
     /** A file's partition values after the date, in the table's order, an empty value as null (TableWriter.partitionsOf). */

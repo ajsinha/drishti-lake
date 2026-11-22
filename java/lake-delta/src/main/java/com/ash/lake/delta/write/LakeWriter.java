@@ -24,7 +24,6 @@ import io.delta.kernel.Snapshot;
 import io.delta.kernel.Table;
 import io.delta.kernel.Transaction;
 import io.delta.kernel.TransactionBuilder;
-import io.delta.kernel.TransactionCommitResult;
 import io.delta.kernel.data.ColumnVector;
 import io.delta.kernel.data.FilteredColumnarBatch;
 import io.delta.kernel.data.Row;
@@ -46,7 +45,6 @@ import io.delta.kernel.types.LongType;
 import io.delta.kernel.types.StringType;
 import io.delta.kernel.types.StructField;
 import io.delta.kernel.types.StructType;
-import io.delta.kernel.utils.CloseableIterable;
 import io.delta.kernel.utils.CloseableIterator;
 import io.delta.kernel.utils.DataFileStatus;
 import java.io.BufferedReader;
@@ -247,7 +245,7 @@ public final class LakeWriter {
             before = withColumns(engine, m.table(), before, wanted);     // a column the manifest adds: the table grows, never drops it
             tb = Table.forPath(engine, m.table()).createTransactionBuilder(engine, ENGINE_INFO, Operation.WRITE);
         }
-        Transaction txn = tb.build(engine);
+        Transaction txn = tb.withMaxRetries(0).build(engine);           // CommitOrder retries, each attempt tagged with its version
         StructType schema = txn.getSchema(engine);
         List<String> leftOut = new ArrayList<>();
         for (StructField f : wanted.fields()) {
@@ -286,48 +284,22 @@ public final class LakeWriter {
             }
             partsDone.accept(++done);
         }
-        TransactionCommitResult result = txn.commit(engine, CloseableIterable.inMemoryIterable(toIterator(actions)));
-        for (PostCommitHook hook : result.getPostCommitHooks()) {
+        java.util.function.Supplier<Transaction> again = before == null ? null : () -> Table.forPath(engine, m.table())
+                .createTransactionBuilder(engine, ENGINE_INFO, Operation.WRITE).withMaxRetries(0).build(engine);
+        CommitOrder.Committed result = CommitOrder.commit(engine, m.table(), txn, again, actions);
+        for (PostCommitHook hook : result.hooks()) {
             try {
                 hook.threadSafeInvoke(engine);                  // a checkpoint every so many versions keeps the log short to read
             } catch (IOException | RuntimeException e) {
                 // a hook that fails leaves the commit as it is; the next write or lake maintenance does it
             }
         }
-        return new Result(result.getVersion(), files, rows, removed, leftOut);
+        return new Result(result.version(), files, rows, removed, leftOut);
     }
 
     /** An add action (a single action row) with the tag of a file of older copies added to its tags. */
     static Row olderCopies(Row single) {
-        int at = single.getSchema().indexOf("add");
-        Row add = single.getStruct(at);
-        StructType s = add.getSchema();
-        Map<Integer, Object> values = new HashMap<>();
-        for (int i = 0; i < s.length(); i++) {
-            if (add.isNullAt(i)) {
-                continue;
-            }
-            io.delta.kernel.types.DataType t = s.at(i).getDataType();
-            values.put(i, t instanceof StringType ? add.getString(i) : t instanceof LongType ? (Object) add.getLong(i)
-                    : t instanceof io.delta.kernel.types.IntegerType ? (Object) add.getInt(i)
-                    : t instanceof io.delta.kernel.types.BooleanType ? (Object) add.getBoolean(i)
-                    : t instanceof io.delta.kernel.types.MapType ? add.getMap(i) : t instanceof StructType ? add.getStruct(i)
-                    : t instanceof ArrayType ? add.getArray(i) : null);
-            if (values.get(i) == null) {
-                throw new IllegalStateException("an add action's field " + s.at(i).getName() + " of type " + t + " is not carried");
-            }
-        }
-        Map<String, String> tags = new java.util.LinkedHashMap<>();
-        int ti = s.indexOf("tags");
-        if (ti < 0) {
-            throw new IllegalStateException("Delta Kernel's add action has no tags field");
-        }
-        if (!add.isNullAt(ti)) {
-            tags.putAll(io.delta.kernel.internal.util.VectorUtils.toJavaMap(add.getMap(ti)));
-        }
-        tags.put(com.ash.lake.rows.LoadOrder.OLDER_TAG, com.ash.lake.rows.LoadOrder.OLDER_VALUE);
-        values.put(ti, io.delta.kernel.internal.util.VectorUtils.stringStringMapValue(tags));
-        return io.delta.kernel.internal.actions.SingleAction.createAddFileSingleAction(new io.delta.kernel.internal.data.GenericRow(s, values));
+        return CommitOrder.withTags(single, Map.of(com.ash.lake.rows.LoadOrder.OLDER_TAG, com.ash.lake.rows.LoadOrder.OLDER_VALUE));
     }
 
     /** The table's columns: id, doc, business_date, the partition columns, the promoted columns. */

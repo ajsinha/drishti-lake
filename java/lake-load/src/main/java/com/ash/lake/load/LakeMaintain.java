@@ -48,6 +48,10 @@ import java.util.SortedMap;
  *       table's {@code file-rows} (a host's own layout); {@code --dates} limits it to those dates; {@code --force} rewrites them even when
  *       they are in the layout (another codec, smaller row groups). A table laid out by more than the id ({@code lake.layout.sort-by}) is left in
  *       its order;</li>
+ *   <li>with {@code --compact} or {@code --checkpoint}, Delta: the data files another writer added (delta-rs, Spark, the Python path)
+ *       stamped with the version of the commit that added each (their add action's tag {@code lake.commit}, read from the log while it
+ *       holds it: DeltaUpkeep.stamp), so the newest load stays known after the log's expiry; the lake's own writers tag their files as
+ *       they commit;</li>
  *   <li>{@code --compact} ({@code --target-file-mb}, 128): the small files of each business date merged (Delta: a date in two or more
  *       files under the target rewritten, OPTIMIZE; Iceberg: a date that drifted from its layout rewritten sorted; files: a date is always
  *       one file, nothing to do);</li>
@@ -232,6 +236,12 @@ public final class LakeMaintain {
         }
         if (steps.rows().active()) {
             m.put("rowRetention", LakeRetention.apply(runtime, root, format, table, steps.rows(), now, dryRun).get("dates"));
+        }
+        if (format.equals("delta") && (steps.compact() || steps.checkpoint())) {
+            int stamped = DeltaUpkeep.stamp(runtime, path, dryRun);   // other writers' files: their commit order kept in the files
+            if (stamped > 0) {
+                m.put("stamped", stamped);
+            }
         }
         java.nio.file.Path spill = com.ash.lake.common.TempFiles.of(runtime).subDir("iceberg-maintain");
         if (steps.relayout()) {

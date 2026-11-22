@@ -22,7 +22,10 @@ package com.ash.lake.rows;
  * others, and between two such files of one commit no order here (the caller's: the file, then the row, as the rewrite wrote them in
  * order); else the run's time, then the whole id. A load id is {@code <run>.<file>} with the run {@code yyyyMMdd'T'HHmmss.SSS-<pid>[-<n>]}
  * (or the run the caller gave, {@code --run-id}); its time is the text before the first {@code -}, a name, never an order across commits.
- * A value in the data never decides between two commits.
+ * A value in the data never decides between two commits. The commit order is durable: a Delta file carries the version of the commit
+ * that added it in its add action's tag {@link #COMMIT_TAG} (written by the lake's writers with the commit; for a file another writer
+ * added, by {@code lake maintain} from the log), so it survives a checkpoint and the log's expiry; an Iceberg file carries its data
+ * sequence number; a files table holds a date whole, its lines in commit order.
  */
 public final class LoadOrder {
 
@@ -32,6 +35,12 @@ public final class LoadOrder {
      * the value {@link #OLDER_VALUE}; on Iceberg the file's name holding {@link #OLDER_NAME} (the files store orders each line by its place in the day).
      */
     public static final String OLDER_TAG = com.ash.lake.PersistedNames.key("copies");
+    /**
+     * The tag of a Delta data file's add action that holds the version of the commit that added the file (its place in the commit
+     * order, kept when the log that recorded the commit is expired).
+     */
+    public static final String COMMIT_TAG = com.ash.lake.PersistedNames.key("commit");
+
     /** The value of {@link #OLDER_TAG} on a file of older copies. */
     public static final String OLDER_VALUE = "older";
     /** What the name of a file of older copies holds (Iceberg, where a data file has no tags). */
@@ -68,25 +77,8 @@ public final class LoadOrder {
     }
 
     /**
-     * Whether {@code loadIds} hold two different runs: only then is the commit order needed (a store reads it for those files alone;
-     * otherwise every commit order may be given as 0).
-     */
-    public static boolean needsCommits(Iterable<String> loadIds) {
-        String first = null;
-        for (String id : loadIds) {
-            String r = run(id);
-            if (first == null) {
-                first = r;
-            } else if (!first.equals(r)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Compares two loads' copies: by commit order ({@code commitA}/{@code commitB}: a table version or sequence number; 0 for both when
-     * {@link #needsCommits} is false), then by the run's time, then by the whole id. Negative when {@code a} is the older.
+     * Compares two loads' copies: by commit order ({@code commitA}/{@code commitB}: a table version or sequence number; -1 when not known,
+     * before every known one), then by the run's time, then by the whole id. Negative when {@code a} is the older.
      */
     public static int compare(String a, long commitA, String b, long commitB) {
         return compare(a, commitA, false, b, commitB, false);

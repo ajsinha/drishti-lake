@@ -467,6 +467,40 @@ public final class TckRunner {
         return out.toString();   // lake-only
     }   // lake-only
 
+    /**   // lake-only
+     * The table's history expired as its retention does: Delta, every commit file (and its checksum) before the last checkpoint deleted;   // lake-only
+     * Iceberg, every snapshot but the current one expired; files, nothing (a date is one file, its lines in commit order). The same answer on every store.   // lake-only
+     */   // lake-only
+    static String expireLog(String format, String root, String domain, String table) throws java.io.IOException {   // lake-only
+        java.nio.file.Path t = java.nio.file.Path.of(root, domain, table);   // lake-only
+        if (format.equals("delta")) {   // lake-only
+            java.nio.file.Path log = t.resolve("_delta_log");   // lake-only
+            long cp = JSON.readTree(java.nio.file.Files.readString(log.resolve("_last_checkpoint"))).path("version").asLong();   // lake-only
+            int gone = 0;   // lake-only
+            try (var files = java.nio.file.Files.list(log)) {   // lake-only
+                for (java.nio.file.Path f : files.toList()) {   // lake-only
+                    String n = f.getFileName().toString();   // lake-only
+                    if (n.matches("\\d{20}\\.(json|crc)") && Long.parseLong(n.substring(0, 20)) < cp) {   // lake-only
+                        java.nio.file.Files.delete(f);   // lake-only
+                        gone++;   // lake-only
+                    }   // lake-only
+                }   // lake-only
+            }   // lake-only
+            if (gone == 0) throw new IllegalStateException("no commit before the checkpoint " + cp + " to expire");   // lake-only
+        } else if (format.equals("iceberg")) {   // lake-only
+            var steps = new com.ash.lake.load.LakeMaintain.Steps(0, null, null, 0.5, false, 0, new com.ash.lake.common.RowRetention(null, null, null),   // lake-only
+                    false, 128, false, 0L);   // lake-only: vacuum of 0 hours: the snapshots before the current one expired
+            try {   // lake-only
+                com.ash.lake.load.LakeMaintain.maintain(RT, root, format, domain + "/" + table, steps, java.time.Instant.now(), false);   // lake-only
+            } catch (java.io.IOException | RuntimeException e) {   // lake-only
+                throw e;   // lake-only
+            } catch (Exception e) {   // lake-only
+                throw new java.io.IOException(e);   // lake-only
+            }   // lake-only
+        }   // lake-only
+        return "history expired";   // lake-only
+    }   // lake-only
+
     /** A store operation through the TableStore SPI: {@code <op> <format> <root> <domain> <table> [arg]} (a capability case's refusal). */   // lake-only
     static int store(String[] a, PrintStream out) {   // lake-only
         var store = com.ash.lake.load.Stores.of(RT, a[1]);   // lake-only
@@ -495,6 +529,7 @@ public final class TckRunner {
                 }   // lake-only
                 case "scan-stats" -> scanStats(store, t, LocalDate.parse(a[5]), a[6], a[7]);   // lake-only: pushdown (READ_API.md 2.7)
                 case "delete-row" -> DeleteRow.run(a);   // lake-only: a row deleted as other writers do (READ_API.md 6)
+                case "expire-log" -> expireLog(a[1], a[2], a[3], a[4]);   // lake-only: the log before the last checkpoint gone, as its retention does
                 default -> a[0].startsWith("read-") ? ReadVerbs.run(store, a) : null;   // lake-only: the read API (READ_API.md section 6)
             };   // lake-only
             if (done == null) throw new IllegalArgumentException("unknown store op " + a[0]);   // lake-only

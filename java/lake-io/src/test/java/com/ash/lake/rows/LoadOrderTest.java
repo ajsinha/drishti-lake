@@ -32,7 +32,6 @@ class LoadOrderTest {
     @Test
     void runsOfOneMillisecondGoByCommitNotByProcessIdText() {
         assertTrue(A.compareTo(B) > 0 && B.compareTo(C) > 0);          // the text order is the reverse of the commits'
-        assertTrue(LoadOrder.needsCommits(List.of(A, B, C)));
         assertTrue(LoadOrder.compare(A, 1, B, 2) < 0);
         assertTrue(LoadOrder.compare(B, 2, C, 3) < 0);
         assertTrue(LoadOrder.compare(C, 3, A, 1) > 0);
@@ -41,7 +40,6 @@ class LoadOrderTest {
     @Test
     void theLaterCommitIsNewerWhateverTheClocksSaid() {
         String later = "20261121T131500.122-99999999-12.x";           // a machine whose clock is behind, or a long load that began first
-        assertTrue(LoadOrder.needsCommits(List.of(later, A)));
         assertTrue(LoadOrder.compare(later, 9, A, 1) > 0);
         assertTrue(LoadOrder.compare(A, 1, later, 9) < 0);
     }
@@ -50,7 +48,6 @@ class LoadOrderTest {
     void withinOneCommitTheTimeThenTheId() {
         String earlier = "20261121T131500.122-99999999-12.x";
         assertTrue(LoadOrder.compare(earlier, 4, A, 4) < 0);
-        assertFalse(LoadOrder.needsCommits(List.of(A, "20261121T131500.123-77-9.other.jsonl")));
         assertEquals("20261121T131500.123", LoadOrder.time(A));
         assertEquals("20261121T131500.123-77-9", LoadOrder.run(A));
         assertTrue(LoadOrder.compare("20261121T131500.123-77-9.a", 0, "20261121T131500.123-77-9.b", 0) < 0);

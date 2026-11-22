@@ -3,6 +3,23 @@
 
 Entries are written per release; unreleased work is listed first.
 
+## 0.9.2 (unreleased)
+
+- **The newest copy is the one committed last, in every case (G4 part 2b item 5, accuracy defect)**: on Delta the commit order was
+  read from the log, and only when a date's files held two run ids. Two loads of one date under one run id (`--run-id` given twice, an
+  inbox's one run for an archive) were taken for one load: readers showed both copies of an id, or the older; and once the log no
+  longer held the commits (checkpointed and expired), the order fell back to the run id and the file's time. Compaction left a date of
+  two loads' files alone when they were already as few as it makes, so it never settled such a date. Now the order is durable: every
+  data file the lake's Delta writers add carries the version of its commit in its add action's tag `lake.commit`
+  (`LoadOrder.COMMIT_TAG`; a commit that loses its version to another writer is checked as Delta Kernel checks it and made again at the
+  next version, tagged with that one); a file another writer added (delta-rs, Spark, the Python path) is tagged by `lake maintain
+  --compact` or `--checkpoint` from the log while it holds the commit (the same file added again, `dataChange: false`), and read from
+  the log until then (once for all dates, remembered). Readers order a date's files by that version always; compaction rewrites a date
+  whose files come from two commits, and leaves one that one commit wrote. Iceberg (data sequence numbers) and the files store (one file
+  a date) already held the order in their files. Kit cases `maintain/commit-order-reused-run-id` and `maintain/commit-order-expired-log`
+  (kit verb `expire-log`: Delta's commit files before the checkpoint deleted, Iceberg's older snapshots expired) on every store and the
+  Python path; LOADER.md states the rule.
+
 ## 0.9.1 (2026-11-21): maintenance data safety
 
 - **The newest copy is the one committed last, after every rewrite (G4 F20, accuracy defect)**: when the load committed last had an

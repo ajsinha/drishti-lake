@@ -27,6 +27,8 @@ load/overwrite-partitions
 load/rerun-replaces-the-date
 load/two-dates
 load/vector-nulls-and-text
+maintain/commit-order-expired-log
+maintain/commit-order-reused-run-id
 maintain/compact-checkpoint-vacuum
 maintain/compact-commit-order
 maintain/keep-days-and-drop-guard

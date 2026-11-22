@@ -57,9 +57,11 @@ final class DeltaTable {
      * @param deletionVectors true when a file carries a deletion vector (column reads then go through documents)
      * @param idScanState the scan state for reading the id column alone, with deletion vectors applied
      * @param snapshot the Kernel's snapshot the layout is of
+     * @param commits the version that added each file of a date held in two or more files, by file name (its {@code lake.commit} tag,
+     *                else the log's); a file whose version is not known (another writer's, its commit expired) is absent
      */
     record Layout(long version, long timestamp, Row scanState, NavigableMap<LocalDate, List<Row>> files, StructType schema,
-            boolean deletionVectors, Row idScanState, Map<String, String> physicalNames, Snapshot snapshot) {
+            boolean deletionVectors, Row idScanState, Map<String, String> physicalNames, Snapshot snapshot, Map<String, Long> commits) {
 
         /**
          * A column's name in the data files, in the add actions' {@code partitionValues} and in their statistics: its
@@ -342,25 +344,73 @@ final class DeltaTable {
 
     /**
      * A date's files in load order, the newest last: by the largest {@code _load_id} each holds (its statistics) in the one load order
-     * ({@link com.ash.lake.rows.LoadOrder}: the commit, then a file of older copies (its add action's tag {@code lake.copies: older})
-     * before the commit's other files, then the run's time, then the id), then the time the file was added, then the path. A reader that keeps the last copy of an id keeps the newest load's. {@code loadColumn} is the load
-     * id column's name in the statistics (its physical name on a column-mapped table); {@code commits}
-     * gives the version that added each of the files when the date holds two runs (null: none known).
+     * ({@link com.ash.lake.rows.LoadOrder}: the commit that added the file ({@code commits}: its {@code lake.commit} tag, else the log's
+     * version; not known: before every known one), then a file of older copies (its add action's tag {@code lake.copies: older}) before
+     * the commit's other files, then the run's time, then the id), then the time the file was added, then the path. A reader that keeps
+     * the last copy of an id keeps the newest load's. {@code loadColumn} is the load id column's name in the statistics (its physical name
+     * on a column-mapped table).
      */
-    static void newestLast(List<Row> files, String loadColumn, java.util.function.Function<List<Row>, Map<String, Long>> commits) {
+    static void newestLast(List<Row> files, String loadColumn, Map<String, Long> commits) {
         Map<Row, String> max = new java.util.IdentityHashMap<>();
+        Map<Row, Long> version = new java.util.IdentityHashMap<>();
+        Map<Row, Boolean> older = new java.util.IdentityHashMap<>();
         for (Row f : files) {
             String m = textBounds(f, loadColumn, Integer.MAX_VALUE)[1];
             max.put(f, m == null ? "" : m);
+            version.put(f, commits.getOrDefault(fileName(f), -1L));
+            older.put(f, olderCopies(f));
         }
-        Map<String, Long> version = commits != null && com.ash.lake.rows.LoadOrder.needsCommits(max.values()) ? commits.apply(files) : Map.of();
-        java.util.function.ToLongFunction<Row> v = f -> version.getOrDefault(fileName(f), 0L);
-        Map<Row, Boolean> older = new java.util.IdentityHashMap<>();
-        files.forEach(f -> older.put(f, olderCopies(f)));
-        files.sort(((java.util.Comparator<Row>) (a, b) -> com.ash.lake.rows.LoadOrder.compare(max.get(a), v.applyAsLong(a), older.get(a),
-                        max.get(b), v.applyAsLong(b), older.get(b)))
+        files.sort(((java.util.Comparator<Row>) (a, b) -> com.ash.lake.rows.LoadOrder.compare(max.get(a), version.get(a), older.get(a),
+                        max.get(b), version.get(b), older.get(b)))
                 .thenComparingLong(f -> InternalScanFileUtils.getAddFileStatus(f).getModificationTime())
                 .thenComparing(f -> InternalScanFileUtils.getAddFileStatus(f).getPath()));
+    }
+
+    /** Versions found in the log for files without the {@code lake.commit} tag, by file name (-1: not in the log); at most this many. */
+    private static final int ADDED_CACHE = 200_000;
+    private final Map<String, Long> addedCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * The version that added each file of the dates held in two or more files ({@link Layout#commits}): the file's {@code lake.commit}
+     * tag ({@link com.ash.lake.delta.write.CommitOrder}), else the log's (read once for all of them, newest first, remembered); a file
+     * neither knows is left out.
+     */
+    private Map<String, Long> commitOrder(Snapshot s, Map<LocalDate, List<Row>> byDate) {
+        Map<String, Long> out = new java.util.HashMap<>();
+        java.util.Set<String> wanted = new java.util.HashSet<>();
+        for (List<Row> files : byDate.values()) {
+            if (files.size() < 2) {
+                continue;
+            }
+            for (Row f : files) {
+                String name = fileName(f);
+                long tag = com.ash.lake.delta.write.CommitOrder.tagged(f.getStruct(InternalScanFileUtils.ADD_FILE_ORDINAL));
+                if (tag >= 0) {
+                    out.put(name, tag);
+                    continue;
+                }
+                Long known = addedCache.get(name);
+                if (known == null) {
+                    wanted.add(name);
+                } else if (known >= 0) {
+                    out.put(name, known);
+                }
+            }
+        }
+        if (!wanted.isEmpty()) {
+            Map<String, Long> found = addedAt(s, wanted);
+            if (addedCache.size() + wanted.size() > ADDED_CACHE) {
+                addedCache.clear();
+            }
+            for (String name : wanted) {
+                Long v = found.get(name);
+                addedCache.put(name, v == null ? -1L : v);
+                if (v != null) {
+                    out.put(name, v);
+                }
+            }
+        }
+        return out;
     }
 
     /** Whether a scan file's add action carries the tag of a file of older copies ({@link com.ash.lake.rows.LoadOrder#OLDER_TAG}). */
@@ -391,67 +441,33 @@ final class DeltaTable {
         return java.net.URLDecoder.decode(last.replace("+", "%2B"), java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    /** The commits a commit-range read takes at a time, newest first. */
-    private static final int COMMITS_PER_READ = 64;
+    /** The version that added each of {@code wanted} (file names) as the log records it ({@link com.ash.lake.delta.write.CommitOrder#addedIn}). */
+    private Map<String, Long> addedAt(Snapshot s, java.util.Set<String> wanted) {
+        return com.ash.lake.delta.write.CommitOrder.addedIn(engine, path, s.getVersion(), wanted);
+    }
 
     /**
-     * The version that added each of {@code files} (by file name): the table's commits read newest first through the Kernel's commit
-     * range (add actions only), until every file is found or the log holds no older commit (a file not found: 0, the oldest).
+     * Whether more than one load may have written the date's files: a file of older copies; else, when the commit of every file is known
+     * ({@code commits}), two commits; else {@code _load_id} statistics of two runs, or a file without them (then the ids are read to
+     * know). Only then can an id be there twice.
      */
-    private Map<String, Long> addedAt(Snapshot s, List<Row> files) {
-        java.util.Set<String> wanted = new java.util.HashSet<>();
-        files.forEach(f -> wanted.add(fileName(f)));
-        Map<String, Long> out = new java.util.HashMap<>();
-        for (long end = s.getVersion(); end >= 0 && out.size() < wanted.size(); end -= COMMITS_PER_READ) {
-            long start = Math.max(0, end - COMMITS_PER_READ + 1);
-            try {
-                io.delta.kernel.CommitRange range = io.delta.kernel.TableManager.loadCommitRange(path,
-                        io.delta.kernel.CommitRangeBuilder.CommitBoundary.atVersion(start))
-                        .withEndBoundary(io.delta.kernel.CommitRangeBuilder.CommitBoundary.atVersion(end)).build(engine);
-                try (CloseableIterator<io.delta.kernel.CommitActions> commits = range.getCommitActions(engine,
-                        java.util.Set.of(io.delta.kernel.internal.DeltaLogActionUtils.DeltaAction.ADD))) {
-                    while (commits.hasNext()) {
-                        try (io.delta.kernel.CommitActions c = commits.next();
-                             CloseableIterator<ColumnarBatch> batches = c.getActions()) {
-                            while (batches.hasNext()) {
-                                ColumnarBatch b = batches.next();
-                                int addAt = b.getSchema().indexOf("add");
-                                try (CloseableIterator<Row> rows = b.getRows()) {
-                                    while (rows.hasNext()) {
-                                        Row r = rows.next();
-                                        if (addAt >= 0 && !r.isNullAt(addAt)) {
-                                            String name = fileName(r.getStruct(addAt).getString(r.getStruct(addAt).getSchema().indexOf("path")));
-                                            if (wanted.contains(name)) {
-                                                out.merge(name, c.getVersion(), Math::max);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (io.delta.kernel.exceptions.KernelException | IllegalArgumentException gone) {
-                break;                                           // the log no longer holds older commits (retention)
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            } catch (Exception e) {
-                throw new IllegalStateException(e.getMessage(), e);
+    static boolean severalLoads(List<Row> files, String loadColumn, Map<String, Long> commits) {
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        boolean known = true;
+        for (Row f : files) {
+            if (olderCopies(f)) {
+                return true;
+            }
+            Long v = commits.get(fileName(f));
+            if (v == null) {
+                known = false;
+            } else {
+                seen.add(v);
             }
         }
-        return out;
-    }
-
-    /**
-     * Whether more than one load may have written the date's files: {@code _load_id} statistics of two runs, or a file without them
-     * (then the ids are read to know). Only then can an id be there twice.
-     */
-    static boolean severalLoads(List<Row> files) {
-        return severalLoads(files, LOAD_ID);
-    }
-
-    /** As above, the load id column named {@code loadColumn} in the statistics. */
-    static boolean severalLoads(List<Row> files, String loadColumn) {
+        if (known) {
+            return seen.size() > 1;
+        }
         String run = null;
         for (Row f : files) {
             String[] b = textBounds(f, loadColumn, Integer.MAX_VALUE);
@@ -473,7 +489,7 @@ final class DeltaTable {
     /** The ids written by more than one load on the date, each with its winning file ({@link #shadows}); computed by {@link #ids}. */
     Map<String, Integer> shadow(Layout layout, LocalDate date) {
         List<Row> files = layout.files().getOrDefault(date, List.of());
-        if (files.size() < 2 || layout.schema() == null || layout.schema().indexOf(LOAD_ID) < 0 || !severalLoads(files, layout.phys(LOAD_ID))) {
+        if (files.size() < 2 || layout.schema() == null || layout.schema().indexOf(LOAD_ID) < 0 || !severalLoads(files, layout.phys(LOAD_ID), layout.commits())) {
             return Map.of();                                     // one load, or a table from before load ids: no id twice
         }
         Map<String, Integer> s = shadows.get(layout.version() + "|" + date);
@@ -549,10 +565,11 @@ final class DeltaTable {
             throw new UncheckedIOException(e);
         }
         String loadPhys = names.getOrDefault(LOAD_ID, LOAD_ID);
-        byDate.values().forEach(files -> newestLast(files, loadPhys, f -> addedAt(s, f)));
+        Map<String, Long> commits = commitOrder(s, byDate);
+        byDate.values().forEach(files -> newestLast(files, loadPhys, commits));
         Row idScanState = s.getScanBuilder().withReadSchema(new StructType().add(idColumn, StringType.STRING)).build().getScanState(engine);
         return new Layout(s.getVersion(), s.getTimestamp(engine), scan.getScanState(engine), byDate, s.getSchema(), dvs,
-                idScanState, names, s);
+                idScanState, names, s, commits);
     }
 
     /**

@@ -1,0 +1,40 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# two appends of one date under ONE run id (--run-id given twice: their load ids are the same): the newest copy of an id is still the one
+# committed last (b: P-1 = 11), never decided by the run id or a file's time; P-2 (a alone) stays. lake maintain --compact settles the
+# two-file date into one commit (the rows readers see, the older copies) and every row stays (raw-digest); a second run reads the same.
+# The expected answer is a table loaded with those rows alone (want).
+inputs:
+  a/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"A","BASE_PV":10}
+    {"POSITION_ID":"P-2","DESK":"A","BASE_PV":20}
+  b/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"B","BASE_PV":11}
+  want/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"B","BASE_PV":11}
+    {"POSITION_ID":"P-2","DESK":"A","BASE_PV":20}
+configs:
+  a: |
+    source: {files: '${in}/a/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  b: |
+    source: {files: '${in}/b/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  want: |
+    source: {files: '${in}/want/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/want', domain: risk, kind: want}
+steps:
+  - load: {config: want}
+  - store: [read-visible, '${store}', '${lake}', risk, want, want]
+  - load: {config: a, args: [--run-id, 20261121T131500.000-1-1]}
+  - load: {config: b, args: [--run-id, 20261121T131500.000-1-1]}
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t', 'BASE_PV:n']
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact]
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact]
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want]
