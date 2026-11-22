@@ -50,9 +50,10 @@ import java.util.TreeMap;
  * <ul>
  *   <li><b>compact</b>: each business date held in two or more files under the target size is rewritten into the writer's files, one
  *       commit a date (the date's files removed, the same rows added: what {@code OPTIMIZE} does). The rows readers see (each id's newest
- *       load's copy) are written in the table's order (by id, or by its {@code lake.layout.sort-by} fields then the id), and every older
- *       copy an append left is kept in a file of its load's own, so readers still read the newest copy and an undo of the newer load still
- *       finds the older one. A date another writer changed while it was read is read again; a lost race fails as any concurrent replace
+ *       load's copy) are written in the table's order (by id, or by its {@code lake.layout.sort-by} fields then the id) into one file, and
+ *       every older copy an append left into one more (by id, the oldest load first; its newest load is older than the first file's), so
+ *       readers still read the newest copy and an undo of the newer load still finds the older one. A date already in as few files is
+ *       left (a second run has nothing to do). A date another writer changed while it was read is read again; a lost race fails as any concurrent replace
  *       does.</li>
  *   <li><b>relayout</b>: a table laid out by id (the loader's sort, {@code lake.layout.sort-by} absent or {@code id}) keeps that layout:
  *       each business date whose files drifted from it (two files of one partition sharing an id range, as an append makes; a file over
@@ -91,60 +92,6 @@ final class DeltaUpkeep {
         return out;
     }
 
-    /**
-     * The dates already in compaction's form (class comment): one file holding several loads' rows (the rows readers see) and every other
-     * file one load's (older copies), by the files' {@code _load_id} statistics; compaction leaves them, so a second run has nothing to do.
-     */
-    static Set<String> compactedDates(Engine engine, Snapshot s) throws IOException {
-        Map<String, int[]> mixedAndSingle = new TreeMap<>();
-        try (CloseableIterator<FilteredColumnarBatch> it = s.getScanBuilder().build().getScanFiles(engine)) {
-            while (it.hasNext()) {
-                try (CloseableIterator<Row> rows = it.next().getRows()) {
-                    while (rows.hasNext()) {
-                        Row r = rows.next();
-                        String d = String.valueOf(InternalScanFileUtils.getPartitionValues(r).get("business_date"));
-                        String[] b = loadBounds(r);
-                        int[] n = mixedAndSingle.computeIfAbsent(d, k -> new int[3]);
-                        if (b[0] == null || b[1] == null) {
-                            n[2]++;                              // no load statistics: not known to be compacted
-                        } else if (b[0].equals(b[1])) {
-                            n[1]++;
-                        } else {
-                            n[0]++;
-                        }
-                    }
-                }
-            }
-        }
-        Set<String> out = new HashSet<>();
-        mixedAndSingle.forEach((d, n) -> {
-            if (n[0] == 1 && n[2] == 0) {
-                out.add(d);
-            }
-        });
-        return out;
-    }
-
-    /** A scan file's {@code _load_id} bounds from its statistics: {min, max}, null when not stated. */
-    private static String[] loadBounds(Row scanFile) {
-        String[] out = new String[2];
-        try {
-            Row add = scanFile.getStruct(InternalScanFileUtils.ADD_FILE_ORDINAL);
-            int at = add.getSchema().indexOf("stats");
-            if (at < 0 || add.isNullAt(at)) {
-                return out;
-            }
-            com.fasterxml.jackson.databind.JsonNode st = JSON.readTree(add.getString(at));
-            com.fasterxml.jackson.databind.JsonNode lo = st.path("minValues").path(RowPlan.LOAD_ID);
-            com.fasterxml.jackson.databind.JsonNode hi = st.path("maxValues").path(RowPlan.LOAD_ID);
-            out[0] = lo.isTextual() ? lo.asText() : null;
-            out[1] = hi.isTextual() ? hi.asText() : null;
-        } catch (IOException | RuntimeException e) {
-            return new String[2];
-        }
-        return out;
-    }
-
     /** The dates compaction rewrites: two or more files, two or more of them under {@code targetBytes}. */
     static List<String> toCompact(SortedMap<String, List<Long>> files, long targetBytes) {
         List<String> out = new ArrayList<>();
@@ -161,20 +108,23 @@ final class DeltaUpkeep {
             String path, long targetBytes, boolean dryRun) throws IOException {
         Engine engine = LakeWriter.engineFor(runtime, path, Map.of());
         Snapshot s = Table.forPath(engine, path).getLatestSnapshot(engine);
-        List<String> dates = new ArrayList<>(toCompact(filesPerDate(engine, s), targetBytes));
-        dates.removeAll(compactedDates(engine, s));
-        if (dryRun) {
-            return dates;
-        }
+        List<String> dates = toCompact(filesPerDate(engine, s), targetBytes);
         List<String> done = new ArrayList<>();
         for (String date : dates) {
             for (int attempt = 0; ; attempt++) {
                 s = Table.forPath(engine, path).getLatestSnapshot(engine);
                 List<Long> files = filesPerDate(engine, s).get(date);
-                if (files == null || toCompact(new TreeMap<>(Map.of(date, files)), targetBytes).isEmpty() || compactedDates(engine, s).contains(date)) {
+                if (files == null || toCompact(new TreeMap<>(Map.of(date, files)), targetBytes).isEmpty()) {
                     break;                                       // another writer replaced or removed the date meanwhile: nothing to do
                 }
                 List<List<TableUpkeep.Staged>> groups = compacted(runtime, store, root, domain, kind, engine, s, date);
+                if (groups != null && !groups.isEmpty() && groups.size() >= files.size()) {
+                    break;                                       // already as few files as compaction makes (the rows readers see, the older copies)
+                }
+                if (dryRun && groups != null && !groups.isEmpty()) {
+                    done.add(date);
+                    break;
+                }
                 if (groups == null) {
                     throw new IOException(path + ": a column of a type the lake's writer does not write (a table written by another "
                             + "engine?): compaction leaves its files as they are");
@@ -332,8 +282,8 @@ final class DeltaUpkeep {
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     /**
-     * A date's rows as compaction writes them (class comment): first the rows readers see, in the table's order, then each older load's
-     * copies, a group a load (oldest first), each in id order. Null when the table has a column the lines cannot carry; empty when the
+     * A date's rows as compaction writes them (class comment): first the rows readers see, in the table's order, then, when an append left
+     * any, every older copy in one group by id and load (the oldest first). Null when the table has a column the lines cannot carry; empty when the
      * read API's snapshot is not the version {@code s} (a commit landed meanwhile: read again).
      */
     static List<List<TableUpkeep.Staged>> compacted(com.ash.lake.LakeRuntime runtime, com.ash.lake.spi.TableStore store, String root, String domain,
@@ -357,13 +307,13 @@ final class DeltaUpkeep {
         }
         List<TableUpkeep.Staged> seen = new ArrayList<>();
         Map<String, TableUpkeep.Staged> newest = new java.util.HashMap<>();
-        TreeMap<String, List<TableUpkeep.Staged>> older = new TreeMap<>((a, b) -> com.ash.lake.rows.LoadOrder.compare(a, 0, b, 0));
+        List<TableUpkeep.Staged> older = new ArrayList<>();
         boolean simple = TableUpkeep.rows(engine, s, pv -> date.equals(pv.get("business_date")), true, (file, row) -> {
             if (row.id() != null && file.equals(winner.get(row.id())) && !newest.containsKey(row.id())) {
                 newest.put(row.id(), row);
                 seen.add(row);
             } else {
-                older.computeIfAbsent(loadOf(row), k -> new ArrayList<>()).add(row);
+                older.add(row);
             }
         });
         if (!simple) {
@@ -372,9 +322,10 @@ final class DeltaUpkeep {
         seen.sort(order(sortedByMore(conf)));
         List<List<TableUpkeep.Staged>> out = new ArrayList<>();
         out.add(seen);
-        for (List<TableUpkeep.Staged> g : older.values()) {
-            g.sort(java.util.Comparator.comparing(r -> r.id() == null ? "" : r.id()));
-            out.add(g);
+        if (!older.isEmpty()) {
+            older.sort(java.util.Comparator.comparing((TableUpkeep.Staged r) -> r.id() == null ? "" : r.id())
+                    .thenComparing(DeltaUpkeep::loadOf, (a, b) -> com.ash.lake.rows.LoadOrder.compare(a, 0, b, 0)));
+            out.add(older);
         }
         return out;
     }

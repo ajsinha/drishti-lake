@@ -38,7 +38,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -246,8 +245,9 @@ final class NativeMaintenance {
      * iceberg-core rewrite a date (validated: a date another writer changed meanwhile fails the commit, nothing lost). Unlike relayout,
      * every row is kept (an append's repeated ids too): the rows readers see (each id's newest load's copy) are regrouped, by id, or for a
      * table laid out by more than the id ({@code lake.layout.sort-by}) by those fields then the id, its files then claiming no sort order;
-     * each older copy an append left goes to a file of its load's own (by id), so readers still read the newest copy and an undo of the
-     * newer load still finds the older one. A date already in that form (one file of several loads, the others one load's each) is left.
+     * every older copy an append left goes to files of their own (by id, the oldest load first), so readers still read the newest copy and
+     * an undo of the newer load still finds the older one. A date already in as few files as that takes is left (a second run has nothing
+     * to do).
      * The dates rewritten (on a dry run: the dates that would be, nothing written).
      */
     static List<LocalDate> compactDates(Table t, boolean dryRun, Path spillDir, long budget) {
@@ -266,46 +266,33 @@ final class NativeMaintenance {
             List<NestedField> promoted = t.metadata().schema().columns().stream().filter(f -> f.id() > 3).toList();
             for (Day day : l.days().values()) {
                 boolean tooMany = day.deletes() || day.files().size() > Math.max(1, (day.rows() + fileRows - 1) / fileRows);
-                if (LocalDate.MIN.equals(day.date()) || !(tooMany || !shard && drifted(day, fileRows, promoted))
-                        || !day.deletes() && compactedForm(k, l, day)) {
+                boolean drift = !shard && drifted(day, fileRows, promoted);
+                if (LocalDate.MIN.equals(day.date()) || !(tooMany || drift)) {
                     continue;
+                }
+                KindTable.IdMap won = k.ids(l, day);
+                long newest = won.size();
+                long older = Math.max(0, day.rows() - newest);
+                long fewest = (newest + fileRows - 1) / fileRows + (older + fileRows - 1) / fileRows;
+                if (!day.deletes() && day.files().size() <= Math.max(1, fewest) && (older > 0 || !drift)) {
+                    continue;                                   // already as few files as compaction makes (the rows readers see, the older copies)
                 }
                 if (dryRun) {
                     done.add(day.date());
                     continue;
                 }
-                KindTable.IdMap won = k.ids(l, day);
-                Comparator<Row> byLoad = Comparator.comparing((Row r) -> String.valueOf(r.columns().getOrDefault(KindTable.LOAD_ID, "")),
-                        (a, b) -> com.ash.lake.rows.LoadOrder.compare(a, 0, b, 0)).thenComparing(Row::id);
+                Comparator<Row> byLoad = Comparator.comparing(Row::id).thenComparing(
+                        (Row r) -> String.valueOf(r.columns().getOrDefault(KindTable.LOAD_ID, "")), (a, b) -> com.ash.lake.rows.LoadOrder.compare(a, 0, b, 0));
                 try (SortedRuns rows = new SortedRuns(spillDir, "compact-" + day.date(), order, false);
-                     SortedRuns older = new SortedRuns(spillDir, "compact-older-" + day.date(), byLoad, false)) {
+                     SortedRuns olderRows = new SortedRuns(spillDir, "compact-older-" + day.date(), byLoad, false)) {
                     for (int f = 0; f < day.files().size(); f++) {
                         int file = f;
                         copyWhere(k, l, day, f, promoted, rows, budget, r -> won.file(r.id()) != file, new long[1]);
-                        copyWhere(k, l, day, f, promoted, older, budget, r -> won.file(r.id()) == file, new long[1]);
+                        copyWhere(k, l, day, f, promoted, olderRows, budget, r -> won.file(r.id()) == file, new long[1]);
                     }
                     List<DataFile> files = new ArrayList<>(NativeLayout.writeDay(t, day.date(), rows.merged(), fileRows, sortOrder));
-                    Iterator<Row> rest = older.merged();
-                    Row[] next = {rest.hasNext() ? rest.next() : null};
-                    while (next[0] != null) {
-                        Object load = next[0].columns().get(KindTable.LOAD_ID);
-                        Iterator<Row> oneLoad = new Iterator<>() {
-                            @Override
-                            public boolean hasNext() {
-                                return next[0] != null && java.util.Objects.equals(load, next[0].columns().get(KindTable.LOAD_ID));
-                            }
-
-                            @Override
-                            public Row next() {
-                                Row r = next[0];
-                                next[0] = rest.hasNext() ? rest.next() : null;
-                                return r;
-                            }
-                        };
-                        files.addAll(NativeLayout.writeDay(t, day.date(), oneLoad, fileRows, sortOrder));
-                        while (oneLoad.hasNext()) {
-                            oneLoad.next();
-                        }
+                    if (olderRows.rows() > 0) {
+                        files.addAll(NativeLayout.writeDay(t, day.date(), olderRows.merged(), fileRows, sortOrder));
                     }
                     Set<String> remove = dayFiles(t, day);
                     Set<String> read = new HashSet<>(remove);
@@ -321,24 +308,6 @@ final class NativeMaintenance {
             }
         }
         return done;
-    }
-
-    /** Whether a date is in compaction's form: one file holding several loads' rows, every other file one load's ({@code _load_id} bounds). */
-    private static boolean compactedForm(NativeKindTable k, Layout l, Day day) {
-        if (day.files().size() < 2) {
-            return false;
-        }
-        int mixed = 0;
-        for (int f = 0; f < day.files().size(); f++) {
-            String[] b = k.textBounds(l, day, f, KindTable.LOAD_ID);
-            if (b[0] == null || b[1] == null) {
-                return false;
-            }
-            if (!b[0].equals(b[1])) {
-                mixed++;
-            }
-        }
-        return mixed == 1;
     }
 
     /** The order of a layout's {@code sort-by} fields ({@code LEGAL_ENTITY,DESK,id}): each field's value (absent first), then the id. */
