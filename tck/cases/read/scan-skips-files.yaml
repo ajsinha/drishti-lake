@@ -8,10 +8,10 @@ inputs:
 configs:
   main: |
     source: {files: '${in}/day', id: POSITION_ID, promote: [DESK, LEGAL_ENTITY], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
   split: |
     source: {files: '${in}/day', id: POSITION_ID, partition-by: [LEGAL_ENTITY], promote: [DESK], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: by-entity}
+    target: {format: ${store}, path: '${lake}/risk/by-entity', domain: risk, kind: by-entity}
 steps:
   - load: []
   - store: [scan-stats, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', DESK, DESK-FX]

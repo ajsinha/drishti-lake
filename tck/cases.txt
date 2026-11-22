@@ -19,6 +19,7 @@ load/contract-rejects-rows
 load/date-guard-future-days-and-zone
 load/drop-guard-replace
 load/future-date-refused
+load/lake-folder-refused
 load/loader-rows
 load/rerun-replaces-the-date
 load/two-dates

@@ -117,12 +117,12 @@ class CodecsTest {
     void aPackGivesTheDomainTableLayoutKeyAndFlattenedFieldsAsLakeBuildReadsThem() throws IOException {
         java.nio.file.Path packs = java.nio.file.Path.of(TestRoots.module(), "host-packs");     // the host's shipped packs: not in this repository
         LoadConfig risk = LoadConfig.read(com.ash.lake.LakeRuntime.fromProcess(), null, List.of("source.files=x.jsonl", "source.pack=" + packs.resolve("market-risk"), "source.date=BUSINESS_DATE",
-                "target.lake=/l", "target.kind=scenario-pv"));
+                "target.path=/l/risk/scenario-pv", "target.kind=scenario-pv"));
         assertThat(risk.target().domain()).isEqualTo("risk");
         assertThat(risk.source().vectors()).containsExactly("SCENARIO_PV");
         assertThat(risk.source().promote()).contains("LEGAL_ENTITY", "DESK", "TT_BOOK");
         LoadConfig trades = LoadConfig.read(com.ash.lake.LakeRuntime.fromProcess(), null, List.of("source.files=x.jsonl", "source.pack=" + packs.resolve("trading"), "source.connector=trade-endur",
-                "source.as-of=2026-10-15", "target.lake=/l", "target.kind=trade"));
+                "source.as-of=2026-10-15", "target.path=/l/trading/trade_endur", "target.kind=trade"));
         assertThat(trades.tablePath()).isEqualTo("/l/trading/trade_endur");
         assertThat(trades.source().id()).isEqualTo("TRADE_ID");
         assertThat(trades.source().flatten()).containsEntry("NOTIONAL", "LEGS[0].NOTIONAL");

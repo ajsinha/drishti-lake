@@ -80,7 +80,7 @@ class ManyDatesMemoryTest {
         }
         Path lake = tmp.resolve("lake");
         String yaml = "source:\n  files: '" + in + "/*.jsonl'\n  id: TRADE_ID\n  promote: [TRADE_ID, SOURCE_SYSTEM]\n  partition-by: [PRODUCT_GROUP]\n"
-                + "target:\n  format: delta\n  lake: '" + lake + "'\n  domain: trading\n  table: trade_murex\n  kind: trade\n"
+                + "target:\n  format: delta\n  path: '" + lake + "/trading/trade_murex'\n  domain: trading\n  table: trade_murex\n  kind: trade\n"
                 + "parallel:\n  parsers: 24\n  readers: 8\nmemory:\n  budget-mb: 32\n";
         JsonNode s = LakeLoadTest.load(tmp, yaml);
         assertThat(s.path("exit").asInt()).as(s.path("said").asText() + s.path("error").asText()).isZero();

@@ -45,7 +45,7 @@ class ConnectorSetStampTest {
         for (String format : List.of("delta", "iceberg")) {
             Path lake = tmp.resolve("lake-" + format);
             String yaml = "source:\n  files: '" + drop + "/*.jsonl'\n  id: TRADE_ID\n  pack: '" + pack + "'\n  connector: trade-swapone\n"
-                    + "target:\n  format: " + format + "\n  lake: '" + lake + "'\n  kind: trade\n";
+                    + "target:\n  format: " + format + "\n  path: '" + lake + "/risk/scenario-pv'\n  kind: trade\n";
             JsonNode s = LakeLoadTest.load(tmp, yaml);
             assertThat(s.path("exit").asInt()).as(s.path("said").asText() + s.path("error").asText()).isZero();
             Map<String, Map<String, Object>> rows = LakeLoadTest.dump(format, lake);

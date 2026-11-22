@@ -76,7 +76,8 @@ class SharedTableSliceTest {
         String split = format.equals("delta") && partitioned ? "  partition-by: [SOURCE_SYSTEM]\n" : "";
         String yaml = "source:\n  files: '" + dir + "/*.jsonl'\n  id: TRADE_ID\n  pack: '" + pack + "'\n  connector: trade-" + system.toLowerCase() + "\n"
                 + "  promote: [TRADE_ID, SOURCE_SYSTEM]\n" + split
-                + "target:\n  format: " + format + "\n  lake: '" + lake + "'\n  kind: trade\n  mode: replace\n";
+                + "target:\n  format: " + format + "\n  path: '" + lake + "/trading/" + (OWN.contains(system) ? "trade_" + system.toLowerCase() : "trades_shared")
+                + "'\n  kind: trade\n  mode: replace\n";
         return LakeLoadTest.load(tmp, yaml);
     }
 

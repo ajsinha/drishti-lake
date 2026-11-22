@@ -1,0 +1,16 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# one form for a table's place: target.lake names a lake file (its entry gives the table), target.path is the table's own folder; a
+# folder given as target.lake is refused before a row is read, naming both forms (the Java loader and the Python path in the same words),
+# and the same rows load through target.path
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 6, scenarios: 2, seed: 1}}
+configs:
+  folder: |
+    source: {files: '${in}/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  path: |
+    source: {files: '${in}/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
+steps:
+  - load: {config: folder}
+  - load: {config: path}

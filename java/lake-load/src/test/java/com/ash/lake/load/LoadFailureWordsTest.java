@@ -76,7 +76,7 @@ class LoadFailureWordsTest {
                   format: loader-rows
                 target:
                   format: iceberg
-                  lake: '%s'
+                  path: '%s/credit/book'
                   domain: credit
                   kind: book
                   iceberg:

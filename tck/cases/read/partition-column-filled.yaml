@@ -5,7 +5,7 @@ inputs:
   pv.2026-10-27.jsonl: {pv: {n: 30, scenarios: 2, seed: 41}}
 config: |
   source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, partition-by: [LEGAL_ENTITY, CCY], promote: [DESK], vectors: [SCENARIO_PV]}
-  target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
 steps:
   - load: []
   - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'LEGAL_ENTITY:t', 'CCY:t', 'DESK:t']

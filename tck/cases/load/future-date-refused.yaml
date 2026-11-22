@@ -7,10 +7,10 @@ inputs:
 configs:
   main: |
     source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
   rows: |
     source: {files: '${in}/later/pv.jsonl', id: POSITION_ID, date: BUSINESS_DATE, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
 steps:
   - load: []
   - load: {config: main, args: [--as-of, '2999-01-04']}

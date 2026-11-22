@@ -35,7 +35,7 @@ A mapping of `source`, `target`, `parallel`, `memory`, `rejects`, `report`, `gua
 |---|---|
 | `source` | `files` (a file, folder or glob `*` `?` `**`; a list), `recursive`, `storage-options`, `format` (documents, or `loader-rows`), `id` (the id field), `date`, `as-of`, `date-from`, `promote` (columns beside the document), `vectors`, `flatten`, `partition-by`, `latest-by`, `pack`, `connector`, `dataset`, `archive` |
 | `source.archive` | `max-mb`, `max-ratio`, `max-members` (zip-bomb caps), `validate` (`rows`, the default, or `structure`) |
-| `target` | `format` (`delta`, `iceberg`, `files`), `lake` (a lake file's name, or a folder), `path`, `domain`, `kind`, `table`, `storage-options`, `mode`, `default-mode`, `batch-id`, `properties`, `iceberg`, `layout`, `contract` |
+| `target` | `format` (`delta`, `iceberg`, `files`), `lake` (a lake file's name), `path` (the table's folder), `domain`, `kind`, `table`, `storage-options`, `mode`, `default-mode`, `batch-id`, `properties`, `iceberg`, `layout`, `contract` |
 | `target.layout` | `sort-by`, `file-size-mb`, `row-group-mb`, `compression`, `vector-compression`, `byte-stream-split`, `shard-aligned`, `vector-type` |
 | `parallel` | `readers`, `parsers`, `writers`, `queue-mb`, `split-mb` |
 | `memory` | `budget-mb` (default half the heap, shared by the reader queue, the parsers' sort buffers and the writers), `sort-buffer-mb`, `spill-dir`, `check-spill-space` |
@@ -43,9 +43,11 @@ A mapping of `source`, `target`, `parallel`, `memory`, `rejects`, `report`, `gua
 | `report` | `summary`, `manifest`, `progress`, `run-log`, `dry-run` |
 | `guard` | `future-days` (0), `zone`, `max-drop-share` (off unless set), `force-drop` (false): the accuracy guards below |
 
-When `target.lake` names a lake file ([STORAGE.md](STORAGE.md)), the table is that file's entry for `target.kind` (location, format,
-partitioning, promoted columns, vectors, id, date, latest-by, sort, layout, load mode); a load key that says otherwise is refused with both
-values named; a kind the lake file lacks is refused.
+A table's place has two forms: `target.lake` names a lake file ([STORAGE.md](STORAGE.md)) and the table is that file's entry for
+`target.kind` (location, format, partitioning, promoted columns, vectors, id, date, latest-by, sort, layout, load mode; a load key that says
+otherwise is refused with both values named; a kind the lake file lacks is refused), or `target.path` is the table's own folder
+(`<root>/<domain>/<table>`, its layout given in the load). A folder given as `target.lake` is refused, naming both forms (kit case
+`load/lake-folder-refused`); `datasets:` loads into a lake file's tables.
 
 ## Rules that apply to every load
 
@@ -166,7 +168,7 @@ source:
   promote: [DESK, BOOK, NOTIONAL]
 target:
   format: delta                 # or iceberg, or files
-  lake: /work/lake
+  path: /work/lake/risk/trade   # the table's folder (or lake: <name>, a lake file's entry)
   domain: risk
   kind: trade
 ```

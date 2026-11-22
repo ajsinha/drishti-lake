@@ -101,7 +101,7 @@ class RoutesTest {
         Routes.Route t = routes(f).route("feed.jsonl", ReadyNote.of(null, null, null, "TRADE", null));
         assertThat(List.of(t.kind(), t.by())).containsExactly("trade", "the .ready file's table trade");
         assertThatThrownBy(() -> routes(f).route("mystery.jsonl", ReadyNote.EMPTY)).isInstanceOf(Routes.Unrouted.class)
-                .hasMessageContaining("mystery: no pack, kind or table of that name (known: demo-pack/position, demo-pack/trade)");
+                .hasMessageContaining("mystery: no pack, kind or table of that name (known: demo-pack/position, demo-pack/trade, demo-pack/trade_other)");
         assertThatThrownBy(() -> routes(f).route("mystery.final.jsonl", ReadyNote.EMPTY)).hasMessageContaining("'final' is neither the date");
         ReadyNote note = new ReadyNote("demo-pack", "position", "pos-lake", null, null, "append", null, null, false, "POS_ID", java.util.Map.of(), false);
         Routes.Route n = routes(f).route("mystery.jsonl", note);

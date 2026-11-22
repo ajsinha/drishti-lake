@@ -8,7 +8,7 @@ inputs:
   pv.2026-10-29.jsonl: {pv: {n: 10, scenarios: 2, seed: 4, start: '2026-10-29'}}
 config: |
   source: {files: '${in}/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
-  target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+  target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
 steps:
   - load: []
   - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --keep-days, '1', --as-of, '2026-10-29']

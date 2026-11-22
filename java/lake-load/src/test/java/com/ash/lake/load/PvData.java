@@ -158,7 +158,7 @@ final class PvData {
         StringBuilder y = new StringBuilder();
         y.append("source:\n  files: '").append(files).append("'\n  id: POSITION_ID\n")       // each file's date: its name (DATA_LAKE_GUIDE.md)
                 .append("  promote: [LEGAL_ENTITY, DESK, TT_BOOK, TRADE_ID, QUANTITY, BASE_PV, CCY, POSITION_ID]\n  vectors: [SCENARIO_PV]\n");
-        y.append("target:\n  format: ").append(format).append("\n  lake: '").append(lake).append("'\n  domain: risk\n  kind: scenario-pv\n");
+        y.append("target:\n  format: ").append(format).append("\n  path: '").append(lake).append("/risk/scenario-pv'\n  domain: risk\n  kind: scenario-pv\n");
         for (String e : extra) {
             y.append(e).append('\n');
         }

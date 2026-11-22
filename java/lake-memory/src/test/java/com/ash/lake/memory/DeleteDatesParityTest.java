@@ -69,8 +69,8 @@ class DeleteDatesParityTest {
         }
         Path lake = dir.resolve("lake-" + format);
         Path cfg = dir.resolve("load-" + format + ".yaml");
-        Files.writeString(cfg, "source:\n  files: '" + in + "'\n  id: TRADE_ID\n  promote: [BOOK]\ntarget:\n  format: " + format + "\n  lake: '" + lake
-                + "'\n  domain: risk\n  kind: trades\n");
+        Files.writeString(cfg, "source:\n  files: '" + in + "'\n  id: TRADE_ID\n  promote: [BOOK]\ntarget:\n  format: " + format + "\n  path: '" + lake
+                + "/risk/trades'\n  domain: risk\n  kind: trades\n");
         ByteArrayOutputStream said = new ByteArrayOutputStream();
         assertThat(LakeLoad.run(MemoryRuntime.RT, new String[] {"--config", cfg.toString(), "-q"}, new PrintStream(said, true, StandardCharsets.UTF_8)))
                 .as(said.toString(StandardCharsets.UTF_8)).isZero();

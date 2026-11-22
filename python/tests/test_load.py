@@ -24,7 +24,7 @@ def run(tmp_path, name, lines, extra="", args=()):
     (d / "in" / "scenario-pv.2026-10-27.jsonl").write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in lines), encoding="utf-8")
     (d / "c.yaml").write_text(f"source: {{files: '{d}/in/*', id: POSITION_ID, promote: [DESK, BASE_PV, QTY, TAGS], vectors: [SCENARIO_PV], "
                               f"flatten: {{LEG_RATE: 'LEGS[0].RATE'}}{extra}}}\n"
-                              f"target: {{format: delta, lake: '{d}/lake', domain: risk, kind: scenario-pv, mode: replace}}\n")
+                              f"target: {{format: delta, path: '{d}/lake/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: replace}}\n")
     code = load.main(["--config", str(d / "c.yaml"), "--summary", str(d / "s.json"), "-q"] + list(args), out=open(d / "said.txt", "w"))
     return code, json.loads((d / "s.json").read_text()), d
 

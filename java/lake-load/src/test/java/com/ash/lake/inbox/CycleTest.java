@@ -63,7 +63,7 @@ class CycleTest {
         assertThat(report.path("load").path("documents").asLong()).isEqualTo(3);
         assertThat(report.path("filesInLoad")).hasSize(2);
         String cfg = Files.readString(f.root.resolve("outbox/2026-11-03").resolve(f.loads.get(0).getParent().getFileName()).resolve("loads/load-1.yaml"));
-        assertThat(cfg).contains("pack: \"" + f.pack.toAbsolutePath()).contains("kind: \"trade\"").contains("lake: \"" + f.lake).contains("max-pct: 0.0");
+        assertThat(cfg).contains("pack: \"" + f.pack.toAbsolutePath()).contains("kind: \"trade\"").contains("path: \"" + f.lake + "/demo/trade").contains("max-pct: 0.0");
         assertThat(f.ledgerLines()).extracting(n -> n.path("outcome").asText()).containsExactly("claimed", "claimed", "loaded", "loaded");
     }
 
@@ -200,7 +200,7 @@ class CycleTest {
         Cycle.Report r = f.run();
         assertThat(r.files()).extracting(Cycle.FileOutcome::outcome).containsOnly("failed");
         assertThat(r.files()).extracting(Cycle.FileOutcome::reason)
-                .anyMatch(s -> s.contains("mystery: no pack, kind or table of that name (known: demo-pack/position, demo-pack/trade)"))
+                .anyMatch(s -> s.contains("mystery: no pack, kind or table of that name (known: demo-pack/position, demo-pack/trade, demo-pack/trade_other)"))
                 .anyMatch(s -> s.contains("the loader does not read trades.csv")).anyMatch(s -> s.contains("key date-field"));
         assertThat(f.loads).isEmpty();
         assertThat(f.tree("failed")).contains("failed/2026-11-03/RUN/mystery.jsonl.failed.json", "failed/2026-11-03/RUN/trades.csv.ready");

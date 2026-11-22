@@ -53,7 +53,7 @@ class BusinessZoneTest {
 
     private int load(LakeRuntime rt, Path file, Path lake, String... more) throws Exception {
         Path cfg = Files.writeString(Files.createTempFile(tmp, "load", ".yaml"), "source: {files: '" + file + "', id: POSITION_ID}\n"
-                + "target: {format: delta, lake: '" + lake + "', domain: risk, kind: scenario-pv, mode: replace}\n");
+                + "target: {format: delta, path: '" + lake + "/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: replace}\n");
         List<String> args = new java.util.ArrayList<>(List.of("--config", cfg.toString(), "-q"));
         args.addAll(List.of(more));
         ByteArrayOutputStream said = new ByteArrayOutputStream();

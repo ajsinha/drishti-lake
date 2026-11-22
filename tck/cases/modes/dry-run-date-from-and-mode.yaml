@@ -8,11 +8,11 @@ inputs:
 configs:
   main: |
     source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, default-mode: append}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, default-mode: append}
     report: {run-log: false}
   plain: |
     source: {files: '${in}/plain/pv.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV], as-of: '2026-10-26', date-from: auto}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
 steps:
   - load: {config: main, args: [--dry-run]}
   - load: {config: main, args: [--plan, --json]}

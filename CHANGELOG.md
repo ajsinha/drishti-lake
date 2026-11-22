@@ -5,6 +5,11 @@ Entries are written per release; unreleased work is listed first.
 
 ## 0.9.0 (2026-11-21): the move from Drishti
 
+- **One form for a table's place (G4 shims)**: the loader no longer reads a folder as `target.lake` (the warn-once old form is gone, in
+  the Java loader and the Python path): `target.lake` names a lake file, `target.path` is the table's folder; a folder as `target.lake` is
+  refused before a row is read, naming both forms. `datasets:` loads into a lake file's tables; the inbox turns its lake folder into the
+  table's path (`<lake>/<domain>/<table>`, the pack's domain and table). The parity kit's cases and the tests name `target.path`; kit case
+  `load/lake-folder-refused`.
 - **JSON arrays as loader input (G4 lake gap c)**: a `.json` file or archive member (plain, `.gz`, `.zst`) whose text starts with `[` is
   a JSON array whose elements are the rows, read as a stream (`JsonArrays` in the Java loader, `inputs.json_array` on the Python path),
   each element the line a JSON Lines file would hold (the same rows, rejects and numbering); a broken array or text after its `]` fails the

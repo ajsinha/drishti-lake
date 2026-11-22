@@ -29,26 +29,26 @@ configs:
       promote: [DESK, QUANTITY]
       vectors: [SCENARIO_PV]
       archive: {max-mb: 0.01}
-    target: {format: '${store}', lake: '${lake}', domain: risk, kind: scenario-pv}
+    target: {format: '${store}', path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
   many: |
     source:
       files: '${in}/many.2026-10-27.zip'
       id: POSITION_ID
       archive: {max-members: 2, max-ratio: 1000}
-    target: {format: '${store}', lake: '${lake}', domain: risk, kind: scenario-pv}
+    target: {format: '${store}', path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
   slip: |
     source: {files: '${in}/slip.2026-10-27.zip', id: POSITION_ID}
-    target: {format: '${store}', lake: '${lake}', domain: risk, kind: scenario-pv}
+    target: {format: '${store}', path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
   folders: |
     source: {files: '${in}/folders.2026-10-27.zip', id: POSITION_ID}
-    target: {format: '${store}', lake: '${lake}', domain: risk, kind: scenario-pv}
+    target: {format: '${store}', path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
   tar: |
     source:
       files: '${in}/two-tables.tar'
       id: POSITION_ID
       promote: [DESK, QUANTITY]
       vectors: [SCENARIO_PV]
-    target: {format: '${store}', lake: '${lake}', domain: risk, kind: scenario-pv}
+    target: {format: '${store}', path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
 steps:
   - load: {config: big}
   - load: {config: many}

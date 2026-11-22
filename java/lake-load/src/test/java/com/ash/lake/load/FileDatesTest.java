@@ -159,7 +159,7 @@ class FileDatesTest {
         for (String e : extra) {
             y.append("  ").append(e).append('\n');
         }
-        y.append("target:\n  format: delta\n  lake: '").append(tmp.resolve(lake)).append("'\n  domain: trading\n  kind: deal\n");
+        y.append("target:\n  format: delta\n  path: '").append(tmp.resolve(lake)).append("/trading/deal'\n  domain: trading\n  kind: deal\n");
         return LakeLoadTest.load(tmp, y.toString());
     }
 

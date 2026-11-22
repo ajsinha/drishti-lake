@@ -182,7 +182,7 @@ class DeltaInteropTest {
         }
         Path lake = tmp.resolve("lake");
         Path cfg = Files.writeString(tmp.resolve("load.yaml"), "source:\n  files: '" + in + "/*'\n  id: POSITION_ID\n  promote: [TEXT]\n"
-                + "target:\n  format: delta\n  lake: '" + lake + "'\n  domain: risk\n  kind: interop\n");
+                + "target:\n  format: delta\n  path: '" + lake + "/risk/interop'\n  domain: risk\n  kind: interop\n");
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         assertThat(LakeLoad.run(runtime(), new String[] {"--config", cfg.toString(), "-q"}, new PrintStream(out))).as(out.toString()).isEqualTo(LakeLoad.OK);
         JsonNode read = DeltaRs.read(lake.resolve("risk/interop"), "id", "business_date", "TEXT");

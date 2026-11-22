@@ -52,7 +52,7 @@ class RowDatesTest {
 
     private JsonNode load(Path dir, Path lake) throws Exception {
         String yaml = "source:\n  files: '" + dir + "/*.jsonl'\n  id: POSITION_ID\n  date: BUSINESS_DATE\n"
-                + "target:\n  format: delta\n  lake: '" + lake + "'\n  domain: risk\n  kind: scenario-pv\n  mode: replace\n";
+                + "target:\n  format: delta\n  path: '" + lake + "/risk/scenario-pv'\n  domain: risk\n  kind: scenario-pv\n  mode: replace\n";
         return LakeLoadTest.load(tmp, yaml);
     }
 

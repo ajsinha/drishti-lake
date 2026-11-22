@@ -181,7 +181,9 @@ def of(tree: dict) -> LoadConfig:
     if date_from not in ("auto", "name"):
         raise ConfigError(f"source.date-from {date_from}: auto or name")
     lake, path = _text(t, "lake"), _text(t, "path")
-    e = _entry(t, lake) if lake is not None and is_lake_name(lake) else None
+    if lake is not None and not is_lake_name(lake):
+        raise ConfigError(folder_lake(lake, _text(t, "domain"), _text(t, "table") or _text(t, "kind")))
+    e = _entry(t, lake) if lake is not None else None
     key, day, latest = _text(s, "id"), _text(s, "date"), _text(s, "latest-by")
     promote, vectors = _list(s, "promote"), _list(s, "vectors") + _list(s, "vector")
     flatten = {str(k): str(_env(v)) for k, v in (s.get("flatten") or {}).items()}
@@ -209,19 +211,16 @@ def of(tree: dict) -> LoadConfig:
             raise ConfigError(f"target.lake {lake}: table {e['name']} sets table properties; {JAVA}")
     if fmt != "delta":
         raise ConfigError(f"target.format {fmt}: the Python path writes Delta tables; {JAVA}")
-    if e is None and path is None and (lake is None or _text(t, "domain") is None or (_text(t, "kind") is None and _text(t, "table") is None)):
-        raise ConfigError("target: give path, or lake, domain and kind (or table)")
-    if e:
-        table_path = _trim(e["location"])
-    else:
-        table_path = _trim(path) if path else _trim(lake) + "/" + _text(t, "domain") + "/" + (_text(t, "table") or _text(t, "kind"))
+    if e is None and path is None:
+        raise ConfigError("target: give lake (a lake file's name, with kind) or path (the table's folder)")
+    table_path = _trim(e["location"]) if e else _trim(path)
     if "://" in table_path and not table_path.startswith("file:"):
         raise ConfigError(f"target {table_path}: the Python path writes local tables; {JAVA}")
     a = table_path.rfind("/")
     b = table_path.rfind("/", 0, a) if a > 0 else -1
     table = table_path[a + 1:]
     domain = _text(t, "domain") or (e["domain"] if e else None) or (table_path[b + 1:a] if b >= 0 else "")
-    lake_root = _trim(e["root"]) if e else _trim(lake) if lake and not path else (table_path[:b] if b > 0 else table_path)
+    lake_root = _trim(e["root"]) if e else (table_path[:b] if b > 0 else table_path)
     given, fallback = _text(t, "mode"), _text(t, "default-mode")
     mode_from = "given" if given else "lake" if e else "default" if fallback else "rules"
     lake_mode = None if e is None else "append" if str(e.get("load-mode") or "").lower() == "append" else "replace-date"
@@ -275,8 +274,17 @@ _LAKE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
 
 
 def is_lake_name(ref: str) -> bool:
-    """Whether ``target.lake`` names a lake by its lake file (a plain name) rather than a folder or a URL (Java: LoadConfig.isLakeName)."""
-    return _LAKE_NAME.fullmatch(ref) is not None and not os.path.isdir(ref)
+    """Whether ``target.lake`` is a lake file's name (a plain name; anything else is refused: ``folder_lake``; Java: LoadConfig.isLakeName)."""
+    return _LAKE_NAME.fullmatch(ref) is not None
+
+
+def folder_lake(ref: str, domain: str | None, table: str | None) -> str:
+    """The refusal of a ``target.lake`` that is not a lake file's name, in the Java loader's words (LoadConfig.folderLake)."""
+    r = ref.replace("\\", "/")
+    r = r[:-1] if len(r) > 1 and r.endswith("/") else r
+    return (f"target.lake {ref} is not a lake file's name: target.lake names a lake of the lakes folder (lake.lakes.dir; target.lake: "
+            f"<name>, its file <name>.yaml), or give the table's folder as target.path ({r}/{domain or '<domain>'}/{table or '<kind>'}); "
+            "a folder is not a lake (LOADER.md, STORAGE.md)")
 
 
 def _entry(t: dict, lake: str) -> dict:

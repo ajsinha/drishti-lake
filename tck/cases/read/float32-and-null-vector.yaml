@@ -13,10 +13,10 @@ inputs:
 configs:
   main: |
     source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, layout: {vector-type: float32}}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, layout: {vector-type: float32}}
   more: |
     source: {files: '${in}/more/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: append}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
 steps:
   - load: {args: [--run-id, 20261121T140000.000-1]}
   - load: {config: more, args: [--run-id, 20261121T140001.000-1]}

@@ -238,8 +238,8 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
             throw new IllegalArgumentException("datasets: name at least one (a list of names, or name: {target: ...} for each)");
         }
         if (tree.path("target").has("path")) {
-            throw new IllegalArgumentException("datasets: each dataset is the table <lake>/<domain>/<name>: give target.lake and target.domain, "
-                    + "not target.path");
+            throw new IllegalArgumentException("datasets: each dataset is a table of the lake file target.lake names (its entry for the "
+                    + "dataset's name): give target.lake, not target.path");
         }
         Map<String, LoadConfig> out = new LinkedHashMap<>();
         for (Map.Entry<String, JsonNode> e : named.entrySet()) {
@@ -464,7 +464,7 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
                 agree(entry, "partition-by", r.list(s, "partition-by"), entry.partitionBy());
             }
         } else if (lakeRef != null && !lakeRef.isBlank()) {
-            warnOnce("target.lake " + lakeRef + " is a folder: name a lake of config/lakes/ instead (docs/guides/DATA_LAKE_GUIDE.md); a folder is read this way for one more release");
+            throw new IllegalArgumentException(folderLake(rt, lakeRef, r.text(t, "domain", null), r.text(t, "table", r.text(t, "kind", null))));
         }
         List<String> vectors = new ArrayList<>(r.list(s, "vectors"));
         vectors.addAll(r.list(s, "vector"));
@@ -593,8 +593,8 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         }
         Target tgt = new Target(tf, path, r.text(t, "lake", null), domain, r.text(t, "kind", null), table, targetStorage, props, iceberg, layout,
                 loadMode, batchId, modeFrom, contract(r.text(t, "contract", null)));
-        if (tgt.path() == null && (tgt.lake() == null || tgt.domain() == null || tgt.kind() == null && tgt.table() == null)) {
-            throw new IllegalArgumentException("target: give path (the table) or lake, domain and kind (the table <lake>/<domain>/<kind>)");
+        if (tgt.path() == null) {
+            throw new IllegalArgumentException("target: give lake (a lake file's name, with kind) or path (the table's folder)");
         }
         int cores = Runtime.getRuntime().availableProcessors();
         Parallel par = new Parallel(r.threads(p, "readers", cores), r.threads(p, "parsers", cores), r.threads(p, "writers", Math.min(8, cores)),
@@ -661,12 +661,9 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         }
     }
 
-    /** Whether {@code target.lake} names a lake of config/lakes/ (a plain name) rather than a folder or a URL (the old form). */
+    /** Whether {@code target.lake} is a lake file's name (a plain name; anything else is refused by {@link #folderLake}). */
     static boolean isLakeName(com.ash.lake.LakeRuntime rt, String ref) {
-        if (!ref.matches("[a-z0-9][a-z0-9_-]*")) {
-            return false;                                   // ./data/delta, /lake, s3://bucket/delta: a folder, the old form
-        }
-        return Lakes.dir(rt).resolve(ref + ".yaml").toFile().isFile() || !new java.io.File(ref).isDirectory();
+        return ref.matches("[a-z0-9][a-z0-9_-]*");        // ./data/delta, /lake, s3://bucket/delta: not a name (refused: folderLake)
     }
 
     /** A value of the load file that the lake file also gives: they must be the same, else the load is refused naming both. */
@@ -678,13 +675,16 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         return mine != null ? mine : lakes;
     }
 
-    private static final Set<String> WARNED = java.util.concurrent.ConcurrentHashMap.newKeySet();
-
-    /** One warning per message and process: an old form still read (decision L4). */
-    static void warnOnce(String message) {
-        if (WARNED.add(message)) {
-            org.slf4j.LoggerFactory.getLogger(LoadConfig.class).warn(message);
-        }
+    /**
+     * The refusal of a {@code target.lake} that is not a lake file's name (a folder, a URL): the two forms a target has, a lake file's
+     * name ({@code <lakes dir>/<name>.yaml}, STORAGE.md) or the table's own folder ({@code target.path}).
+     */
+    static String folderLake(com.ash.lake.LakeRuntime rt, String ref, String domain, String table) {
+        String r = ref.replace('\\', '/');
+        r = r.length() > 1 && r.endsWith("/") ? r.substring(0, r.length() - 1) : r;
+        return "target.lake " + ref + " is not a lake file's name: target.lake names a lake of the lakes folder (lake.lakes.dir; target.lake: "
+                + "<name>, its file <name>.yaml), or give the table's folder as target.path (" + r + "/" + (domain == null ? "<domain>" : domain) + "/"
+                + (table == null ? "<kind>" : table) + "); a folder is not a lake (LOADER.md, STORAGE.md)";
     }
 
     /** {@code source.dataset} and {@code source.archive.*}: the caps' defaults from lake.archive.max-mb, max-ratio, max-members. */
@@ -734,17 +734,11 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
 
     /** The table's location: {@code path}, else {@code <lake>/<domain>/<table or kind>}. */
     String tablePath() {
-        if (target.path() != null) {
-            return trim(target.path());
-        }
-        return trim(target.lake()) + "/" + target.domain() + "/" + (target.table() != null ? target.table() : target.kind());
+        return trim(target.path());                    // a lake file's name gives its entry's location (single)
     }
 
-    /** The lake root (for the run log and the lock): {@code lake}, else the table's grandparent. */
+    /** The lake root (for the run log and the lock): the table's grandparent. */
     String lakeRoot() {
-        if (target.lake() != null && target.path() == null) {           // a lake by name has its table's path: its grandparent below
-            return trim(target.lake());
-        }
         String p = tablePath();
         int a = p.lastIndexOf('/');
         int b = a > 0 ? p.lastIndexOf('/', a - 1) : -1;

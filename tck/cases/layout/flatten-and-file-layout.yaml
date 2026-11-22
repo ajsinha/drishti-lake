@@ -14,7 +14,7 @@ config: |
     flatten: {LEG1_RATE: 'LEGS[0].RATE', LEG2_NOTIONAL: 'LEGS[1].NOTIONAL'}
   target:
     format: ${store}
-    lake: '${lake}'
+    path: '${lake}/risk/scenario-pv'
     domain: risk
     kind: scenario-pv
     layout: {sort-by: [DESK, POSITION_ID], file-size-mb: 1, row-group-mb: 1, compression: zstd, vector-compression: zstd, byte-stream-split: true}

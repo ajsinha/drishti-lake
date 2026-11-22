@@ -105,8 +105,8 @@ class RetentionParityTest {
                     StandardCharsets.UTF_8);
         }
         Path lake = dir.resolve("lake-" + format);
-        String yaml = "source:\n  files: '" + in + "'\n  id: TRADE_ID\n  promote: [BOOK]\ntarget:\n  format: " + format + "\n  lake: '" + lake
-                + "'\n  domain: risk\n  kind: trades\n";
+        String yaml = "source:\n  files: '" + in + "'\n  id: TRADE_ID\n  promote: [BOOK]\ntarget:\n  format: " + format + "\n  path: '" + lake
+                + "/risk/trades'\n  domain: risk\n  kind: trades\n";
         Path cfg = dir.resolve("load-" + format + ".yaml");
         Files.writeString(cfg, yaml);
         ByteArrayOutputStream said = new ByteArrayOutputStream();

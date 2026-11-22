@@ -110,15 +110,26 @@ public final class LoaderProcess implements LoadRunner {
         put(s, "id", r.key());
         ObjectNode t = root.putObject("target");
         t.put("format", r.format());
-        t.put("lake", r.lake());
         t.put("kind", r.kind());
         if (r.newDomain() != null) {
             t.put("domain", r.newDomain());                     // a new table: the pack's domain, the generic layout
         }
-        // the table: the route's, else the pack connector's (trade-endur: trade_endur), which picks among several tables of one kind
-        boolean named = r.lake() != null && r.lake().matches("[a-z0-9][a-z0-9_-]*");      // a lake of config/lakes/ (else a folder: the old form)
-        put(t, "table", r.table() != null || !named || r.connector() == null || r.newDomain() != null ? r.table()
-                : com.ash.lake.config.PackEntry.read(runtime, r.packDir(), r.kind(), r.connector()).table());
+        boolean named = r.lake() != null && r.lake().matches("[a-z0-9][a-z0-9_-]*");      // a lake of config/lakes/ (else the inbox's lake folder)
+        if (named) {
+            t.put("lake", r.lake());
+            // the table: the route's, else the pack connector's (trade-endur: trade_endur), which picks among several tables of one kind
+            put(t, "table", r.table() != null || r.connector() == null || r.newDomain() != null ? r.table()
+                    : com.ash.lake.config.PackEntry.read(runtime, r.packDir(), r.kind(), r.connector()).table());
+        } else {
+            // a lake folder (the inbox's settings): the table's own folder, <lake>/<domain>/<table>, the domain and table the pack's
+            com.ash.lake.config.PackEntry pack = r.newDomain() != null ? null : com.ash.lake.config.PackEntry.read(runtime, r.packDir(), r.kind(), r.connector());
+            String domain = r.newDomain() != null ? r.newDomain() : pack.domain();
+            String table = r.table() != null ? r.table() : pack != null && pack.table() != null ? pack.table() : r.kind();
+            String lake = r.lake().replace('\\', '/');
+            t.put("path", (lake.length() > 1 && lake.endsWith("/") ? lake.substring(0, lake.length() - 1) : lake) + "/" + domain + "/" + table);
+            put(t, "domain", domain);
+            put(t, "table", r.table());
+        }
         // the mode (DATA_LAKE_GUIDE.md section 5): the .ready file's, else the lake file's entry for the table, else the inbox's default
         t.put(r.modeGiven() ? "mode" : "default-mode", "append".equals(r.mode()) ? "append" : "replace-date");
         t.put("batch-id", batchId(files));

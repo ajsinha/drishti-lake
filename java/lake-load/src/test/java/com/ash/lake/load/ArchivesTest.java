@@ -145,9 +145,37 @@ class ArchivesTest {
         assertThat(Inputs.SUFFIXES).contains(".zip", ".tgz", ".tar", ".gz", ".zst");
     }
 
-    private String config(Path lake, String files, String extra) {
-        return "source:\n  files: '" + files + "'\n  id: id\n  date: date\n" + "target:\n  format: delta\n  lake: '" + lake + "'\n  domain: fixture\n"
+    /**
+     * A load of {@code files}: into the table {@code <lake>/fixture/<kind>} ({@code extra} names the kind), or with {@code datasets:} into the
+     * tables of a lake file made for it (root {@code lake}, the fixtures' tables), its name in the configuration.
+     */
+    private String config(Path lake, String files, String extra) throws java.io.IOException {
+        String target;
+        if (extra.contains("datasets:")) {
+            String name = "fx-" + lake.getFileName().toString().toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9-]", "-");
+            Path lakes = Files.createDirectories(tmp.resolve("lakes"));
+            StringBuilder y = new StringBuilder("lake: " + name + "\nformat: delta\nroot: '" + lake + "'\ntables:\n");
+            for (String t : List.of("trade", "position", "alpha", "beta")) {
+                y.append("  fixture.").append(t).append(":\n    id: id\n    date: date\n");
+            }
+            Files.writeString(lakes.resolve(name + ".yaml"), y.toString());
+            target = "  lake: " + name + "\n";
+        } else {
+            String kind = extra.replaceAll("(?s).*kind: ([A-Za-z0-9_-]+).*", "$1");
+            target = "  path: '" + lake + "/fixture/" + kind + "'\n";
+        }
+        return "source:\n  files: '" + files + "'\n  id: id\n  date: date\n" + "target:\n  format: delta\n" + target + "  domain: fixture\n"
                 + extra + "parallel: {readers: 2, parsers: 2, writers: 2}\nmemory: {budget-mb: 64}\n";
+    }
+
+    @org.junit.jupiter.api.BeforeEach
+    void lakes() {
+        System.setProperty(com.ash.lake.config.Lakes.PROPERTY, tmp.resolve("lakes").toString());
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void noLakes() {
+        System.clearProperty(com.ash.lake.config.Lakes.PROPERTY);
     }
 
     private static long rowsOf(Path table) throws Exception {

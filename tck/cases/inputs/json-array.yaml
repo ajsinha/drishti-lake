@@ -20,19 +20,19 @@ inputs:
 configs:
   arr: |
     source: {files: '${in}/arr/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: replace-date}
   lines: |
     source: {files: '${in}/lines/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: from-lines, mode: replace-date}
+    target: {format: ${store}, path: '${lake}/risk/from-lines', domain: risk, kind: from-lines, mode: replace-date}
   feed: |
     source: {files: '${in}/feed.tar', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: replace-date}
   odd: |
     source: {files: '${in}/odd/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: replace-date}
   broken: |
     source: {files: '${in}/broken/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: replace-date}
 steps:
   - load: {config: arr}
   - load: {config: lines}

@@ -26,7 +26,7 @@ python -m drishti_lake undo|retention|check|maintain|lakes ...    the Java tools
 `load` takes **the same configuration file and flags as the Java loader** ([LOADER.md](LOADER.md)), applies the same rules in the same order (the
 configuration checked; each file's business date decided; every line through the row rule; the rows' dates and the reject share checked; one
 id's copies on a date resolved; one commit per business date), prints the same summary keys and exits with the same codes (0 loaded, 2 loaded
-with rejects, 1 failed, 3 locked). It writes Delta on the local disk (`target.path` or a lake folder); what it does not do is refused **before a row
+with rejects, 1 failed, 3 locked). It writes Delta on the local disk (`target.path`, or a lake file's entry); what it does not do is refused **before a row
 is read**, naming the Java loader: Iceberg and files, `s3://` and `mem://` tables, `datasets:`, `source.pack`, a lake named by a lake file.
 
 The upkeep commands run the Java tools of the product (`LakeUndo`, `LakeRetention`, `LakeCheck`, `LakeMaintain`, `LakesCli`) so there is

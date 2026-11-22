@@ -49,7 +49,7 @@ class ListColumnsLoadTest {
                 "{\"TRADE_ID\":\"T-4\",\"DESK\":\"FX\",\"TAGS\":[\"credit, \\\"senior\\\"\",true],\"YEARS\":[1],\"LEGS\":[{\"N\":3}]}") + "\n");
         Path lake = tmp.resolve("lake");
         String yaml = "source:\n  files: '" + in + "'\n  id: TRADE_ID\n  promote: [DESK, TAGS, YEARS, LEGS]\n"
-                + "target:\n  format: " + format + "\n  lake: '" + lake + "'\n  domain: trading\n  kind: trade\n";
+                + "target:\n  format: " + format + "\n  path: '" + lake + "/trading/trade'\n  domain: trading\n  kind: trade\n";
         JsonNode s = LakeLoadTest.load(tmp, yaml);
         assertThat(s.path("exit").asInt()).as(s.toString()).isZero();
         assertThat(s.path("columns").path("types").path("TAGS").asText()).isEqualTo("list");

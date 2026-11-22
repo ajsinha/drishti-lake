@@ -92,7 +92,7 @@ class ChildLoadsTest {
         Files.copy(FIXTURE.resolve("deal.2026-11-03.jsonl"), in);
         Path lake = tmp.resolve("lake");
         String yaml = "source:\n  files: '" + in + "'\n  pack: '" + pack + "'\n  id: TRADE_ID\n"
-                + "target:\n  format: " + format + "\n  lake: '" + lake + "'\n  domain: deals\n  kind: deal\n";
+                + "target:\n  format: " + format + "\n  path: '" + lake + "/deals/deal'\n  domain: deals\n  kind: deal\n";
         JsonNode s = LakeLoadTest.load(tmp, yaml);
         assertThat(s.path("exit").asInt()).as(s.toString()).isZero();
         Map<String, Map<String, Object>> parents = rows(format, lake, "deal");

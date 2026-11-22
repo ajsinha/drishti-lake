@@ -48,7 +48,7 @@ config: |
     vectors: [SCENARIO_PV]
   target:
     format: ${store}
-    lake: '${lake}'
+    path: '${lake}/risk/scenario-pv'
     domain: risk
     kind: scenario-pv
     contract: '${in}/position.contract.yaml'

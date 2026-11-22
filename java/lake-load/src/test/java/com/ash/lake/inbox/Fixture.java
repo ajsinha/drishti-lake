@@ -74,6 +74,12 @@ final class Fixture {
                       layout:
                         trade:
                           columns: [TRADE_ID, DESK]
+                  other:
+                    plugin: delta
+                    kinds: [trade]
+                    settings:
+                      domain: demo
+                      table.trade: trade_other
                 ingest:
                   trade:
                     key: TRADE_ID
@@ -172,7 +178,7 @@ final class Fixture {
                 int code = extra.contains("--dry-run") ? LakeLoad.OK : exit.apply(names);
                 ObjectNode s = JSON.createObjectNode().put("run", "fake-" + loads.size()).put("exitCode", code)
                         .put("status", code == 0 ? "ok" : code == 2 ? "partial" : code == 3 ? "locked" : "failed")
-                        .put("dryRun", extra.contains("--dry-run")).put("table", cfg.path("target").path("lake").asText() + "/demo/trade")
+                        .put("dryRun", extra.contains("--dry-run")).put("table", cfg.path("target").path("path").asText(cfg.path("target").path("lake").asText() + "/demo/trade"))
                         .put("documents", docs).put("accepted", code <= 2 ? docs : 0).put("rejected", code == 2 ? 1 : 0);
                 if (code == 1) {
                     s.put("error", "line 3: not JSON (" + names + ")");

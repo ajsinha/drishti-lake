@@ -9,10 +9,10 @@ inputs:
 configs:
   main: |
     source: {files: '${in}/day', id: POSITION_ID, partition-by: [LEGAL_ENTITY], promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
   again: |
     source: {files: '${in}/again', id: POSITION_ID, partition-by: [LEGAL_ENTITY], promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
-    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: replace-date}
 steps:
   - load: []
   - store: [read-days, '${store}', '${lake}', risk, scenario-pv]
