@@ -55,8 +55,7 @@ python3 tools/ci/check.py            # the whole check: build, delta-rs interop,
 
 ## Build and run in the IDE
 
-**IntelliJ IDEA**: open `java/pom.xml`; run configurations in `java/run-configs/` (folder **Lake**). **PyCharm**: open the repository root; launchers in
-`tools/run-configs/`; the Python package is `python/`. **VS Code**: open `drishti-lake.code-workspace`. JDK 21 as the project SDK in every case. Steps,
+Every launcher is in `run-configs/` (folder **Lake**, names `Lake: <verb> <what>`: build all, test, test Python, test TCK, check all, run loader, run check, install release (tag only), maintain release plan). **IntelliJ IDEA** or **PyCharm**: open the repository root and link `java/pom.xml`; the Python package is `python/`. **VS Code**: open `drishti-lake.code-workspace`. JDK 21 as the project SDK in every case. Steps,
 the Windows `PKIX` fix and the install order: [docs/BUILD_AND_IDE.md](docs/BUILD_AND_IDE.md).
 
 ## Documents

@@ -2,13 +2,13 @@
   Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved.
   Drishti Lake. Proprietary: see LICENSE.
 
-  Lake TCK (this repository): the parity kit (tck/cases) over the modules built here; one canonical result line per case and store.
-  Use it when: after Lake build all; it needs PyYAML (pip install pyyaml).
+  Lake: test TCK (this repository): the parity kit (tck/cases) over the modules built here; one canonical result line per case and store. Needs PyYAML (pip install pyyaml).
+  Use it when: after Lake: build all.
   Needs a Python 3.10+ interpreter (PyCharm: Settings, Project, Python Interpreter).
   Shared, so it is in git: copy the configuration (Ctrl+D) to change it; a pull overwrites this file.
 -->
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Lake TCK (this repository)" type="PythonConfigurationType" factoryName="Python" folderName="Lake tools">
+  <configuration default="false" name="Lake: test TCK (this repository)" type="PythonConfigurationType" factoryName="Python" folderName="Lake">
     <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />

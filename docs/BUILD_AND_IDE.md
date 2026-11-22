@@ -51,24 +51,23 @@ gates and the comparison with the reference results): `python3 tools/ci/check.py
 ## IntelliJ IDEA
 
 Open `java/pom.xml` as a project; project SDK JDK 21; **Settings, Build Tools, Maven, Runner, JRE: Use Project JDK**. Run configurations are in
-`java/run-configs/`, folder **Lake**:
+`run-configs/` at the repository root, folder **Lake** (open the repository root as the project and link `java/pom.xml` in the Maven tool window):
 
 | Configuration | Runs |
 |---|---|
-| **Lake build all** | the build without tests |
-| **Lake test** | the full build with every test and guard |
-| **Lake install release** | `install`; on a release tag only |
-| **Lake load (CLI)** | `com.ash.lake.load.LakeLoad`; give it `--config` of your own (see [LOADER.md](guides/LOADER.md)) |
-| **Lake check (CLI)** | `com.ash.lake.load.LakeCheck` |
+| **Lake: build all** | the build without tests |
+| **Lake: test** | the full build with every test and guard |
+| **Lake: install release (tag only)** | `install`; on a release tag only |
+| **Lake: run loader (CLI)** | `com.ash.lake.load.LakeLoad`; give it `--config` of your own (see [LOADER.md](guides/LOADER.md)) |
+| **Lake: run check (CLI)** | `com.ash.lake.load.LakeCheck` |
 
 IntelliJ Community has no Node support; nothing here needs Node.
 
 ## PyCharm
 
-Open the repository root; the launchers are in `tools/run-configs/`: **Lake TCK (this repository)** (the parity kit over the built
-modules) and **Lake check (build, TCK twice, reference)** (`tools/ci/check.py`). The Python package is in `python/`: mark `python/` as sources,
-use a Python 3.11+ interpreter with the package's dependencies, and run `python/tests` with pytest. Open the repository in PyCharm or the
-Java parts in IntelliJ, not one folder in both (each rewrites the other's `.idea`).
+Open the repository root; the same `run-configs/` holds the Python launchers: **Lake: test TCK (this repository)** (the parity kit over the built
+modules) and **Lake: check all (build, TCK twice, reference)** (also **Lake: test Python**, **Lake: maintain release plan (dry run)**) (`tools/ci/check.py`). The Python package is in `python/`: mark `python/` as sources,
+use a Python 3.11+ interpreter with the package's dependencies, and run `python/tests` with pytest. One root, one `run-configs/`: IntelliJ and PyCharm read the same launchers.
 
 ## VS Code
 

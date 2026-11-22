@@ -1,18 +1,14 @@
 // Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved.
 // Drishti Lake. Proprietary: see LICENSE.
 //
-// Drishti Lake in VS Code: File, Open Workspace from File. The tasks and launch configurations mirror the JetBrains run
-// configurations (java/run-configs, tools/run-configs). JDK 21: change the path below (Windows: C:\\jdk-21).
-// Build and run in the IDE: README.md#build-and-run-in-the-ide. The Python package drishti_lake is planned, not built yet.
+// Lake in VS Code: File, Open Workspace from File. The tasks and launch configurations carry the SAME names as the JetBrains run
+// configurations in run-configs/ (the launcher standard: docs/plans/LAUNCHER_STANDARD.md in the Drishti repository). JDK 21: change the
+// Java path below (Windows: C:\\jdk-21). Build and run in the IDE: README.md#build-and-run-in-the-ide.
 {
-  "folders": [ { "name": "lake", "path": "." } ],
-  "extensions": {
-    "recommendations": [ "vscjava.vscode-java-pack", "ms-python.python", "ms-python.vscode-pylance", "ms-python.debugpy", "redhat.vscode-yaml" ]
-  },
+  "folders": [{"name": "lake", "path": "."}],
+  "extensions": {"recommendations": ["vscjava.vscode-java-pack", "ms-python.python", "ms-python.vscode-pylance", "ms-python.debugpy", "redhat.vscode-yaml"]},
   "settings": {
-    "java.configuration.runtimes": [
-      { "name": "JavaSE-21", "path": "/usr/lib/jvm/java-21-openjdk-amd64", "default": true }
-    ],
+    "java.configuration.runtimes": [{"name": "JavaSE-21", "path": "/usr/lib/jvm/java-21-openjdk-amd64", "default": true}],
     "java.jdt.ls.java.home": "/usr/lib/jvm/java-21-openjdk-amd64",
     "java.import.maven.enabled": true,
     "java.configuration.updateBuildConfiguration": "automatic",
@@ -21,19 +17,24 @@
   "tasks": {
     "version": "2.0.0",
     "tasks": [
-      { "label": "Lake build all", "type": "shell", "command": "./mvnw clean verify -DskipTests", "windows": { "command": "mvnw.cmd clean verify -DskipTests" }, "options": { "cwd": "${workspaceFolder:lake}/java" }, "group": "build", "problemMatcher": [] },
-      { "label": "Lake test", "type": "shell", "command": "./mvnw clean verify", "windows": { "command": "mvnw.cmd clean verify" }, "options": { "cwd": "${workspaceFolder:lake}/java" }, "group": "test", "problemMatcher": [] },
-      { "label": "Lake install release (ONLY on a release tag)", "type": "shell", "command": "./mvnw clean install -DskipTests", "windows": { "command": "mvnw.cmd clean install -DskipTests" }, "options": { "cwd": "${workspaceFolder:lake}/java" }, "problemMatcher": [] },
-      { "label": "Lake TCK (this repository)", "type": "shell", "command": "python3 tools/tck/tck.py --out java/target/tck-local.jsonl", "windows": { "command": "python tools/tck/tck.py --out java/target/tck-local.jsonl" }, "options": { "cwd": "${workspaceFolder:lake}" }, "problemMatcher": [] },
-      { "label": "Lake check (build, TCK twice, reference)", "type": "shell", "command": "python3 tools/ci/check.py", "windows": { "command": "python tools/ci/check.py" }, "options": { "cwd": "${workspaceFolder:lake}", "env": { "LAKE_JAVA_HOME": "/usr/lib/jvm/java-21-openjdk-amd64" } }, "problemMatcher": [] }
+      {"label": "Lake: build all", "type": "shell", "command": "./mvnw clean verify -DskipTests", "windows": {"command": "mvnw.cmd clean verify -DskipTests"}, "options": {"cwd": "${workspaceFolder:lake}/java"}, "group": "build", "problemMatcher": []},
+      {"label": "Lake: test", "type": "shell", "command": "./mvnw clean verify", "windows": {"command": "mvnw.cmd clean verify"}, "options": {"cwd": "${workspaceFolder:lake}/java"}, "group": "test", "problemMatcher": []},
+      {"label": "Lake: install release (tag only)", "type": "shell", "command": "./mvnw clean install -DskipTests", "windows": {"command": "mvnw.cmd clean install -DskipTests"}, "options": {"cwd": "${workspaceFolder:lake}/java"}, "problemMatcher": []},
+      {"label": "Lake: test Python", "type": "shell", "command": "python3 -m pytest -q python/tests", "windows": {"command": "python -m pytest -q python/tests"}, "options": {"cwd": "${workspaceFolder:lake}"}, "group": "test", "problemMatcher": []},
+      {"label": "Lake: test TCK (this repository)", "type": "shell", "command": "python3 tools/tck/tck.py --out java/target/tck-local.jsonl", "windows": {"command": "python tools/tck/tck.py --out java/target/tck-local.jsonl"}, "options": {"cwd": "${workspaceFolder:lake}"}, "group": "test", "problemMatcher": []},
+      {"label": "Lake: check all (build, TCK twice, reference)", "type": "shell", "command": "python3 tools/ci/check.py", "windows": {"command": "python tools/ci/check.py"}, "options": {"cwd": "${workspaceFolder:lake}"}, "group": "test", "problemMatcher": []},
+      {"label": "Lake: maintain release plan (dry run)", "type": "shell", "command": "python3 tools/release/release.py --version 0.0.0", "windows": {"command": "python tools/release/release.py --version 0.0.0"}, "options": {"cwd": "${workspaceFolder:lake}"}, "problemMatcher": []}
     ]
   },
   "launch": {
     "version": "0.2.0",
     "configurations": [
-      { "name": "Lake load (CLI)", "type": "java", "request": "launch", "mainClass": "com.ash.lake.load.LakeLoad", "projectName": "lake-load", "args": "--help", "cwd": "${workspaceFolder:lake}" },
-      { "name": "Lake check (CLI)", "type": "java", "request": "launch", "mainClass": "com.ash.lake.load.LakeCheck", "projectName": "lake-load", "cwd": "${workspaceFolder:lake}" },
-      { "name": "Lake TCK (this repository)", "type": "debugpy", "request": "launch", "program": "${workspaceFolder:lake}/tools/tck/tck.py", "args": [ "--out", "java/target/tck-local.jsonl" ], "cwd": "${workspaceFolder:lake}", "console": "integratedTerminal" }
+      {"name": "Lake: test Python", "type": "debugpy", "request": "launch", "cwd": "${workspaceFolder:lake}", "console": "integratedTerminal", "module": "pytest", "args": ["-q", "python/tests"], "env": {"PYTHONPATH": "${workspaceFolder:lake}/python"}},
+      {"name": "Lake: test TCK (this repository)", "type": "debugpy", "request": "launch", "cwd": "${workspaceFolder:lake}", "console": "integratedTerminal", "program": "${workspaceFolder:lake}/tools/tck/tck.py", "args": ["--out", "java/target/tck-local.jsonl"]},
+      {"name": "Lake: check all (build, TCK twice, reference)", "type": "debugpy", "request": "launch", "cwd": "${workspaceFolder:lake}", "console": "integratedTerminal", "program": "${workspaceFolder:lake}/tools/ci/check.py"},
+      {"name": "Lake: run loader (CLI)", "type": "java", "request": "launch", "mainClass": "com.ash.lake.load.LakeLoad", "projectName": "lake-load", "cwd": "${workspaceFolder:lake}", "args": "--help"},
+      {"name": "Lake: run check (CLI)", "type": "java", "request": "launch", "mainClass": "com.ash.lake.load.LakeCheck", "projectName": "lake-load", "cwd": "${workspaceFolder:lake}"},
+      {"name": "Lake: maintain release plan (dry run)", "type": "debugpy", "request": "launch", "cwd": "${workspaceFolder:lake}", "console": "integratedTerminal", "program": "${workspaceFolder:lake}/tools/release/release.py", "args": ["--version", "0.0.0"]}
     ]
   }
 }

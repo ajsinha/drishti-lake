@@ -2,13 +2,12 @@
   Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved.
   Drishti Lake. Proprietary: see LICENSE.
 
-  Lake install release: the jars into the local Maven repository (~/.m2/repository/com/ash/lake) for a host product.
-  Use it when: ONLY on a checkout of a release tag (decision R-1), never on a branch or a snapshot.
-  TAG-ONLY: do not run this on a working branch.
+  Lake: test: the full Java build with the unit tests and the guards.
+  Use it when: before a commit or a push.
   Shared, so it is in git: copy the configuration (Ctrl+D) to change it; a pull overwrites this file.
 -->
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Lake install release" type="MavenRunConfiguration" factoryName="Maven" folderName="Lake">
+  <configuration default="false" name="Lake: test" type="MavenRunConfiguration" factoryName="Maven" folderName="Lake">
     <MavenSettings>
       <option name="myGeneralSettings" />
       <option name="myRunnerSettings">
@@ -24,16 +23,15 @@
           <option name="goals">
             <list>
               <option value="clean" />
-              <option value="install" />
-              <option value="-DskipTests" />
+              <option value="verify" />
             </list>
           </option>
-          <option name="pomFileName" />
+          <option name="pomFileName" value="" />
           <option name="profilesMap">
             <map />
           </option>
           <option name="resolveToWorkspace" value="false" />
-          <option name="workingDirPath" value="$PROJECT_DIR$" />
+          <option name="workingDirPath" value="$PROJECT_DIR$/java" />
         </MavenRunnerParameters>
       </option>
     </MavenSettings>
