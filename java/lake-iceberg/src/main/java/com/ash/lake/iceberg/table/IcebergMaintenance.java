@@ -166,6 +166,24 @@ public final class IcebergMaintenance {
      * referenced, then removes the orphan files older than that and than {@link OrphanFiles#MIN_AGE_HOURS}. A line per step; a dry run
      * changes nothing and says which dates compaction would rewrite and which orphans would go. An absent table: an empty answer.
      */
+    /**
+     * {@code lake maintain --relayout} on the one Iceberg table {@code domain/kind} of the lake at {@code root}: each business date whose files
+     * drifted from the table's id layout rewritten as readers see it, sorted by id into files of its {@code file-rows}, each file its own
+     * id range (relayout, one commit a date); a table laid out by more than the id is left in its order. The dates rewritten (on a dry run:
+     * that would be); an absent table: none.
+     */
+    public static List<String> relayoutTable(com.ash.lake.LakeRuntime runtime, String root, String domain, String kind, Integer fileRows,
+            java.util.function.Predicate<LocalDate> wanted, boolean force, boolean dryRun, Path spillDir) throws Exception {
+        try (LayoutLake view = LayoutLake.of(runtime, new HashMap<>(Map.of("root", root, "domain", domain, "engine", "native")))) {
+            var table = view.load(kind);
+            if (table.isEmpty()) {
+                return List.of();
+            }
+            return NativeMaintenance.relayoutDates(((LayoutLake.Native.Kind) table.get()).t(), force, dryRun, fileRows, wanted, spillDir, 256L << 20).stream()
+                    .map(LocalDate::toString).toList();
+        }
+    }
+
     public static Map<String, Object> maintainTable(com.ash.lake.LakeRuntime runtime, String root, String domain, String kind, boolean compact,
             boolean checkpoint, Long vacuumHours, boolean dryRun, Path spillDir) throws Exception {
         Map<String, Object> out = new java.util.LinkedHashMap<>();

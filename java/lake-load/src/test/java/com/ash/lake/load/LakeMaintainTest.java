@@ -29,6 +29,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -93,13 +94,32 @@ class LakeMaintainTest {
         Files.delete(young);
         Files.deleteIfExists(old);
         long after = dataFiles(lake);
-        assertThat(after).as(done.toString()).isLessThan(before);
-        // one file a date: the stores read the same rows, from one file
+        assertThat(after).as(done.toString()).isLessThanOrEqualTo(before);
+        // the three appends repeat the same ids: the rows readers see in one file, each older load's copies in a file of its own (the
+        // files store: its one day file), so the newest copy is still the one read; a second compaction has nothing to do
         try (var reader = Stores.of(rt, format).open(rt, com.ash.lake.read.LakeAddress.of(lake.toString(), "risk"))) {
             var s = reader.table("scenario-pv").snapshot(com.ash.lake.spi.AsOf.LATEST).orElseThrow();
             for (var d : s.dates()) {
-                assertThat(s.day(d).orElseThrow().files()).as(format + " " + d).hasSize(1);
+                assertThat(s.day(d).orElseThrow().files()).as(format + " " + d).hasSize(format.equals("files") ? 1 : 3);
+                var ids = s.ids(d);
+                for (int i = 1; i < ids.size(); i++) {
+                    assertThat(ids.id(i - 1)).as("one id once, in order").isLessThan(ids.id(i));
+                }
+                assertThat(ids.size()).isEqualTo(12);
             }
         }
+        Map<String, Object> again = LakeMaintain.maintain(rt, lake.toString(), format, "risk/scenario-pv", steps, Instant.now(), false);
+        if (!format.equals("files")) {
+            assertThat((List<String>) ((Map<String, Object>) again.get("compact")).get("dates")).as(again.toString()).isEmpty();
+        }
+    }
+
+    @Test
+    void keepDaysKeepsTheAsOfDayAndThatManyBusinessDaysBeforeIt() {
+        assertThat(LakeMaintain.keepFrom(java.time.LocalDate.parse("2026-10-29"), 1)).isEqualTo(java.time.LocalDate.parse("2026-10-28"));
+        assertThat(LakeMaintain.keepFrom(java.time.LocalDate.parse("2026-11-23"), 2)).isEqualTo(java.time.LocalDate.parse("2026-11-19"));
+        assertThat(LakeMaintain.keepFrom(java.time.LocalDate.parse("2026-11-21"), 1)).isEqualTo(java.time.LocalDate.parse("2026-11-20"));
+        assertThat(LakeMaintain.keepFrom(java.time.LocalDate.parse("2026-11-02"), 5)).isEqualTo(java.time.LocalDate.parse("2026-10-26"));
+        assertThat(LakeMaintain.keepFrom(java.time.LocalDate.parse("2026-10-29"), 0)).isEqualTo(java.time.LocalDate.parse("2026-10-29"));
     }
 }

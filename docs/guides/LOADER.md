@@ -114,14 +114,15 @@ official libraries (Delta Kernel, iceberg-core), each step an ordinary commit:
 ```text
 LakeMaintain --lake ROOT --format delta|iceberg|files --table domain/table
     [--keep-days N [--as-of D] [--zone Z] [--max-drop-share F] [--force-drop]] [--floor-days D]
-    [--ttl 8h [--on FIELD] [--max-rows N]] [--compact [--target-file-mb 128]] [--checkpoint] [--vacuum-hours H] [--dry-run] [--json]
+    [--ttl 8h [--on FIELD] [--max-rows N]] [--relayout [--file-rows N] [--dates D,D|D..D] [--force]] [--compact [--target-file-mb 128]] [--checkpoint] [--vacuum-hours H] [--dry-run] [--json]
 ```
 
 | Step | Delta | Iceberg | Files |
 |---|---|---|---|
-| `--keep-days N` | the business dates older than the newest N on or before `--as-of` (the business today in `--zone`) removed in one commit; **refused, nothing removed, over `--max-drop-share` (0.5) of the table's rows** unless `--force-drop`; never a date within `--floor-days` of `--as-of` | same | same |
+| `--keep-days N` | the business dates before the day N business days (Monday to Friday) before `--as-of` (the business today in `--zone`) removed in one commit: `--as-of` and the N business days before it stay, counted on the calendar, never from the newest date the table holds (Monday with 2 keeps from the Thursday before); **refused, nothing removed, over `--max-drop-share` (0.5) of the table's rows** unless `--force-drop`; never a date within `--floor-days` of `--as-of` | same | same |
+| `--relayout` | a table laid out by id: each date whose files drifted from it (two files sharing an id range, a file over the table's `lake.layout.file-rows`, 250,000, more files than its rows need) rewritten as readers see it (each id's newest copy), sorted by id into files of `file-rows` (`--file-rows N`: N instead, a host's own layout; `--dates` only those dates; `--force` even a date in the layout: another codec, smaller row groups), each file its own id range, one commit a date (Delta Kernel); a table laid out by more than the id (`lake.layout.sort-by`) is left in its order | the same, by iceberg-core | a day file that holds an id twice rewritten with the last copy of each, sorted by id |
 | `--ttl` / `--max-rows` | the row retention above | same | same |
-| `--compact` | each date in two or more files under `--target-file-mb` rewritten (OPTIMIZE), one commit a date, every row kept | each date in more files than its rows need (or with delete files, or drifted from its id order) rewritten into files of the table's `file-rows`, every row kept; a table laid out by more than the id keeps that order | nothing to do: a date is one day file |
+| `--compact` | each date in two or more files under `--target-file-mb` rewritten (OPTIMIZE), one commit a date, every row kept: the rows readers see in the table's order (by id, or its `sort-by` then the id), each older copy an append left in a file of its load's own, so the newest copy is still the one read and an undo still finds the older; a date already in that form is left | each date in more files than its rows need (or with delete files, or drifted from its id order) rewritten into files of the table's `file-rows`, every row kept, the older copies as on Delta; a table laid out by more than the id keeps that order | nothing to do: a date is one day file |
 | `--checkpoint` | a checkpoint of the latest version | the manifests regrouped one per month | nothing to do: the day files are the current state |
 | `--vacuum-hours H` | the data files no version of the last H hours references deleted (VACUUM) | the snapshots older than H expired, then orphan files | the log's content files of versions older than H deleted |
 
@@ -131,7 +132,7 @@ as well. `--floor-days D` raises H to D days. A dry run changes nothing and says
 store (the table's dates and rows before and after, the steps run); `--json` gives each step's detail (dates compacted, files and bytes
 vacuumed). The run fails (exit 1) for an absent table, a negative `--vacuum-hours`, or the drop guard; a Delta vacuum that cannot match
 every file of the latest version to the table's folder deletes nothing. The parity kit's cases: `maintain/compact-checkpoint-vacuum`,
-`maintain/keep-days-and-drop-guard`. `IcebergMaintenance` (an Iceberg lake's domains at once: relayout, `--columns`, undo) stays the Iceberg
+`maintain/keep-days-and-drop-guard`, `maintain/sorted-layout`. `IcebergMaintenance` (an Iceberg lake's domains at once: relayout, `--columns`, undo) stays the Iceberg
 store's own tool.
 
 ## The inbox: hand-over by `.ready` files

@@ -448,6 +448,41 @@ public final class FilesStore implements TableStore {
     }
 
     /**
+     * {@code lake maintain --relayout} on a files table: each day file that holds an id twice (an append's copy) rewritten as readers see
+     * it (the last copy of each id, the newest load's), sorted by id, one commit a date; a day file of one copy each is left in its order
+     * (readers find an id through the day's index, whatever the order of its lines) unless {@code force}; only the dates {@code wanted} accepts. The dates rewritten (on
+     * a dry run: that would be).
+     */
+    public static List<String> relayout(LakeRuntime runtime, String root, String domain, String table, Predicate<LocalDate> wanted, boolean force,
+            boolean dryRun) throws IOException {
+        List<String> out = new ArrayList<>();
+        for (LocalDate d : dayDates(runtime, root, domain, table)) {
+            if (!wanted.test(d)) {
+                continue;
+            }
+            List<String> lines = dayLines(runtime, root, domain, table, d);
+            TreeMap<String, String> last = new TreeMap<>();
+            boolean repeated = false;
+            for (String line : lines) {
+                String id = JsonlDay.line(line.getBytes(StandardCharsets.UTF_8), "id", JsonlFormat.DEFAULT).id();
+                if (id == null) {
+                    last = null;                                 // a line without an id: left to the readers' own rule, the day as it is
+                    break;
+                }
+                repeated |= last.put(id, line) != null;
+            }
+            if (last == null || !repeated && !force) {
+                continue;
+            }
+            out.add(d.toString());
+            if (!dryRun) {
+                rewriteDay(runtime, root, domain, table, d, new ArrayList<>(last.values()), "relayout");
+            }
+        }
+        return out;
+    }
+
+    /**
      * Whole dates removed from the table {@code domain/table} of the lake at {@code root} (the lake's delete): {@code held} (every date
      * held before) and {@code dates} (a line per date {@code wanted} accepts: {@code date}, {@code rows}, {@code dropped}). Each day file is
      * removed whole, so a reader sees the whole day or none of it; nothing on a dry run.

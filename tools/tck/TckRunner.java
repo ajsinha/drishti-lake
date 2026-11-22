@@ -499,6 +499,7 @@ final class ReadVerbs {   // lake-only
                 case "read-days" -> days(lake, a[2] + "|" + a[4], a[4]);   // lake-only
                 case "read-files" -> files(snap(lake, a[4]));   // lake-only: data files per date (compaction)
                 case "read-ids" -> ids(snap(lake, a[4]), LocalDate.parse(args.get(0)));   // lake-only
+                case "read-layout" -> layout(snap(lake, a[4]));   // lake-only: each date's files in id order, their ranges disjoint
                 case "read-doc" -> docs(snap(lake, a[4]), LocalDate.parse(args.get(0)));   // lake-only
                 case "read-columns" -> columns(snap(lake, a[4]), LocalDate.parse(args.get(0)), args.subList(1, args.size()));   // lake-only
                 case "read-vectors" -> vectors(snap(lake, a[4]), LocalDate.parse(args.get(0)), args.get(1), args.subList(2, args.size()));   // lake-only
@@ -628,6 +629,28 @@ final class ReadVerbs {   // lake-only
         StringBuilder out = new StringBuilder("dates " + s.dates().size());   // lake-only
         for (LocalDate d : s.dates()) {   // lake-only
             out.append("\n").append(d).append(": files=").append(s.day(d).orElseThrow().files().size());   // lake-only
+        }   // lake-only
+        return out.toString();   // lake-only
+    }   // lake-only
+
+    static String layout(com.ash.lake.read.TableSnapshot s) throws java.io.IOException {   // lake-only
+        StringBuilder out = new StringBuilder("dates " + s.dates().size());   // lake-only
+        for (LocalDate d : s.dates()) {   // lake-only
+            var files = new ArrayList<>(s.day(d).orElseThrow().files());   // lake-only
+            boolean disjoint = true;   // lake-only
+            if (files.size() > 1) {   // lake-only
+                for (var f : files) {   // lake-only
+                    var b = f.bounds().get("id");   // lake-only
+                    disjoint &= b != null && b.min() != null && b.max() != null;   // lake-only
+                }   // lake-only
+                if (disjoint) {   // lake-only
+                    files.sort(java.util.Comparator.comparing(f -> f.bounds().get("id").min()));   // lake-only
+                    for (int i = 1; i < files.size(); i++) {   // lake-only
+                        disjoint &= files.get(i - 1).bounds().get("id").max().compareTo(files.get(i).bounds().get("id").min()) < 0;   // lake-only
+                    }   // lake-only
+                }   // lake-only
+            }   // lake-only
+            out.append("\n").append(d).append(": files=").append(files.size()).append(" id-ranges-disjoint=").append(disjoint);   // lake-only
         }   // lake-only
         return out.toString();   // lake-only
     }   // lake-only

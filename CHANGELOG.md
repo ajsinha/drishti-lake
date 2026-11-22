@@ -3,6 +3,23 @@
 
 Entries are written per release; unreleased work is listed first.
 
+## Unreleased
+
+- **keep-days keeps what Drishti kept (G4 defect)**: `lake maintain --keep-days N` removes the business dates before the day N business
+  days (Monday to Friday) before `--as-of`, so `--as-of` and the N business days before it stay, counted on the calendar, never from the
+  newest date the table holds (Drishti's rule before the move, `maintain.py`'s `keep-business-days`); before, the newest N dates on or
+  before `--as-of` were kept, one date fewer. Every store alike; `LakeMaintain.keepFrom`; kit case `maintain/keep-days-and-drop-guard`
+  (the weekend not counted, the floor, the drop guard).
+- **A laid-out table keeps its id order on every store (G4 lake gap)**: `lake maintain --relayout` rewrites each business date whose
+  files drifted from the id layout (an append whose ids overlap the date's files, a file over the table's `file-rows`, more files than its
+  rows need) as readers see it, sorted by id into files of `file-rows` rows (`--file-rows`, `--dates`, `--force`), each file its own id range: Delta through Delta Kernel
+  (`DeltaUpkeep.relayout`), Iceberg its relayout, files the day file that holds an id twice. A table laid out by more than the id
+  (`lake.layout.sort-by`, which a Delta table now records too) is left in its order. `--compact` keeps the readers' answer: the rows
+  readers see are written in the table's order and each older copy an append left goes to a file of its load's own (Delta and Iceberg),
+  so the newest copy is still the one read (before, a compacted append on Delta and Iceberg could answer the older copy, and the Iceberg
+  id map held an id twice) and an undo of the newer load still finds the older copy; a date already in that form is left. Kit cases
+  `maintain/sorted-layout` (the read-ids check sorted on every store; `read-layout`, a new kit verb) and `maintain/compact-checkpoint-vacuum`.
+
 ## 0.9.0 (2026-11-21): the move from Drishti
 
 - **IDE launchers follow the platform standard**: one `run-configs/` at the repository root, every launcher named `Lake: <verb> <what>` (IntelliJ folder `Lake`), the same names as the VS Code tasks and launches; missing launchers added; the check `python/tests/test_launchers.py` (a test) keeps names, files and workspace in step.

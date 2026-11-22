@@ -1,13 +1,13 @@
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
-# lake maintain on every store (LakeMaintain): a date written by three appends (three files on Delta and Iceberg, one day file on the
-# files store) and a date replaced twice are compacted (one file a date after it on every store), checkpointed and vacuumed with no time
+# lake maintain on every store (LakeMaintain): a date written by three appends of different positions (three files on Delta and Iceberg,
+# one day file on the files store; appends that repeat an id: maintain/sorted-layout) and a date replaced twice are compacted (one file a date after it on every store), checkpointed and vacuumed with no time
 # travel kept (--vacuum-hours 0: the files of the replaced versions go); a dry run first changes nothing; the rows are the same after it
 inputs:
   a/pv.2026-10-27.jsonl: {pv: {n: 10, scenarios: 2, seed: 1}}
-  b/pv.2026-10-27.jsonl: {pv: {n: 7, scenarios: 2, seed: 2}}
-  c/pv.2026-10-27.jsonl: {pv: {n: 5, scenarios: 2, seed: 3}}
+  b/pv.2026-10-27.jsonl: {pv: {n: 7, scenarios: 2, seed: 2, first: 10}}
+  c/pv.2026-10-27.jsonl: {pv: {n: 5, scenarios: 2, seed: 3, first: 17}}
   d/pv.2026-10-28.jsonl: {pv: {n: 9, scenarios: 2, seed: 4, start: '2026-10-28'}}
-  e/pv.2026-10-28.jsonl: {pv: {n: 6, scenarios: 2, seed: 5, start: '2026-10-28'}}
+  e/pv.2026-10-28.jsonl: {pv: {n: 6, scenarios: 2, seed: 5, start: '2026-10-28', first: 9}}
 configs:
   a: |
     source: {files: '${in}/a/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
