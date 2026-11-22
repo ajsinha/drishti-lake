@@ -19,7 +19,7 @@
   <parent>
     <groupId>com.ash.lake</groupId>
     <artifactId>lake-parent</artifactId>
-    <version>0.9.0</version>
+    <version>0.9.1</version>
   </parent>
   <artifactId>lake-memory</artifactId>
   <name>Drishti Lake: the memory lake (mem:// stores, memory tables and their replenish jobs)</name>

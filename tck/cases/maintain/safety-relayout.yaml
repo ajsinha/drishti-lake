@@ -1,0 +1,30 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# Data safety of lake maintain --relayout: a laid-out table an append made drift is rewritten as readers see it; what readers see is the
+# same after it (every id's newest copy, documents and vectors: same as before=true), the rows the table holds are exactly those (one
+# copy an id), a reader that opened the table before reads the same after it, and the date no append touched is left as it was
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 15, scenarios: 3, seed: 6}}
+  more/pv.2026-10-27.jsonl: {pv: {n: 5, scenarios: 3, seed: 7}}
+  other/pv.2026-10-28.jsonl: {pv: {n: 7, scenarios: 3, seed: 8, start: '2026-10-28'}}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, layout: {sort-by: [POSITION_ID]}}
+  more: |
+    source: {files: '${in}/more/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append, layout: {sort-by: [POSITION_ID]}}
+  other: |
+    source: {files: '${in}/other/*', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, layout: {sort-by: [POSITION_ID]}}
+steps:
+  - load: {config: main}
+  - load: {config: more}
+  - load: {config: other}
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, seen]
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, untouched, '2026-10-28']
+  - store: [hold, '${store}', '${lake}', risk, scenario-pv, before]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --relayout]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, seen]
+  - store: [read-held, '${store}', '${lake}', risk, scenario-pv, before, seen]
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, untouched, '2026-10-28']
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv]

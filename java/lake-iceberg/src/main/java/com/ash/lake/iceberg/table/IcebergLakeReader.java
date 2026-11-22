@@ -54,7 +54,7 @@ public final class IcebergLakeReader implements LakeReader {
         this.settings = settings;
         this.lake = lake;
         this.root = address.root();
-        this.problems = new Problems(lake.describe(), IcebergLakeReader::reason);
+        this.problems = new Problems(lake.describe(), TableProblems.of(settings));
     }
 
     /** The lake of {@code address}. */
@@ -64,10 +64,6 @@ public final class IcebergLakeReader implements LakeReader {
         settings.put("domain", address.domain());
         address.tableNames().forEach((k, v) -> settings.put("table." + k, v));
         return new IcebergLakeReader(runtime, settings, LakeTables.open(runtime, settings), address);
-    }
-
-    static String reason(Throwable e) {
-        return Problems.describe(e);
     }
 
     @Override

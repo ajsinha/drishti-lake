@@ -1,0 +1,42 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# target.mode overwrite-partitions on every store (WriteSpec.partitionsOnly; DATA_LAKE_GUIDE.md section 5): of each date only the
+# partitions the input brings are replaced (here LE-NY and the empty value, which every store keeps as null), the date's other partitions
+# and the other date stay; a re-run gives the same table; a table without partition columns has its whole date replaced (as
+# overwrite-dates); with the drop guard (whole dates) the mode is refused
+inputs:
+  day/pv.2026-10-27.jsonl: {pv: {n: 30, scenarios: 2, seed: 11}}
+  day/pv.2026-10-28.jsonl: {pv: {n: 20, scenarios: 2, seed: 12, start: '2026-10-28'}}
+  ny/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-9000001","BUSINESS_DATE":"2026-10-27","LEGAL_ENTITY":"LE-NY","DESK":"DESK-FX","BASE_PV":10.5,"SCENARIO_PV":[1.0,2.0]}
+    {"POSITION_ID":"P-9000002","BUSINESS_DATE":"2026-10-27","LEGAL_ENTITY":"LE-NY","DESK":"DESK-RATES","BASE_PV":-3.25,"SCENARIO_PV":[0.5,null]}
+    {"POSITION_ID":"P-9000003","BUSINESS_DATE":"2026-10-27","LEGAL_ENTITY":"","DESK":"DESK-COMM","BASE_PV":7,"SCENARIO_PV":[3.0,4.0]}
+configs:
+  main: |
+    source: {files: '${in}/day', id: POSITION_ID, partition-by: [LEGAL_ENTITY], promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: replace-date}
+  ny: |
+    source: {files: '${in}/ny', id: POSITION_ID, partition-by: [LEGAL_ENTITY], promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: overwrite-partitions}
+  plain: |
+    source: {files: '${in}/day', id: POSITION_ID, promote: [LEGAL_ENTITY, DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/plain', domain: risk, kind: plain, mode: replace-date}
+  plain-ny: |
+    source: {files: '${in}/ny', id: POSITION_ID, promote: [LEGAL_ENTITY, DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/plain', domain: risk, kind: plain, mode: overwrite-partitions}
+  guarded: |
+    source: {files: '${in}/ny', id: POSITION_ID, partition-by: [LEGAL_ENTITY], promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: overwrite-partitions}
+    guard: {max-drop-share: 0.5}
+steps:
+  - load: []
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'LEGAL_ENTITY:t', 'DESK:t']
+  - load: {config: ny}
+  - store: [read-days, '${store}', '${lake}', risk, scenario-pv]
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'LEGAL_ENTITY:t', 'DESK:t', 'BASE_PV:n']
+  - load: {config: ny}
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'LEGAL_ENTITY:t', 'DESK:t', 'BASE_PV:n']
+  - load: {config: plain}
+  - load: {config: plain-ny}
+  - store: [read-days, '${store}', '${lake}', risk, plain]
+  - load: {config: guarded}
+tables: [risk/scenario-pv, risk/plain]

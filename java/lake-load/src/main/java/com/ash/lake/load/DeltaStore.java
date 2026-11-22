@@ -171,6 +171,12 @@ public final class DeltaStore implements TableStore {
     }
 
     @Override
+    public Map<String, String> properties(LakeRuntime runtime, TableRef table) {
+        return snapshot(runtime, table, new Engine[1]).map(s -> Map.copyOf(((io.delta.kernel.internal.SnapshotImpl) s).getMetadata().getConfiguration()))
+                .orElse(Map.of());
+    }
+
+    @Override
     public Columns columns(LakeRuntime runtime, TableRef table) throws IOException {
         Snapshot s = snapshot(runtime, table, new Engine[1]).orElseThrow(() -> new IOException("no Delta table at " + table.location()));
         return DeltaRows.columns(s.getSchema());

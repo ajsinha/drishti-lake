@@ -15,23 +15,22 @@
  */
 package com.ash.lake.iceberg.table;
 
-import java.util.ArrayList;
-import java.util.List;
+import com.ash.lake.io.read.Problems;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The tables of one Iceberg connector that cannot be read now, one problem per kind, for Admin → Health (QA2-22). A table moved or
- * copied after it was written (its metadata still names the old folder) is said plainly, with what to do; the log has one short line
- * when a kind's problem appears or changes and one when it is over, never a stack trace per refresh.
+ * How the Iceberg reader words a failed read (READ_API.md 2.8; QA2-22, QA3B-03): a table moved or copied after it was written (its
+ * metadata still names the old folder) is said plainly with what to do, for Admin → Health the folders and the {@code relocate} pair to
+ * copy, for the reader the failure is thrown to the same in words without a folder (a host's error detail shows no path); any other
+ * failure is {@link Problems#describe}. {@link Problems} keeps one problem per table and place and logs one line when it appears or
+ * changes, never a stack trace.
  */
-final class TableProblems {
+final class TableProblems implements Problems.Classifier {
 
-    private static final System.Logger LOGGER = System.getLogger(TableProblems.class.getName());
     private static final int MAX_REASON = 2000;
     /**
      * A file a table's metadata names, split into the table's folder and the file under it: at the LAST {@code /metadata/} or {@code /data/}
@@ -40,153 +39,80 @@ final class TableProblems {
      */
     static final Pattern PATH = Pattern.compile("((?:file:|s3a?://|gs://|abfss?://|/)\\S*)/(?:metadata|data)/([^/\\s]+(?:/[^\\s]*)?)");
 
-    private final String source;
-    /** Where a kind's table is now (a path-based lake: {@code <root>/<domain>/<kind>}), or null when that is not known (a catalog). */
+    /** Where a table is now (a path-based lake: {@code <root>/<domain>/<table>}), or null when that is not known (a catalog). */
     private final Function<String, String> whereNow;
     /** The connector's {@code relocate} (none when not set). */
     private final com.ash.lake.iceberg.io.Relocation relocate;
-    private final Map<String, String> byKind = new ConcurrentHashMap<>();
-    /** Per kind with a moved table: the {@code relocate} pair that reads it, so a summary of several moved together gives one. */
-    private final Map<String, String> movedBy = new ConcurrentHashMap<>();
 
-    TableProblems(String source, Function<String, String> whereNow) {
-        this(source, whereNow, com.ash.lake.iceberg.io.Relocation.none());
-    }
-
-    TableProblems(String source, Function<String, String> whereNow, com.ash.lake.iceberg.io.Relocation relocate) {
-        this.source = source;
-        this.whereNow = whereNow;
+    TableProblems(Function<String, String> whereNow, com.ash.lake.iceberg.io.Relocation relocate) {
+        this.whereNow = whereNow == null ? t -> null : whereNow;
         this.relocate = relocate == null ? com.ash.lake.iceberg.io.Relocation.none() : relocate;
     }
 
-    /** Kinds whose table names files that are not there (moved, copied, or files removed). */
-    private final java.util.Set<String> missingFiles = ConcurrentHashMap.newKeySet();
-
     /**
-     * Reading the kind's table failed with {@code e}: recorded, and logged in one line when the kind's problem is new or changed. Returns
-     * the failure to give the reader: for a table whose files are not there, {@link com.ash.lake.rows.UnreadableData} saying so in words
-     * without a path (the 502 says what is wrong; Admin → Health has the folders and the fix), else {@code e} itself.
+     * For a lake's settings ({@code root}, {@code domain}, {@code table.<kind>}, {@code relocate}, a catalog): where a path-based lake's
+     * tables are now; a catalog ({@code uri}, {@code catalog: rest}, S3 Tables) says where its tables are, so no folder is suggested there.
      */
-    Throwable failed(String kind, Throwable e) {
-        String reason = reason(kind, e);
-        String was = byKind.put(kind, reason);
-        if (!reason.equals(was)) {
-            LOGGER.log(System.Logger.Level.WARNING, "{0}: {1} cannot be read: {2}", source, kind, reason);
+    static TableProblems of(Map<String, String> settings) {
+        String root = settings.getOrDefault("root", "").replaceAll("/+$", "");
+        String domain = settings.getOrDefault("domain", "").replaceAll("^/+|/+$", "");
+        boolean catalog = !settings.getOrDefault("uri", "").isBlank() || "rest".equalsIgnoreCase(settings.getOrDefault("catalog", ""))
+                || com.ash.lake.iceberg.catalog.S3Tables.named(settings);
+        Map<String, String> names = LakeTables.Named.of(settings);
+        Function<String, String> now = catalog || root.isBlank() ? t -> null
+                : t -> root + (domain.isBlank() ? "" : "/" + domain) + "/" + names.getOrDefault(t, t);
+        com.ash.lake.iceberg.io.Relocation r;
+        try {
+            r = com.ash.lake.iceberg.io.Relocation.parse(settings.getOrDefault("relocate", ""));
+        } catch (IllegalArgumentException e) {
+            r = com.ash.lake.iceberg.io.Relocation.none();          // refused when the lake was opened: never reached
         }
-        if (missing(e).isPresent()) {
-            missingFiles.add(kind);
-            return new com.ash.lake.rows.UnreadableData(movedWords(kind), e);
-        }
-        missingFiles.remove(kind);
-        return e;
+        return new TableProblems(now, r);
     }
 
-    /** A read of the kind's table succeeded: a problem recorded for it is over. */
-    void ok(String kind) {
-        movedBy.remove(kind);
-        missingFiles.remove(kind);
-        if (!byKind.isEmpty() && byKind.remove(kind) != null) {
-            LOGGER.log(System.Logger.Level.INFO, "{0}: {1} is readable again", source, kind);
+    /** Whether {@code e} says the table names a file that is not there: the table was moved or copied, or its files removed. */
+    static boolean moved(Throwable e) {
+        return missing(e).isPresent();
+    }
+
+    @Override
+    public String reason(String table, Throwable e) {
+        Optional<String> missing = missing(e);
+        if (missing.isEmpty()) {
+            return Problems.describe(e);
         }
-    }
-
-    Optional<String> of(String kind) {
-        return Optional.ofNullable(byKind.get(kind));
-    }
-
-    /**
-     * The kind's problem in words without a folder, for a reader (the 502, a search's partial note, the connector's Test): a table that
-     * names files that are not there says so; any other problem says the table cannot be read and that Health says why.
-     */
-    Optional<String> forReaders(String kind) {
-        if (!byKind.containsKey(kind)) {
-            return Optional.empty();
+        Matcher m = PATH.matcher(missing.get());
+        if (!m.find()) {
+            return shorten("a file its metadata names is not there (" + missing.get() + "): the table was moved or its files removed");
         }
-        return Optional.of(missingFiles.contains(kind) ? movedWords(kind) : "the table " + kind + " cannot be read now; Admin → Health says why");
+        String old = m.group(1);
+        String shownOld = com.ash.lake.iceberg.io.Relocation.shown(old);
+        if (relocate.targets(old)) {
+            // the read was relocated, and the files are not in the new folder either
+            return shorten("relocate " + relocate + " sends its reads to " + shownOld + ", and the files are not there either (" + tail(m.group(2))
+                    + "): check the new folder in relocate");
+        }
+        String now = whereNow.apply(table);
+        // the pair to copy: the folders where the two differ, in the plain form the setting reads (QA3B-04)
+        String pair = now == null ? null : com.ash.lake.iceberg.io.Relocation.suggest(old, now).orElse(null);
+        String given = relocate.isEmpty() ? "" : " (relocate " + relocate + " is set, but no old folder in it holds " + shownOld + ")";
+        return shorten("its metadata names files under " + shownOld + " that are not there (" + tail(m.group(2))
+                + "): the table was moved or copied after it was written. Write it again where it is now, or read it with "
+                + "relocate: '" + (pair == null ? shownOld + " -> <where it is now>" : pair) + "'" + given);
     }
 
-    private static String movedWords(String kind) {
-        return "the table " + kind + " names files that are not there (it was moved or copied after it was written, or its files were removed); "
+    /** A moved table in words without a folder (the reason, with the folders and the pair, is in the read problems: Admin → Health). */
+    @Override
+    public String forReaders(String table, Throwable e) {
+        if (!moved(e)) {
+            return null;
+        }
+        return "the table " + table + " names files that are not there (it was moved or copied after it was written, or its files were removed); "
                 + "Admin → Health says where they were and the relocate that reads it";
     }
 
-    boolean isEmpty() {
-        return byKind.isEmpty();
-    }
-
-    /**
-     * One line for health: "trade: why; counterparty: why". Tables moved together (one {@code relocate} reads them all) are one sentence naming
-     * them, so Health stays readable with a domain of tables: "credit-limit, cva: their metadata names files … relocate: '/a -> /b'".
-     */
-    String summary() {
-        List<String> parts = new ArrayList<>();
-        Map<String, List<String>> byPair = new java.util.TreeMap<>();
-        new java.util.TreeMap<>(byKind).forEach((kind, why) -> {
-            String pair = movedBy.get(kind);
-            if (pair != null) {
-                byPair.computeIfAbsent(pair, k -> new ArrayList<>()).add(kind);
-            }
-        });
-        Map<String, String> grouped = new java.util.HashMap<>();
-        byPair.forEach((pair, kinds) -> {
-            if (kinds.size() > 1) {
-                kinds.forEach(k -> grouped.put(k, pair));
-            }
-        });
-        java.util.Set<String> said = new java.util.HashSet<>();
-        new java.util.TreeMap<>(byKind).forEach((kind, why) -> {
-            String pair = grouped.get(kind);
-            if (pair == null) {
-                parts.add(kind + ": " + why);
-            } else if (said.add(pair)) {
-                List<String> kinds = byPair.get(pair);
-                parts.add(String.join(", ", kinds) + ": their metadata names files under the folder they were written in, which is not there now: "
-                        + "the tables were moved or copied after they were written. Write them again where they are now, or read them with "
-                        + "relocate: '" + pair + "'" + (relocate.isEmpty() ? ""
-                                : " (relocate " + relocate + " is set, but no old folder in it holds " + pair.substring(0, pair.indexOf(" -> ")) + ")"));
-            }
-        });
-        return String.join("; ", parts);
-    }
-
-    /** Why, in words: a moved table names the folder its metadata points at and what to do; anything else its innermost cause. */
-    String reason(String kind, Throwable e) {
-        Throwable root = e;
-        while (root.getCause() != null && root.getCause() != root) {
-            root = root.getCause();
-        }
-        Optional<String> missing = missing(e);
-        if (missing.isPresent()) {
-            Matcher m = PATH.matcher(missing.get());
-            if (m.find()) {
-                String old = m.group(1);
-                String now = whereNow.apply(kind);
-                String shownOld = com.ash.lake.iceberg.io.Relocation.shown(old);
-                // the pair to copy: the folders where the two differ, in the plain form the setting reads (QA3B-04)
-                String pair = now == null ? null : com.ash.lake.iceberg.io.Relocation.suggest(old, now).orElse(null);
-                if (pair != null && !relocate.targets(old)) {
-                    movedBy.put(kind, pair);
-                } else {
-                    movedBy.remove(kind);
-                }
-                if (relocate.targets(old)) {
-                    // the read was relocated, and the files are not in the new folder either
-                    return shorten("relocate " + relocate + " sends its reads to " + shownOld + ", and the files are not there either (" + tail(m.group(2))
-                            + "): check the new folder in relocate");
-                }
-                String given = relocate.isEmpty() ? "" : " (relocate " + relocate + " is set, but no old folder in it holds " + shownOld + ")";
-                return shorten("its metadata names files under " + shownOld + " that are not there (" + tail(m.group(2))
-                        + "): the table was moved or copied after it was written. Write it again where it is now, or read it with "
-                        + "relocate: '" + (pair == null ? shownOld + " -> <where it is now>" : pair) + "'" + given);
-            }
-            return shorten("a file its metadata names is not there (" + missing.get() + "): the table was moved or its files removed");
-        }
-        String msg = root.getMessage();
-        return shorten(root.getClass().getSimpleName() + (msg == null || msg.isBlank() ? "" : ": " + msg));
-    }
-
     /** The path of a file that is not there, when {@code e} is (or is caused by) a file not found. */
-    private static Optional<String> missing(Throwable e) {
+    static Optional<String> missing(Throwable e) {
         for (Throwable c = e; c != null; c = c.getCause() == c ? null : c.getCause()) {
             if (c instanceof java.nio.file.NoSuchFileException n && n.getFile() != null) {
                 return Optional.of(n.getFile());

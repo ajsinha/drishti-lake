@@ -29,6 +29,7 @@ class public abstract static interface com.ash.lake.inbox.Routes$Packs
 class public abstract static interface com.ash.lake.memory.MemoryLake$Cron
 class public abstract static interface com.ash.lake.memory.store.MemoryStorage$RoomMaker
 class public abstract static interface com.ash.lake.spi.TableWriter$FileOut
+class public class com.ash.lake.LakeException extends java.lang.RuntimeException
 class public final class com.ash.lake.LakeOptions
 class public final class com.ash.lake.LakeRoots
 class public final class com.ash.lake.LakeRuntime
@@ -62,7 +63,9 @@ class public final class com.ash.lake.load.LakeCheck
 class public final class com.ash.lake.load.LakeLoad
 class public final class com.ash.lake.load.LakeMaintain
 class public final class com.ash.lake.load.LakeRetention
+class public final class com.ash.lake.load.LakeStorage implements java.lang.AutoCloseable
 class public final class com.ash.lake.load.LakeUndo
+class public final class com.ash.lake.load.RowFeed implements java.lang.AutoCloseable
 class public final class com.ash.lake.load.Stores
 class public final class com.ash.lake.load.TableDateRows
 class public final class com.ash.lake.memory.MemoryLake implements java.lang.AutoCloseable
@@ -76,6 +79,8 @@ class public final class com.ash.lake.memory.store.MemoryStores
 class public final class com.ash.lake.read.Documents
 class public final class com.ash.lake.read.IdMaps
 class public final class com.ash.lake.spi.Capabilities
+class public final class com.ash.lake.spi.TableProperties
+class public final enum com.ash.lake.LakeError
 class public final enum com.ash.lake.read.FileFormat
 class public final enum com.ash.lake.spi.Capability
 class public final enum com.ash.lake.spi.ColumnType
@@ -135,6 +140,7 @@ class public static final record com.ash.lake.load.FileRows$Counted
 class public static final record com.ash.lake.load.LakeCheck$Finding
 class public static final record com.ash.lake.load.LakeMaintain$Steps
 class public static final record com.ash.lake.load.LakeUndo$Done
+class public static final record com.ash.lake.load.RowFeed$Tag
 class public static final record com.ash.lake.load.TableDateRows$Counts
 class public static final record com.ash.lake.memory.MemoryLakeSettings$Compaction
 class public static final record com.ash.lake.memory.MemoryLakeSettings$Source
@@ -149,9 +155,24 @@ class public static final record com.ash.lake.spi.Expr$IsNull implements com.ash
 class public static final record com.ash.lake.spi.Expr$Not implements com.ash.lake.spi.Expr
 class public static final record com.ash.lake.spi.Expr$Or implements com.ash.lake.spi.Expr
 class public static final record com.ash.lake.spi.RowSource$Served
+class public static final record com.ash.lake.spi.TableProperties$Effective
 class public static final record com.ash.lake.spi.TableWriter$LoadColumns
 class public static final record com.ash.lake.spi.TableWriter$WrittenFile
 class public static final record com.ash.lake.spi.WriteSpec$FileLayout
+com.ash.lake.LakeError :: public int com.ash.lake.LakeError.status()
+com.ash.lake.LakeError :: public java.lang.String com.ash.lake.LakeError.code()
+com.ash.lake.LakeError :: public static com.ash.lake.LakeError com.ash.lake.LakeError.valueOf(java.lang.String)
+com.ash.lake.LakeError :: public static com.ash.lake.LakeError[] com.ash.lake.LakeError.values()
+com.ash.lake.LakeError :: public static final com.ash.lake.LakeError com.ash.lake.LakeError.BAD_REQUEST
+com.ash.lake.LakeError :: public static final com.ash.lake.LakeError com.ash.lake.LakeError.MEMORY_ONLY
+com.ash.lake.LakeError :: public static final com.ash.lake.LakeError com.ash.lake.LakeError.NOT_FOUND
+com.ash.lake.LakeError :: public static final com.ash.lake.LakeError com.ash.lake.LakeError.READY_REFUSED
+com.ash.lake.LakeError :: public static final com.ash.lake.LakeError com.ash.lake.LakeError.TOO_LARGE
+com.ash.lake.LakeError :: public static final com.ash.lake.LakeError com.ash.lake.LakeError.UNREADABLE
+com.ash.lake.LakeException :: public com.ash.lake.LakeError com.ash.lake.LakeException.error()
+com.ash.lake.LakeException :: public com.ash.lake.LakeException(com.ash.lake.LakeError,java.lang.String)
+com.ash.lake.LakeException :: public com.ash.lake.LakeException(com.ash.lake.LakeError,java.lang.String,java.lang.Throwable)
+com.ash.lake.LakeException :: public java.lang.String com.ash.lake.LakeException.getMessage()
 com.ash.lake.LakeOptions :: public boolean com.ash.lake.LakeOptions.loaderTrace()
 com.ash.lake.LakeOptions :: public boolean com.ash.lake.LakeOptions.parquetPageIndex()
 com.ash.lake.LakeOptions :: public boolean com.ash.lake.LakeOptions.readsProcess()
@@ -752,6 +773,7 @@ com.ash.lake.load.DeltaStore :: public java.lang.String com.ash.lake.load.DeltaS
 com.ash.lake.load.DeltaStore :: public java.util.List<com.ash.lake.spi.DateChange> com.ash.lake.load.DeltaStore.deleteDates(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef,java.util.Set<java.time.LocalDate>,boolean) throws java.io.IOException
 com.ash.lake.load.DeltaStore :: public java.util.List<com.ash.lake.spi.DateChange> com.ash.lake.load.DeltaStore.undo(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef,java.lang.String,boolean) throws java.io.IOException
 com.ash.lake.load.DeltaStore :: public java.util.List<com.ash.lake.spi.TableVersion> com.ash.lake.load.DeltaStore.versions(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
+com.ash.lake.load.DeltaStore :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.load.DeltaStore.properties(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef)
 com.ash.lake.load.DeltaStore :: public java.util.SortedMap<java.time.LocalDate, java.lang.Long> com.ash.lake.load.DeltaStore.dates(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
 com.ash.lake.load.DeltaStore :: public static com.ash.lake.load.DeltaStore com.ash.lake.load.DeltaStore.create()
 com.ash.lake.load.DeltaStore :: public static final java.lang.String com.ash.lake.load.DeltaStore.FORMAT
@@ -774,6 +796,7 @@ com.ash.lake.load.IcebergStore :: public java.lang.String com.ash.lake.load.Iceb
 com.ash.lake.load.IcebergStore :: public java.util.List<com.ash.lake.spi.DateChange> com.ash.lake.load.IcebergStore.deleteDates(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef,java.util.Set<java.time.LocalDate>,boolean) throws java.io.IOException
 com.ash.lake.load.IcebergStore :: public java.util.List<com.ash.lake.spi.DateChange> com.ash.lake.load.IcebergStore.undo(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef,java.lang.String,boolean) throws java.io.IOException
 com.ash.lake.load.IcebergStore :: public java.util.List<com.ash.lake.spi.TableVersion> com.ash.lake.load.IcebergStore.versions(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
+com.ash.lake.load.IcebergStore :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.load.IcebergStore.properties(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
 com.ash.lake.load.IcebergStore :: public java.util.SortedMap<java.time.LocalDate, java.lang.Long> com.ash.lake.load.IcebergStore.dates(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
 com.ash.lake.load.IcebergStore :: public static com.ash.lake.load.IcebergStore com.ash.lake.load.IcebergStore.create()
 com.ash.lake.load.IcebergStore :: public static final java.lang.String com.ash.lake.load.IcebergStore.FORMAT
@@ -801,12 +824,16 @@ com.ash.lake.load.LakeLoad :: public static java.util.Map<java.lang.String, java
 com.ash.lake.load.LakeLoad :: public static void com.ash.lake.load.LakeLoad.main(java.lang.String[])
 com.ash.lake.load.LakeMaintain :: public static int com.ash.lake.load.LakeMaintain.run(com.ash.lake.LakeRuntime,java.lang.String[],java.io.PrintStream)
 com.ash.lake.load.LakeMaintain :: public static int com.ash.lake.load.LakeMaintain.run(java.lang.String[],java.io.PrintStream)
+com.ash.lake.load.LakeMaintain :: public static java.time.LocalDate com.ash.lake.load.LakeMaintain.keepFrom(java.time.LocalDate,int)
 com.ash.lake.load.LakeMaintain :: public static java.util.Map<java.lang.String, java.lang.Object> com.ash.lake.load.LakeMaintain.maintain(com.ash.lake.LakeRuntime,java.lang.String,java.lang.String,java.lang.String,com.ash.lake.load.LakeMaintain$Steps,java.time.Instant,boolean) throws java.lang.Exception
 com.ash.lake.load.LakeMaintain :: public static void com.ash.lake.load.LakeMaintain.main(java.lang.String[])
 com.ash.lake.load.LakeMaintain$Steps :: public boolean com.ash.lake.load.LakeMaintain$Steps.checkpoint()
 com.ash.lake.load.LakeMaintain$Steps :: public boolean com.ash.lake.load.LakeMaintain$Steps.compact()
 com.ash.lake.load.LakeMaintain$Steps :: public boolean com.ash.lake.load.LakeMaintain$Steps.forceDrop()
+com.ash.lake.load.LakeMaintain$Steps :: public boolean com.ash.lake.load.LakeMaintain$Steps.relayout()
+com.ash.lake.load.LakeMaintain$Steps :: public boolean com.ash.lake.load.LakeMaintain$Steps.relayoutForce()
 com.ash.lake.load.LakeMaintain$Steps :: public com.ash.lake.common.RowRetention com.ash.lake.load.LakeMaintain$Steps.rows()
+com.ash.lake.load.LakeMaintain$Steps :: public com.ash.lake.load.LakeMaintain$Steps(int,java.time.LocalDate,java.lang.String,double,boolean,int,com.ash.lake.common.RowRetention,boolean,java.lang.Integer,java.lang.String,boolean,boolean,long,boolean,java.lang.Long)
 com.ash.lake.load.LakeMaintain$Steps :: public com.ash.lake.load.LakeMaintain$Steps(int,java.time.LocalDate,java.lang.String,double,boolean,int,com.ash.lake.common.RowRetention,boolean,long,boolean,java.lang.Long)
 com.ash.lake.load.LakeMaintain$Steps :: public double com.ash.lake.load.LakeMaintain$Steps.maxDropShare()
 com.ash.lake.load.LakeMaintain$Steps :: public final boolean com.ash.lake.load.LakeMaintain$Steps.equals(java.lang.Object)
@@ -814,9 +841,12 @@ com.ash.lake.load.LakeMaintain$Steps :: public final int com.ash.lake.load.LakeM
 com.ash.lake.load.LakeMaintain$Steps :: public final java.lang.String com.ash.lake.load.LakeMaintain$Steps.toString()
 com.ash.lake.load.LakeMaintain$Steps :: public int com.ash.lake.load.LakeMaintain$Steps.floorDays()
 com.ash.lake.load.LakeMaintain$Steps :: public int com.ash.lake.load.LakeMaintain$Steps.keepDays()
+com.ash.lake.load.LakeMaintain$Steps :: public java.lang.Integer com.ash.lake.load.LakeMaintain$Steps.fileRows()
 com.ash.lake.load.LakeMaintain$Steps :: public java.lang.Long com.ash.lake.load.LakeMaintain$Steps.vacuumHours()
+com.ash.lake.load.LakeMaintain$Steps :: public java.lang.String com.ash.lake.load.LakeMaintain$Steps.relayoutDates()
 com.ash.lake.load.LakeMaintain$Steps :: public java.lang.String com.ash.lake.load.LakeMaintain$Steps.zone()
 com.ash.lake.load.LakeMaintain$Steps :: public java.time.LocalDate com.ash.lake.load.LakeMaintain$Steps.asOf()
+com.ash.lake.load.LakeMaintain$Steps :: public java.util.function.Predicate<java.time.LocalDate> com.ash.lake.load.LakeMaintain$Steps.relayoutWanted()
 com.ash.lake.load.LakeMaintain$Steps :: public long com.ash.lake.load.LakeMaintain$Steps.targetFileMb()
 com.ash.lake.load.LakeMaintain$Steps :: public static com.ash.lake.load.LakeMaintain$Steps com.ash.lake.load.LakeMaintain$Steps.none()
 com.ash.lake.load.LakeRetention :: public static int com.ash.lake.load.LakeRetention.run(com.ash.lake.LakeRuntime,java.lang.String[],java.io.PrintStream)
@@ -825,6 +855,11 @@ com.ash.lake.load.LakeRetention :: public static java.util.Map<java.lang.String,
 com.ash.lake.load.LakeRetention :: public static java.util.Map<java.lang.String, java.lang.Object> com.ash.lake.load.LakeRetention.dropDates(com.ash.lake.LakeRuntime,java.lang.String,java.lang.String,java.lang.String,java.util.function.Predicate<java.lang.String>,boolean) throws java.lang.Exception
 com.ash.lake.load.LakeRetention :: public static java.util.function.Predicate<java.lang.String> com.ash.lake.load.LakeRetention.dates(java.lang.String)
 com.ash.lake.load.LakeRetention :: public static void com.ash.lake.load.LakeRetention.main(java.lang.String[])
+com.ash.lake.load.LakeStorage :: public com.ash.lake.spi.Storage com.ash.lake.load.LakeStorage.storage(java.lang.String)
+com.ash.lake.load.LakeStorage :: public static boolean com.ash.lake.load.LakeStorage.isLocal(java.lang.String)
+com.ash.lake.load.LakeStorage :: public static com.ash.lake.load.LakeStorage com.ash.lake.load.LakeStorage.open(com.ash.lake.LakeRuntime,java.util.Map<java.lang.String, java.lang.String>)
+com.ash.lake.load.LakeStorage :: public static java.nio.file.Path com.ash.lake.load.LakeStorage.localPath(java.lang.String)
+com.ash.lake.load.LakeStorage :: public void com.ash.lake.load.LakeStorage.close()
 com.ash.lake.load.LakeUndo :: public static int com.ash.lake.load.LakeUndo.run(com.ash.lake.LakeRuntime,java.lang.String[],java.io.PrintStream)
 com.ash.lake.load.LakeUndo :: public static int com.ash.lake.load.LakeUndo.run(java.lang.String[],java.io.PrintStream)
 com.ash.lake.load.LakeUndo :: public static java.util.List<com.ash.lake.load.LakeUndo$Done> com.ash.lake.load.LakeUndo.undo(com.ash.lake.LakeRuntime,java.lang.String,java.lang.String,java.util.List<java.lang.String>,boolean) throws java.io.IOException
@@ -841,6 +876,24 @@ com.ash.lake.load.LakeUndo$Done :: public java.lang.String com.ash.lake.load.Lak
 com.ash.lake.load.LakeUndo$Done :: public long com.ash.lake.load.LakeUndo$Done.removed()
 com.ash.lake.load.LakeUndo$Done :: public long com.ash.lake.load.LakeUndo$Done.restored()
 com.ash.lake.load.LakeUndo$Done :: public long com.ash.lake.load.LakeUndo$Done.version()
+com.ash.lake.load.RowFeed :: public com.ash.lake.load.RowFeed$Tag com.ash.lake.load.RowFeed.tag()
+com.ash.lake.load.RowFeed :: public java.lang.String com.ash.lake.load.RowFeed.label()
+com.ash.lake.load.RowFeed :: public java.lang.String com.ash.lake.load.RowFeed.next() throws java.io.IOException
+com.ash.lake.load.RowFeed :: public java.time.LocalDate com.ash.lake.load.RowFeed.date()
+com.ash.lake.load.RowFeed :: public java.time.LocalDate com.ash.lake.load.RowFeed.place(com.ash.lake.load.RowFeed$Tag,java.lang.String,java.time.LocalDate) throws java.io.IOException
+com.ash.lake.load.RowFeed :: public java.time.LocalDate com.ash.lake.load.RowFeed.place(java.lang.String,java.time.LocalDate) throws java.io.IOException
+com.ash.lake.load.RowFeed :: public java.util.List<java.lang.String> com.ash.lake.load.RowFeed.notes()
+com.ash.lake.load.RowFeed :: public static com.ash.lake.load.RowFeed com.ash.lake.load.RowFeed.open(java.lang.String,java.time.LocalDate,java.time.ZoneId) throws java.io.IOException
+com.ash.lake.load.RowFeed :: public static com.ash.lake.load.RowFeed com.ash.lake.load.RowFeed.stream(java.io.Reader,java.time.LocalDate,java.time.ZoneId) throws java.io.IOException
+com.ash.lake.load.RowFeed :: public static java.time.LocalDate com.ash.lake.load.RowFeed.asOf(java.lang.String[])
+com.ash.lake.load.RowFeed :: public void com.ash.lake.load.RowFeed.close() throws java.io.IOException
+com.ash.lake.load.RowFeed$Tag :: public com.ash.lake.load.RowFeed$Tag(java.lang.String,java.time.LocalDate,java.lang.String)
+com.ash.lake.load.RowFeed$Tag :: public final boolean com.ash.lake.load.RowFeed$Tag.equals(java.lang.Object)
+com.ash.lake.load.RowFeed$Tag :: public final int com.ash.lake.load.RowFeed$Tag.hashCode()
+com.ash.lake.load.RowFeed$Tag :: public final java.lang.String com.ash.lake.load.RowFeed$Tag.toString()
+com.ash.lake.load.RowFeed$Tag :: public java.lang.String com.ash.lake.load.RowFeed$Tag.folder()
+com.ash.lake.load.RowFeed$Tag :: public java.lang.String com.ash.lake.load.RowFeed$Tag.label()
+com.ash.lake.load.RowFeed$Tag :: public java.time.LocalDate com.ash.lake.load.RowFeed$Tag.date()
 com.ash.lake.load.Stores :: public static boolean com.ash.lake.load.Stores.isBuiltIn(java.lang.String)
 com.ash.lake.load.Stores :: public static com.ash.lake.spi.TableStore com.ash.lake.load.Stores.builtIn(java.lang.String)
 com.ash.lake.load.Stores :: public static com.ash.lake.spi.TableStore com.ash.lake.load.Stores.of(com.ash.lake.LakeRuntime,java.lang.String)
@@ -1448,6 +1501,19 @@ com.ash.lake.spi.Storage :: public default void com.ash.lake.spi.Storage.put(jav
 com.ash.lake.spi.StorageProvider :: public abstract com.ash.lake.spi.Storage com.ash.lake.spi.StorageProvider.storage(java.lang.String)
 com.ash.lake.spi.StorageProvider :: public abstract java.lang.String com.ash.lake.spi.StorageProvider.scheme()
 com.ash.lake.spi.StorageProvider :: public default boolean com.ash.lake.spi.StorageProvider.memoryOnly()
+com.ash.lake.spi.TableProperties :: public static com.ash.lake.spi.TableProperties$Effective com.ash.lake.spi.TableProperties.effective(java.util.Map<java.lang.String, java.lang.String>)
+com.ash.lake.spi.TableProperties :: public static final java.lang.String com.ash.lake.spi.TableProperties.APPEND_ONLY
+com.ash.lake.spi.TableProperties :: public static final java.lang.String com.ash.lake.spi.TableProperties.RETENTION_HOURS
+com.ash.lake.spi.TableProperties :: public static java.util.Map<java.lang.String, java.lang.String> com.ash.lake.spi.TableProperties.forStore(java.lang.String,java.util.Map<java.lang.String, java.lang.String>)
+com.ash.lake.spi.TableProperties :: public static void com.ash.lake.spi.TableProperties.refuseReplace(java.util.Map<java.lang.String, java.lang.String>,com.ash.lake.spi.WriteSpec)
+com.ash.lake.spi.TableProperties :: public static void com.ash.lake.spi.TableProperties.refuseRewrite(java.util.Map<java.lang.String, java.lang.String>,java.lang.String,java.lang.String)
+com.ash.lake.spi.TableProperties$Effective :: public boolean com.ash.lake.spi.TableProperties$Effective.appendOnly()
+com.ash.lake.spi.TableProperties$Effective :: public com.ash.lake.spi.TableProperties$Effective(boolean,java.lang.Long)
+com.ash.lake.spi.TableProperties$Effective :: public final boolean com.ash.lake.spi.TableProperties$Effective.equals(java.lang.Object)
+com.ash.lake.spi.TableProperties$Effective :: public final int com.ash.lake.spi.TableProperties$Effective.hashCode()
+com.ash.lake.spi.TableProperties$Effective :: public final java.lang.String com.ash.lake.spi.TableProperties$Effective.toString()
+com.ash.lake.spi.TableProperties$Effective :: public java.lang.Long com.ash.lake.spi.TableProperties$Effective.retentionHours()
+com.ash.lake.spi.TableProperties$Effective :: public java.util.Map<java.lang.String, java.lang.String> com.ash.lake.spi.TableProperties$Effective.named()
 com.ash.lake.spi.TableRef :: public com.ash.lake.spi.TableRef(java.lang.String,java.lang.String,java.lang.String)
 com.ash.lake.spi.TableRef :: public final boolean com.ash.lake.spi.TableRef.equals(java.lang.Object)
 com.ash.lake.spi.TableRef :: public final int com.ash.lake.spi.TableRef.hashCode()
@@ -1468,6 +1534,7 @@ com.ash.lake.spi.TableStore :: public abstract java.util.List<com.ash.lake.spi.D
 com.ash.lake.spi.TableStore :: public abstract java.util.List<com.ash.lake.spi.DateChange> com.ash.lake.spi.TableStore.undo(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef,java.lang.String,boolean) throws java.io.IOException
 com.ash.lake.spi.TableStore :: public abstract java.util.List<com.ash.lake.spi.TableVersion> com.ash.lake.spi.TableStore.versions(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
 com.ash.lake.spi.TableStore :: public abstract java.util.SortedMap<java.time.LocalDate, java.lang.Long> com.ash.lake.spi.TableStore.dates(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
+com.ash.lake.spi.TableStore :: public default java.util.Map<java.lang.String, java.lang.String> com.ash.lake.spi.TableStore.properties(com.ash.lake.LakeRuntime,com.ash.lake.spi.TableRef) throws java.io.IOException
 com.ash.lake.spi.TableVersion :: public com.ash.lake.spi.TableVersion(long,java.time.Instant)
 com.ash.lake.spi.TableVersion :: public final boolean com.ash.lake.spi.TableVersion.equals(java.lang.Object)
 com.ash.lake.spi.TableVersion :: public final int com.ash.lake.spi.TableVersion.hashCode()
@@ -1482,6 +1549,8 @@ com.ash.lake.spi.TableWriter :: public abstract long com.ash.lake.spi.TableWrite
 com.ash.lake.spi.TableWriter :: public abstract void com.ash.lake.spi.TableWriter.begin(java.time.LocalDate) throws java.io.IOException
 com.ash.lake.spi.TableWriter :: public abstract void com.ash.lake.spi.TableWriter.close()
 com.ash.lake.spi.TableWriter :: public abstract void com.ash.lake.spi.TableWriter.open(com.ash.lake.spi.TableWriter$LoadColumns) throws java.io.IOException
+com.ash.lake.spi.TableWriter :: public default long com.ash.lake.spi.TableWriter.nativeVersion(long)
+com.ash.lake.spi.TableWriter :: public static java.util.Set<java.util.List<java.lang.String>> com.ash.lake.spi.TableWriter.partitionsOf(java.util.List<com.ash.lake.spi.TableWriter$WrittenFile>)
 com.ash.lake.spi.TableWriter$FileOut :: public abstract com.ash.lake.spi.TableWriter$WrittenFile com.ash.lake.spi.TableWriter$FileOut.finish() throws java.io.IOException
 com.ash.lake.spi.TableWriter$FileOut :: public abstract long com.ash.lake.spi.TableWriter$FileOut.length()
 com.ash.lake.spi.TableWriter$FileOut :: public abstract void com.ash.lake.spi.TableWriter$FileOut.write(com.ash.lake.spi.LoadRow) throws java.io.IOException
@@ -1507,10 +1576,12 @@ com.ash.lake.spi.TableWriter$WrittenFile :: public long com.ash.lake.spi.TableWr
 com.ash.lake.spi.TableWriter$WrittenFile :: public long com.ash.lake.spi.TableWriter$WrittenFile.rows()
 com.ash.lake.spi.WriteSpec :: public boolean com.ash.lake.spi.WriteSpec.appends()
 com.ash.lake.spi.WriteSpec :: public boolean com.ash.lake.spi.WriteSpec.loadColumns()
+com.ash.lake.spi.WriteSpec :: public boolean com.ash.lake.spi.WriteSpec.partitionsOnly()
 com.ash.lake.spi.WriteSpec :: public boolean com.ash.lake.spi.WriteSpec.sortedById()
 com.ash.lake.spi.WriteSpec :: public com.ash.lake.LakeRuntime com.ash.lake.spi.WriteSpec.runtime()
 com.ash.lake.spi.WriteSpec :: public com.ash.lake.spi.WriteSpec$FileLayout com.ash.lake.spi.WriteSpec.layout()
 com.ash.lake.spi.WriteSpec :: public com.ash.lake.spi.WriteSpec(com.ash.lake.LakeRuntime,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.util.Map<java.lang.String, java.lang.String>,java.util.Map<java.lang.String, java.lang.String>,java.util.Map<java.lang.String, java.lang.String>,boolean,java.lang.String,java.util.Map<java.lang.String, java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.lang.String>,boolean,boolean,java.util.List<java.lang.String>,com.ash.lake.spi.WriteSpec$FileLayout)
+com.ash.lake.spi.WriteSpec :: public com.ash.lake.spi.WriteSpec(com.ash.lake.LakeRuntime,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.lang.String,java.util.Map<java.lang.String, java.lang.String>,java.util.Map<java.lang.String, java.lang.String>,java.util.Map<java.lang.String, java.lang.String>,boolean,java.lang.String,java.util.Map<java.lang.String, java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.lang.String>,java.util.List<java.lang.String>,boolean,boolean,java.util.List<java.lang.String>,com.ash.lake.spi.WriteSpec$FileLayout,boolean)
 com.ash.lake.spi.WriteSpec :: public final boolean com.ash.lake.spi.WriteSpec.equals(java.lang.Object)
 com.ash.lake.spi.WriteSpec :: public final int com.ash.lake.spi.WriteSpec.hashCode()
 com.ash.lake.spi.WriteSpec :: public final java.lang.String com.ash.lake.spi.WriteSpec.toString()

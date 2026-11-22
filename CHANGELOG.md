@@ -3,13 +3,114 @@
 
 Entries are written per release; unreleased work is listed first.
 
-## 0.9.0 (2026-11-21): the move from Drishti
+## 0.9.1 (2026-11-21): maintenance data safety
 
-- **IDE launchers follow the platform standard**: one `run-configs/` at the repository root, every launcher named `Lake: <verb> <what>` (IntelliJ folder `Lake`), the same names as the VS Code tasks and launches; missing launchers added; the check `python/tests/test_launchers.py` (a test) keeps names, files and workspace in step.
+- **The newest copy is the one committed last, after every rewrite (G4 F20, accuracy defect)**: when the load committed last had an
+  earlier run id than an older load of the same date (two loads that overlap, an inbox's one run id for an archive, clocks that differ
+  or go back), `lake maintain --compact` on Delta and Iceberg made readers answer the superseded copies: both of its files came from one
+  commit and the tie fell to the run ids. An undo or row retention of such a date had the same fault, and worse: Delta's undo wrote every
+  remaining copy into one file (readers then saw an id twice) and took a compaction's commit for a replace ("rows of the date before it
+  restored"), Iceberg's undo and retention kept one copy an id by file name and dropped the others. Now the rule is one, on every store:
+  the later commit, whatever the clocks said; a run id is a name. A rewrite of a date (compaction, undo, retention; Delta, Iceberg, the
+  in-memory lake's compactor) ranks every copy in the readers' own order, writes each id's newest copy into the date's files and every
+  older copy (by id, in that order) into files of older copies, marked so the readers put them first in the one commit: on Delta the add
+  action's tag `lake.copies: older`, on Iceberg `-older-` in the file's name (`LoadOrder.OLDER_TAG`, `OLDER_NAME`). The Iceberg reader
+  orders copies by the data sequence number always (before, only when the date held two runs). Undo skips the commits that rewrote the
+  same rows (removes with `dataChange: false`) when it looks for the load's own commit. Kit cases `maintain/compact-commit-order` (loads
+  committed opposite to their run ids; compaction, a second run, undo, compaction again; what readers see equal to a table loaded with
+  the expected rows alone; kit verb `undo-rows`: an undo's dates and rows without the version) and `retention/ttl-keeps-commit-order`,
+  on every store, local, memory and S3, and the Python path.
+- **A new promoted column is added, never dropped (G4 F21, accuracy defect)**: on Delta (the Java loader and the Python path) and on the
+  files store, a promoted or vector column first sent by a later load of an existing table was left out with no word (Iceberg added it);
+  Drishti's VaR read a matured position's `MATURITY_DATE` as missing. Now every store adds it, nullable, at the end (Delta: one metadata
+  commit, as merge-schema writes it; the Python path through delta-rs's add-columns; files: its column list); no file is rewritten and
+  the rows written before read it as null. A Delta table under column mapping or in-commit timestamps (another engine's) is not widened:
+  such a load is refused naming the column, nothing written. A files-store load with a partition column the table lacks is refused, as
+  on Delta and Iceberg. Iceberg compaction no longer fills an added column of older rows from their documents (maintenance changed what
+  readers saw). LOADER.md says the rule; kit case `load/new-promoted-column` (a column in load 2 and 3, compaction after: no row changes).
+- **Compaction keeps what readers see (accuracy defect in 0.9.0)**: in 0.9.0, `lake maintain --compact` on a Delta or Iceberg date that
+  appends had written with repeated ids merged every copy into one file; the rows were all kept, but readers then answered wrongly: a
+  whole-day read returned the superseded copies as well (Delta and Iceberg), and on Iceberg the id map held each such id twice and a
+  document could be the older copy. Now the rows readers see (each id's newest copy) are written in the table's order into one file and
+  every older copy into one more (by id, the oldest load first), so readers answer exactly as before the compaction and an undo of the
+  newer load still finds the older copy; a date already in that form is left (a second run changes nothing, on every store). Shown by the
+  new kit case `maintain/safety-compact`, which fails on 0.9.0.
+- **Maintenance proven safe on every store**: kit cases on Delta, Iceberg and files, on local disk, memory and S3:
+  `maintain/safety-compact` (compaction, checkpoint and vacuum: every row the table holds the same, each copy, document, column and
+  vector; what readers see the same; a reader opened before maintain reads the same after it), `maintain/safety-relayout` (what readers
+  see the same, a date relayout does not touch unchanged), `maintain/safety-keep-days` (exactly `--as-of` and the N business days before
+  it kept, with a later date, their rows unchanged; a reader opened before still reads), `maintain/safety-race` (an append racing a
+  compaction: the table equals a twin loaded without maintain, row for row; nothing lost or twice). Kit verbs `raw-digest`,
+  `read-visible`, `hold` and `read-held` (labelled comparisons: `same as <label>=true`), and the step group `settled`.
+- **keep-days keeps what Drishti kept (G4 defect)**: `lake maintain --keep-days N` removes the business dates before the day N business
+  days (Monday to Friday) before `--as-of`, so `--as-of` and the N business days before it stay, counted on the calendar, never from the
+  newest date the table holds (Drishti's rule before the move); before, the newest N dates on or before `--as-of` were kept, one date
+  fewer. Every store alike; `LakeMaintain.keepFrom`; kit cases `maintain/keep-days-and-drop-guard`, `maintain/safety-keep-days`.
+- **A laid-out table keeps its id order on every store (G4 lake gap)**: `lake maintain --relayout` rewrites each business date whose
+  files drifted from the id layout (an append whose ids overlap the date's files, a file over the table's `file-rows`, more files than its
+  rows need) as readers see it, sorted by id into files of `file-rows` rows (`--file-rows`, `--dates`, `--force`), each file its own id
+  range: Delta through Delta Kernel (`DeltaUpkeep.relayout`), Iceberg its relayout (which now keeps each id's newest copy: before, an
+  appended copy could lose to the older one), files the day file that holds an id twice. A table laid out by more than the id
+  (`lake.layout.sort-by`, which a Delta table now records too) is left in its order. The id map reports sorted-and-filed on every store
+  after maintenance; kit case `maintain/sorted-layout`, kit verb `read-layout`.
+- **A moved Iceberg table is said again (regression in 0.9.0's read API)**: a table moved or copied after it was written (its metadata
+  still names the old folder) was reported as `File does not exist: …avro`, with no `relocate` to copy. The Iceberg reader words it again
+  (`TableProblems`, now the reader's `Problems.Classifier`): the read problem (a host's Health) names the old folder and the pair that reads
+  it (`relocate: '/data/ice1 -> /data/ice2'`, or that a `relocate` set sends reads where the files are not either); the failure thrown
+  is `LK-1006` in words without a folder ("the table cva names files that are not there …"), so a host shows it as one line, never a stack
+  trace or a path. A read problem keeps up to 1,000 characters (300 cut the pair). Delta and the plain-file store keep paths relative to the
+  table, so a moved Delta or files table reads where it is. `IcebergMovedTableTest`.
+- **lake maintain --relayout of several dates (G4 defect)**: relayout commits each date on its own, and the second date found relayout's own
+  first commit and refused with "another writer committed while relayout read the date" (every Delta table with more than one drifted date,
+  whoever wrote it). The next date now expects the version relayout itself committed; another writer's commit between two dates still
+  stops it, nothing written. Kit case `maintain/relayout-several-dates` (two drifted dates: every date laid out, what readers see the
+  same, one copy an id, a second run has nothing to do).
+- **The public surface a host needs (G4 F6)**: `LakeException` and `LakeError` are `com.ash.lake` (were `com.ash.lake.common`); `RowFeed`
+  (a host's store loader's input by the load rules) is `com.ash.lake.load` (was `com.ash.lake.common`); new `com.ash.lake.load.LakeStorage`
+  (local disk, S3 with the runtime's and the caller's `s3.*` settings, `mem://`: a `Storage` to write or check files beside the tables, with
+  `isLocal`/`localPath`). Not public, with what to call instead: the Delta manifest writer (`LakeWriter`, `LakeManifest`, `LakeCli`) and
+  the Iceberg appender (`IcebergAppender`): the loader (`LakeLoad.run(runtime, args, out)` with `source.format: loader-rows`,
+  `target.mode: append`, `target.properties`, the version from `--summary`); `S3Storage`, `S3Settings`, `LocalPaths`: `LakeStorage`;
+  `PageDecodeException`, `UnsupportedCodec`: every read wraps them as `LakeException` with `LakeError.UNREADABLE`, its message the
+  words. `java/api-surface.txt` updated; the design's section 3.1 lists them. The dead Delta `TableProblems` is removed.
+- **target.properties on every store (storage-parity defect found by Drishti's 0.9.1 adoption)**: the Iceberg target ignored
+  `target.properties` (a new table got neither its retention nor its append-only mark; Delta applied them), and the files store had no
+  table properties. Now `TableProperties` maps them on every store, set when the load creates the table: `lake.append-only` is Delta's
+  `delta.appendOnly`, Iceberg's and the files store's `lake.append-only`; `lake.retention-hours` is Delta's
+  `delta.deletedFileRetentionDuration` and `delta.logRetentionDuration`, Iceberg's `history.expire.max-snapshot-age-ms`, the files
+  store's `lake.retention-hours` (in `_log/<table>/properties.json`); a format's native name of the two is taken on any store, other keys
+  are written as given, disagreeing names and keys of the prefix before Drishti Lake are refused. What they do is the same everywhere: an
+  append-only table takes appends only (a replace, a delete of dates, row retention, keep-days and an undo that would remove rows are
+  refused in one sentence; compaction, relayout, checkpoints and vacuum run, a Delta compaction's removes now `dataChange: false` as
+  OPTIMIZE's, so an append-only Delta table compacts), and `lake maintain --vacuum-hours` never goes below the table's retention.
+  `TableStore.properties` (new, default empty) and `TableProperties.effective` read them back. The Python path writes them on a new Delta
+  table and refuses a replace of an append-only one in the same words. Kit case `properties/retention-and-append-only` (kit verb
+  `store properties`; a load step's `error: true` records a failed load's reason), `TablePropertiesTest`.
+- **overwrite-partitions on every store (storage-parity gap)**: `target.mode: overwrite-partitions` replaces, of each business date, only
+  the partitions the input brings (its `partition-by` values, an empty value as null); the date's other partitions stay. Drishti's
+  documented flows use it (`load-day.sh`/`backfill.sh --mode overwrite-partitions` for a restated source, `lake build`, systems that each
+  write their partition of one table), which until now needed the Python deltalake engine. Delta, Iceberg, files and the Python path
+  alike (`WriteSpec.partitionsOnly`, kept compatible by the old constructor); with `guard.max-drop-share` (which counts whole dates) it is
+  refused. Kit case `load/overwrite-partitions`.
+- **One meaning of a load's version (storage-parity defect)**: the summary's `commit.dates.<date>.version` was Delta's table version but
+  an Iceberg snapshot id (a random number, so a second commit's could be smaller). It is now a number that grows with every commit of the
+  table on every store (Delta's version, the Iceberg snapshot's sequence number, the files store's log number), and `nativeVersion` beside
+  it is the store's own id (Iceberg: the snapshot id, the one `TableStore.versions` and a read at a version take). `TableWriter.commit`
+  answers the version, `TableWriter.nativeVersion` the id. `LoadVersionTest`.
+- **A Delta day with the null partition reads (defect)**: the read API's day listing of a Delta date holding a file of a null
+  partition value (an empty `partition-by` value) failed with `LK-1006 ... NullPointerException`; the null partition is now left out of the
+  file's partition values, as the Iceberg store does. Kit case `load/overwrite-partitions`.
+- **lake maintain's report**: `before` and `after` give `files`, `mb`, `latestDate` and `latestRows` as well, on every store.
 - **A caller's refusal is its own (G4 triage)**: an exception thrown by the caller's sink inside a read (a vector, document or row sink:
   a host refusing a duplicate trade, say) leaves the read as it was thrown, unchanged, and records no read problem; before, every store
   wrapped it as `LK-1006` (data that cannot be read) and listed the date among the table's read problems, so a host's own refusal (Drishti's
   duplicate-trade 422) became a 502. `Problems.caller` marks the sink's failures; `ProblemsCallerTest`.
+- **The S3 simulator binds its own ports**: `S3MockServer` starts S3Mock on ports the server binds itself and reports the port it bound,
+  so no other process can take a port between a pick and a bind (`S3LoadTest` failed now and then on a busy machine).
+
+## 0.9.0 (2026-11-21): the move from Drishti
+
+- **IDE launchers follow the platform standard**: one `run-configs/` at the repository root, every launcher named `Lake: <verb> <what>` (IntelliJ folder `Lake`), the same names as the VS Code tasks and launches; missing launchers added; the check `python/tests/test_launchers.py` (a test) keeps names, files and workspace in step.
 - **Loader rows keep their vectors (G4 triage)**: a loader row (`source.format: loader-rows`) whose document holds a vector in its stored
   form `{"$vector": "<column>"}` (the row as a lake keeps it, the form Drishti's fixtures and exports write) takes the vector's numbers from
   the wrapper's `columns` list, as the loader Drishti had before the move did; a null there is no vector, a missing or non-list value is

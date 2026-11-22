@@ -29,6 +29,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -52,11 +53,26 @@ class LakeMaintainTest {
         assertThat(LakeLoad.run(rt, new String[] {"--config", file.toString(), "-q"}, new PrintStream(out))).as(out.toString()).isEqualTo(LakeLoad.OK);
     }
 
+    /** Every document readers see, by date and id (the newest copy of each). */
+    private static Map<String, String> documents(LakeRuntime rt, Path lake, String format) throws IOException {
+        Map<String, String> out = new java.util.TreeMap<>();
+        try (var reader = Stores.of(rt, format).open(rt, com.ash.lake.read.LakeAddress.of(lake.toString(), "risk"))) {
+            var s = reader.table("scenario-pv").snapshot(com.ash.lake.spi.AsOf.LATEST).orElseThrow();
+            for (var d : s.dates()) {
+                s.documents(d, (id, json) -> {
+                    assertThat(out.put(d + "|" + id, json)).as("one document an id").isNull();
+                });
+            }
+        }
+        return out;
+    }
+
     private static long dataFiles(Path lake) throws IOException {
         try (Stream<Path> s = Files.walk(lake)) {
             return s.filter(p -> {
                 String n = p.getFileName().toString();
-                return Files.isRegularFile(p) && !n.startsWith(".") && (n.endsWith(".parquet") || n.endsWith(".jsonl") && !n.equals("scenario-pv.jsonl"));
+                return Files.isRegularFile(p) && !n.startsWith(".") && !p.toString().contains("/_delta_log/")    // a checkpoint is no data file
+                        && (n.endsWith(".parquet") || n.endsWith(".jsonl") && !n.equals("scenario-pv.jsonl"));
             }).count();
         }
     }
@@ -71,6 +87,7 @@ class LakeMaintainTest {
         load(rt, lake, format, 2, "append");
         load(rt, lake, format, 3, "append");
         long before = dataFiles(lake);
+        Map<String, String> docsBefore = documents(rt, lake, format);
         var steps = new LakeMaintain.Steps(0, null, null, 0.5, false, 0, new com.ash.lake.common.RowRetention(null, null, null), true, 128, true, 0L);
         Map<String, Object> dry = LakeMaintain.maintain(rt, lake.toString(), format, "risk/scenario-pv", steps, Instant.now(), true);
         assertThat(dataFiles(lake)).as("a dry run changes nothing").isEqualTo(before);
@@ -94,12 +111,32 @@ class LakeMaintainTest {
         Files.deleteIfExists(old);
         long after = dataFiles(lake);
         assertThat(after).as(done.toString()).isLessThan(before);
-        // one file a date: the stores read the same rows, from one file
+        // the three appends repeat the same ids: the rows readers see in one file and the older copies in one more (the files store: its one
+        // day file), so the newest copy is still the one read; a second compaction has nothing to do
         try (var reader = Stores.of(rt, format).open(rt, com.ash.lake.read.LakeAddress.of(lake.toString(), "risk"))) {
             var s = reader.table("scenario-pv").snapshot(com.ash.lake.spi.AsOf.LATEST).orElseThrow();
             for (var d : s.dates()) {
-                assertThat(s.day(d).orElseThrow().files()).as(format + " " + d).hasSize(1);
+                assertThat(s.day(d).orElseThrow().files()).as(format + " " + d).hasSize(format.equals("files") ? 1 : 2);
+                var ids = s.ids(d);
+                for (int i = 1; i < ids.size(); i++) {
+                    assertThat(ids.id(i - 1)).as("one id once, in order").isLessThan(ids.id(i));
+                }
+                assertThat(ids.size()).isEqualTo(12);
             }
         }
+        assertThat(documents(rt, lake, format)).as("the documents readers see are the same").isEqualTo(docsBefore);
+        Map<String, Object> again = LakeMaintain.maintain(rt, lake.toString(), format, "risk/scenario-pv", steps, Instant.now(), false);
+        if (!format.equals("files")) {
+            assertThat((List<String>) ((Map<String, Object>) again.get("compact")).get("dates")).as(again.toString()).isEmpty();
+        }
+    }
+
+    @Test
+    void keepDaysKeepsTheAsOfDayAndThatManyBusinessDaysBeforeIt() {
+        assertThat(LakeMaintain.keepFrom(java.time.LocalDate.parse("2026-10-29"), 1)).isEqualTo(java.time.LocalDate.parse("2026-10-28"));
+        assertThat(LakeMaintain.keepFrom(java.time.LocalDate.parse("2026-11-23"), 2)).isEqualTo(java.time.LocalDate.parse("2026-11-19"));
+        assertThat(LakeMaintain.keepFrom(java.time.LocalDate.parse("2026-11-21"), 1)).isEqualTo(java.time.LocalDate.parse("2026-11-20"));
+        assertThat(LakeMaintain.keepFrom(java.time.LocalDate.parse("2026-11-02"), 5)).isEqualTo(java.time.LocalDate.parse("2026-10-26"));
+        assertThat(LakeMaintain.keepFrom(java.time.LocalDate.parse("2026-10-29"), 0)).isEqualTo(java.time.LocalDate.parse("2026-10-29"));
     }
 }

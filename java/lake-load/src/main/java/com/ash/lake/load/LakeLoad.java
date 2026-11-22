@@ -86,8 +86,8 @@ public final class LakeLoad {
     private static final java.util.concurrent.atomic.AtomicInteger RUNS = new java.util.concurrent.atomic.AtomicInteger();
 
     /**
-     * The current run's id, else a new one: {@code yyyyMMdd'T'HHmmss.SSS-<pid>[-<n>]}, in time order, so the newest load's rows sort last
-     * ({@code _load_id} is {@code <run>.<file>}).
+     * The current run's id, else a new one: {@code yyyyMMdd'T'HHmmss.SSS-<pid>[-<n>]} ({@code _load_id} is {@code <run>.<file>}): a name
+     * of the load, never its order; which load is the newer is the commit order ({@link com.ash.lake.rows.LoadOrder}).
      */
     static String runId() {
         String r = RUN.get();

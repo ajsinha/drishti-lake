@@ -1,0 +1,62 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# target.properties on every store (TableProperties; DATA_LAKE_GUIDE.md "Table properties"): the product's lake.retention-hours and
+# lake.append-only, and Delta's native names given to any store, are each format's native property on the new table and read back the
+# same; the retention is honoured by lake maintain (--vacuum-hours 0 keeps the replaced version readable); an append-only table takes
+# appends, refuses a replace (overwrite-dates, overwrite-partitions), a delete of its dates and an undo, and still compacts; a drishti.
+# key is refused (the product's names are lake.*)
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 12, scenarios: 2, seed: 1}}
+  again/pv.2026-10-27.jsonl: {pv: {n: 5, scenarios: 2, seed: 99}}
+  more/pv.2026-10-27.jsonl: {pv: {n: 6, scenarios: 2, seed: 7, first: 12}}
+configs:
+  kept: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/kept', domain: risk, kind: kept, mode: replace-date, properties: {lake.retention-hours: '1000'}}
+  kept-again: |
+    source: {files: '${in}/again/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/kept', domain: risk, kind: kept, mode: replace-date}
+  official: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/official', domain: risk, kind: official, mode: append,
+             properties: {lake.append-only: true, lake.retention-hours: '61368'}}
+  official-more: |
+    source: {files: '${in}/more/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/official', domain: risk, kind: official, mode: append}
+  official-replace: |
+    source: {files: '${in}/again/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/official', domain: risk, kind: official, mode: overwrite-dates}
+  official-partitions: |
+    source: {files: '${in}/again/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/official', domain: risk, kind: official, mode: overwrite-partitions}
+  native: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/native', domain: risk, kind: native, mode: append,
+             properties: {delta.appendOnly: 'true', delta.deletedFileRetentionDuration: interval 7 days, delta.logRetentionDuration: interval 7 days}}
+  earlier: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/earlier', domain: risk, kind: earlier, properties: {drishti.append-only: 'true'}}
+  disagree: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/earlier', domain: risk, kind: earlier,
+             properties: {lake.retention-hours: '24', history.expire.max-snapshot-age-ms: '7200000'}}
+steps:
+  - load: {config: kept}
+  - load: {config: kept-again}
+  - store: [properties, '${store}', '${lake}', risk, kept]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/kept, --vacuum-hours, '0']
+  - store: [scan-at, '${store}', '${lake}', risk, kept, '0']
+  - load: {config: official, args: [--run-id, tck-first]}
+  - load: {config: official-more, args: [--run-id, tck-second]}
+  - store: [properties, '${store}', '${lake}', risk, official]
+  - load: {config: official-replace, error: true}
+  - load: {config: official-partitions, error: true}
+  - retention: [--lake, '${lake}', --format, '${store}', --table, risk/official, --dates, '2026-10-27']
+  - store: [delete, '${store}', '${lake}', risk, official, '2026-10-27']
+  - undo: [--lake, '${lake}', --load-id, tck-second.1, --table, risk/official]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/official, --compact, --vacuum-hours, '0']
+  - store: [read-files, '${store}', '${lake}', risk, official]
+  - load: {config: native}
+  - store: [properties, '${store}', '${lake}', risk, native]
+  - load: {config: earlier}
+  - load: {config: disagree}
+tables: [risk/kept, risk/official, risk/native]

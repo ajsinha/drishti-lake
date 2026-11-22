@@ -127,7 +127,8 @@ final class DeltaTable {
 
     /**
      * Per layout version and date: the ids that more than one load wrote, each with the index of the file whose copy wins (the newest
-     * load: the largest {@code _load_id}, then the latest commit); empty when no id was written twice. Kept for a few dates.
+     * load: the latest commit, then {@link com.ash.lake.rows.LoadOrder}'s rule within a commit); empty when no id was written twice.
+     * Kept for a few dates.
      */
     private final Map<String, Map<String, Integer>> shadows = java.util.Collections.synchronizedMap(new LinkedHashMap<>(16, 0.75f, true));   // at most 64, the least used first out
 
@@ -341,8 +342,8 @@ final class DeltaTable {
 
     /**
      * A date's files in load order, the newest last: by the largest {@code _load_id} each holds (its statistics) in the one load order
-     * ({@link com.ash.lake.rows.LoadOrder}: the commit, then the run's time, then the id), then the time
-     * the file was added, then the path. A reader that keeps the last copy of an id keeps the newest load's. {@code loadColumn} is the load
+     * ({@link com.ash.lake.rows.LoadOrder}: the commit, then a file of older copies (its add action's tag {@code lake.copies: older})
+     * before the commit's other files, then the run's time, then the id), then the time the file was added, then the path. A reader that keeps the last copy of an id keeps the newest load's. {@code loadColumn} is the load
      * id column's name in the statistics (its physical name on a column-mapped table); {@code commits}
      * gives the version that added each of the files when the date holds two runs (null: none known).
      */
@@ -354,9 +355,30 @@ final class DeltaTable {
         }
         Map<String, Long> version = commits != null && com.ash.lake.rows.LoadOrder.needsCommits(max.values()) ? commits.apply(files) : Map.of();
         java.util.function.ToLongFunction<Row> v = f -> version.getOrDefault(fileName(f), 0L);
-        files.sort(((java.util.Comparator<Row>) (a, b) -> com.ash.lake.rows.LoadOrder.compare(max.get(a), v.applyAsLong(a), max.get(b), v.applyAsLong(b)))
+        Map<Row, Boolean> older = new java.util.IdentityHashMap<>();
+        files.forEach(f -> older.put(f, olderCopies(f)));
+        files.sort(((java.util.Comparator<Row>) (a, b) -> com.ash.lake.rows.LoadOrder.compare(max.get(a), v.applyAsLong(a), older.get(a),
+                        max.get(b), v.applyAsLong(b), older.get(b)))
                 .thenComparingLong(f -> InternalScanFileUtils.getAddFileStatus(f).getModificationTime())
                 .thenComparing(f -> InternalScanFileUtils.getAddFileStatus(f).getPath()));
+    }
+
+    /** Whether a scan file's add action carries the tag of a file of older copies ({@link com.ash.lake.rows.LoadOrder#OLDER_TAG}). */
+    static boolean olderCopies(Row scanFile) {
+        Row add = scanFile.getStruct(InternalScanFileUtils.ADD_FILE_ORDINAL);
+        int at = add.getSchema().indexOf("tags");
+        if (at < 0 || add.isNullAt(at)) {
+            return false;
+        }
+        io.delta.kernel.data.MapValue m = add.getMap(at);
+        io.delta.kernel.data.ColumnVector keys = m.getKeys();
+        io.delta.kernel.data.ColumnVector values = m.getValues();
+        for (int i = 0; i < m.getSize(); i++) {
+            if (!keys.isNullAt(i) && com.ash.lake.rows.LoadOrder.OLDER_TAG.equals(keys.getString(i))) {
+                return !values.isNullAt(i) && com.ash.lake.rows.LoadOrder.OLDER_VALUE.equals(values.getString(i));
+            }
+        }
+        return false;
     }
 
     /** A data file's name (the last part of its path, decoded): unique in a table, the same in the log's add action and a scan file. */

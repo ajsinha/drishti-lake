@@ -97,6 +97,13 @@ public final class IcebergStore implements TableStore {
     }
 
     @Override
+    public Map<String, String> properties(LakeRuntime runtime, TableRef table) throws IOException {
+        try (Catalog c = catalog(runtime, table)) {
+            return c.load(table.table()).map(t -> Map.copyOf(t.metadata().properties())).orElse(Map.of());
+        }
+    }
+
+    @Override
     public Columns columns(LakeRuntime runtime, TableRef table) throws IOException {
         try (Catalog c = catalog(runtime, table)) {
             com.ash.lake.iceberg.Table t = c.load(table.table()).orElseThrow(() -> new IOException("no Iceberg table at " + table.location()));
@@ -229,6 +236,9 @@ public final class IcebergStore implements TableStore {
 
     @Override
     public List<DateChange> undo(LakeRuntime runtime, TableRef table, String loadId, boolean dryRun) throws IOException {
+        if (!dryRun && com.ash.lake.spi.TableProperties.effective(properties(runtime, table)).appendOnly() && !undo(runtime, table, loadId, true).isEmpty()) {
+            com.ash.lake.spi.TableProperties.refuseRewrite(properties(runtime, table), table.name(), "an undo");
+        }
         List<Map<String, Object>> lines;
         try {
             lines = IcebergMaintenance.undoTable(runtime, table.root(), table.domain(), table.table(), loadId, dryRun,

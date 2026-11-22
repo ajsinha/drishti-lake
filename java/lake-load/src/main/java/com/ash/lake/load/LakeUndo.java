@@ -235,48 +235,51 @@ public final class LakeUndo {
         if (s.getSchema().indexOf(RowPlan.LOAD_ID) < 0) {
             return List.of();                                   // a table from before load ids: no load can be found in it
         }
+        if (!dryRun && com.ash.lake.spi.TableProperties.effective(((io.delta.kernel.internal.SnapshotImpl) s).getMetadata().getConfiguration()).appendOnly()
+                && !undoTable(runtime, table, name, id, true).isEmpty()) {
+            com.ash.lake.spi.TableProperties.refuseRewrite(((io.delta.kernel.internal.SnapshotImpl) s).getMetadata().getConfiguration(), name, "an undo");
+        }
         List<Done> out = new ArrayList<>();
+        String sortBy = DeltaUpkeep.sortedByMore(((io.delta.kernel.internal.SnapshotImpl) s).getMetadata().getConfiguration());
         for (String date : candidateDates(engine, s, id)) {
-            List<TableUpkeep.Staged> now = TableUpkeep.rows(engine, s, pv -> date.equals(pv.get("business_date")), true);
-            if (now == null) {
+            // every other row of the date stays, each copy in its place in the readers' order: the newest by commit is what readers see after
+            long[] removed = {0};
+            List<TableUpkeep.Ranked> kept = TableUpkeep.ranked(engine, table, s, pv -> date.equals(pv.get("business_date")), 1,
+                    r -> id.equals(loadIdOf(r)), removed);
+            if (kept == null) {
                 throw new IOException(name + ": a column the undo cannot carry");
             }
-            List<TableUpkeep.Staged> kept = new ArrayList<>();
-            long removed = 0;
-            for (TableUpkeep.Staged r : now) {
-                if (id.equals(JSON.readTree(r.line()).path("columns").path(RowPlan.LOAD_ID).asText(null))) {
-                    removed++;
-                } else {
-                    kept.add(r);
-                }
-            }
-            if (removed == 0) {
+            if (removed[0] == 0) {
                 continue;
             }
             long replacedAt = replacedAt(engine, table, s.getVersion(), date, id);
             long restored = 0;
             if (replacedAt > 0) {
                 Snapshot before = Table.forPath(engine, table).getSnapshotAsOfVersion(engine, replacedAt - 1);
-                List<TableUpkeep.Staged> old = TableUpkeep.rows(engine, before, pv -> date.equals(pv.get("business_date")), true);
+                // a replace of one slice of a shared table (LoadConfig.withSlice) left the other slices' rows: those are in kept already
+                java.util.Set<String> still = new java.util.HashSet<>();
+                kept.forEach(k -> still.add(k.row().line()));
+                List<TableUpkeep.Ranked> old = TableUpkeep.ranked(engine, table, before, pv -> date.equals(pv.get("business_date")), 0,
+                        o -> still.contains(o.line()), new long[1]);
                 if (old != null) {
-                    // a replace of one slice of a shared table (LoadConfig.withSlice) left the other slices' rows: those are in kept already
-                    java.util.Set<String> still = new java.util.HashSet<>();
-                    kept.forEach(k -> still.add(k.line()));
-                    List<TableUpkeep.Staged> all = new ArrayList<>();
-                    for (TableUpkeep.Staged o : old) {
-                        if (!still.contains(o.line())) {
-                            all.add(o);
-                        }
-                    }
-                    restored = all.size();
-                    all.addAll(kept);
-                    kept = all;
+                    restored = old.size();
+                    old.addAll(kept);
+                    kept = old;                              // the rows of before the replace: older than every row written since
                 }
             }
-            long version = dryRun ? -1 : rewrite(runtime, engine, table, s, date, kept);
-            out.add(new Done(name, date, removed, restored, replacedAt > 0, version));
+            long version = dryRun ? -1 : rewriteGroups(runtime, engine, table, s, date, TableUpkeep.generations(kept, DeltaUpkeep.order(sortBy)), Integer.MAX_VALUE, false);
+            out.add(new Done(name, date, removed[0], restored, replacedAt > 0, version));
         }
         return out;
+    }
+
+    /** A staged row's {@code _load_id}; null when it has none. */
+    static String loadIdOf(TableUpkeep.Staged r) {
+        try {
+            return JSON.readTree(r.line()).path("columns").path(RowPlan.LOAD_ID).asText(null);
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
     }
 
     /**
@@ -397,7 +400,7 @@ public final class LakeUndo {
             }
             found.sort((a, b) -> Long.compare(b[0], a[0]));
             for (long[] c : found) {
-                if (c[1] == 1) {
+                if (c[1] == 1 && c[3] == 0) {                   // a rewrite of the same rows (compaction, relayout) is not the load's commit
                     return c[2] == 1 ? c[0] : 0;
                 }
             }
@@ -405,10 +408,14 @@ public final class LakeUndo {
         return 0;
     }
 
-    /** One commit's {version, whether an add holds the load's rows of the date (its _load_id bounds), whether a remove is of the date}. */
+    /**
+     * One commit's {version, whether an add holds the load's rows of the date (its _load_id bounds), whether a remove is of the date,
+     * whether it rewrote the date's rows as they were (its removes of the date all {@code dataChange: false}: compaction, relayout)}.
+     */
     private static long[] commit(io.delta.kernel.CommitActions c, String date, String id) throws IOException {
         boolean adds = false;
         boolean removes = false;
+        boolean changes = false;
         try (CloseableIterator<io.delta.kernel.data.ColumnarBatch> batches = c.getActions()) {
             while (batches.hasNext()) {
                 io.delta.kernel.data.ColumnarBatch b = batches.next();
@@ -430,12 +437,15 @@ public final class LakeUndo {
                         }
                         if (removeAt >= 0 && !r.isNullAt(removeAt) && date.equals(partition(r.getStruct(removeAt), "business_date"))) {
                             removes = true;
+                            Row rm = r.getStruct(removeAt);
+                            int dc = rm.getSchema().indexOf("dataChange");
+                            changes |= dc < 0 || rm.isNullAt(dc) || rm.getBoolean(dc);
                         }
                     }
                 }
             }
         }
-        return new long[] {c.getVersion(), adds ? 1 : 0, removes ? 1 : 0};
+        return new long[] {c.getVersion(), adds ? 1 : 0, removes ? 1 : 0, removes && !changes ? 1 : 0};
     }
 
     /** One partition value of an add or remove action (null when the action has none of that name). */
@@ -455,29 +465,52 @@ public final class LakeUndo {
         return null;
     }
 
-    /** The date rewritten with {@code rows} (one commit: its files replaced); with none, the date's files removed. Returns the version. */
-    static long rewrite(com.ash.lake.LakeRuntime runtime, Engine engine, String table, Snapshot s, String date, List<TableUpkeep.Staged> rows) throws IOException {
+    /**
+     * The date rewritten (one commit: its files replaced), a partition's rows written in their order into files of at most {@code fileRows} rows each (relayout: rows
+     * sorted by id, so each file holds its own id range).
+     */
+    static long rewriteSorted(com.ash.lake.LakeRuntime runtime, Engine engine, String table, Snapshot s, String date, List<TableUpkeep.Staged> rows,
+            int fileRows) throws IOException {
+        return rewriteGroups(runtime, engine, table, s, date, List.of(rows), fileRows, true);
+    }
+
+    /**
+     * The date rewritten (one commit: its files replaced; with no row, the date's files removed; returns the version), each group's rows written in their order into files of their own (never two groups in one file: a rewrite keeps
+     * the older copies apart from the rows readers see), a partition's rows of a group cut every {@code fileRows} rows; the files of every
+     * group after the first are tagged as files of older copies ({@link com.ash.lake.rows.LoadOrder#OLDER_TAG}), so in the one commit
+     * readers still put them first ({@link TableUpkeep#generations}). {@code same}: the date keeps its rows (compaction, relayout:
+     * LakeManifest's rearrange-dates, which an append-only table takes).
+     */
+    @SuppressWarnings("unchecked")
+    static long rewriteGroups(com.ash.lake.LakeRuntime runtime, Engine engine, String table, Snapshot s, String date,
+            List<List<TableUpkeep.Staged>> groups, int fileRows, boolean same) throws IOException {
         List<String> partitions = s.getPartitionColumnNames();
-        if (rows.isEmpty()) {
+        if (groups.stream().allMatch(List::isEmpty)) {
             return removeDates(engine, table, s, date::equals);
         }
         Path dir = com.ash.lake.common.TempFiles.of(runtime).createDir("lake-undo-");
         try {
-            Map<Map<String, String>, BufferedWriter> files = new LinkedHashMap<>();
-            Map<Map<String, String>, Path> paths = new LinkedHashMap<>();
-            Map<Map<String, String>, Long> counts = new LinkedHashMap<>();
-            for (TableUpkeep.Staged r : rows) {
-                Map<String, String> pv = r.partitionValues();
-                BufferedWriter w = files.get(pv);
-                if (w == null) {
-                    Path p = dir.resolve("part-" + files.size() + ".rows");
-                    w = Files.newBufferedWriter(p, StandardCharsets.UTF_8);
-                    files.put(pv, w);
-                    paths.put(pv, p);
+            // a part per partition, cut every fileRows rows: (partition values, the part's number in it)
+            Map<List<Object>, BufferedWriter> files = new LinkedHashMap<>();
+            Map<List<Object>, Path> paths = new LinkedHashMap<>();
+            Map<List<Object>, Long> counts = new LinkedHashMap<>();
+            Map<List<Object>, Long> seen = new LinkedHashMap<>();
+            for (int g = 0; g < groups.size(); g++) {
+                for (TableUpkeep.Staged r : groups.get(g)) {
+                    Map<String, String> pv = r.partitionValues();
+                    long n = seen.merge(List.of(pv, g), 1L, Long::sum) - 1;
+                    List<Object> key = List.of(pv, g, n / fileRows);
+                    BufferedWriter w = files.get(key);
+                    if (w == null) {
+                        Path p = dir.resolve("part-" + files.size() + ".rows");
+                        w = Files.newBufferedWriter(p, StandardCharsets.UTF_8);
+                        files.put(key, w);
+                        paths.put(key, p);
+                    }
+                    w.write(r.line());
+                    w.write('\n');
+                    counts.merge(key, 1L, Long::sum);
                 }
-                w.write(r.line());
-                w.write('\n');
-                counts.merge(pv, 1L, Long::sum);
             }
             for (BufferedWriter w : files.values()) {
                 w.close();
@@ -490,10 +523,21 @@ public final class LakeUndo {
                 }
             }
             List<LakeManifest.Part> parts = new ArrayList<>();
-            paths.forEach((pv, p) -> parts.add(new LakeManifest.Part(p, counts.get(pv), pv)));
-            LakeManifest m = new LakeManifest(table, partitions, columns, promoted, "overwrite-dates", 50_000,
-                    List.of("id", "business_date", RowPlan.LOAD_ID), parts);
-            return LakeWriter.forTable(runtime, table, Map.of()).write(m, n -> { }).version();
+            java.util.Set<Path> older = new java.util.HashSet<>();
+            paths.forEach((key, p) -> {
+                parts.add(new LakeManifest.Part(p, counts.get(key), (Map<String, String>) key.get(0)));
+                if ((Integer) key.get(1) > 0) {
+                    older.add(p);
+                }
+            });
+            List<String> stats = new ArrayList<>(List.of("id", "business_date", RowPlan.LOAD_ID));
+            for (LakeManifest.Column c : columns) {                   // the promoted columns keep their statistics, as the loader writes them
+                if (promoted.contains(c.name()) && !"vector".equals(c.type()) && !stats.contains(c.name())) {
+                    stats.add(c.name());
+                }
+            }
+            LakeManifest m = new LakeManifest(table, partitions, columns, promoted, same ? "rearrange-dates" : "overwrite-dates", 50_000, stats, parts);
+            return LakeWriter.forTable(runtime, table, Map.of()).write(m, n -> { }, p -> older.contains(p.file())).version();
         } finally {
             try (Stream<Path> s2 = Files.walk(dir)) {
                 s2.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());

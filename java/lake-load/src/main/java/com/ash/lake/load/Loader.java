@@ -438,7 +438,7 @@ final class Loader {
                 long version = target.commit(date, files);
                 commit.rows.add(files.stream().mapToLong(WrittenFile::rows).sum());
                 commit.busy(c0);
-                report.committed(date, version, files);
+                report.committed(date, version, target.nativeVersion(version), files);
                 for (Runs.Run r : e.getValue()) {
                     r.close();
                 }
@@ -506,7 +506,8 @@ final class Loader {
                 t.appends(), t.batchId(), cfg.source().slice(), plan.partition.stream().map(RowPlan::column).toList(),
                 plan.promoted.stream().map(RowPlan.Promoted::column).toList(), plan.vectors.stream().map(RowPlan.Vector::column).toList(),
                 plan.sortNames, plan.sortedById(), RowPlan.loadColumns, ids,
-                new WriteSpec.FileLayout(l.compression(), l.rowGroupBytes(), l.vectorCompression(), l.byteStreamSplit(), l.float32Vectors()));
+                new WriteSpec.FileLayout(l.compression(), l.rowGroupBytes(), l.vectorCompression(), l.byteStreamSplit(), l.float32Vectors()),
+                t.partitionsOnly());
     }
 
     /**

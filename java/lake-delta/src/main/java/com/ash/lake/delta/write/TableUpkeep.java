@@ -62,6 +62,69 @@ public final class TableUpkeep {
     /** A staged row of the table: its partition values and its line ({@code {"id", "doc", "columns"}}), as the lake writer reads it. */
     public record Staged(Map<String, String> partitionValues, String id, String line) {}
 
+    /**
+     * A row with its place in the readers' order: its {@code layer} (rows an undo restores from before a replace: 0, below the rows of
+     * the table now: 1), its file's place among its date's files newest last ({@link com.ash.lake.delta.table.DeltaRows#readersOrder}: the
+     * commit that added it, a file of older copies before the commit's others, ...), its place in the file.
+     */
+    public record Ranked(Staged row, int layer, int file, long at) {}
+
+    /** The readers' order of two copies of an id: the newer last. */
+    public static final java.util.Comparator<Ranked> READERS = java.util.Comparator.comparingInt(Ranked::layer).thenComparingInt(Ranked::file)
+            .thenComparingLong(Ranked::at);
+
+    /**
+     * The rows of snapshot {@code s} of the table at {@code path} whose partition values {@code keep} accepts, each with its place in the
+     * readers' order, in layer {@code layer}; those {@code drop} accepts are left out (counted in {@code dropped[0]}; null: none). Null when
+     * the table has a column the lines cannot carry.
+     */
+    public static List<Ranked> ranked(Engine engine, String path, Snapshot s, Predicate<Map<String, String>> keep, int layer,
+            Predicate<Staged> drop, long[] dropped) throws IOException {
+        Map<String, Integer> place = com.ash.lake.delta.table.DeltaRows.readersOrder(engine, path, s);
+        Map<String, long[]> next = new java.util.HashMap<>();
+        List<Ranked> out = new ArrayList<>();
+        boolean simple = rows(engine, s, keep, true, (file, row) -> {
+            long at = next.computeIfAbsent(file, f -> new long[1])[0]++;
+            if (drop != null && drop.test(row)) {
+                dropped[0]++;
+                return;
+            }
+            Integer f = place.get(file);
+            if (f == null) {
+                throw new IllegalStateException(path + ": the file " + file + " is not among the files the readers order");
+            }
+            out.add(new Ranked(row, layer, f, at));
+        });
+        return simple ? out : null;
+    }
+
+    /**
+     * Rows as a rewrite of their dates writes them, so readers answer as before: first the rows readers see (each id's newest copy on its
+     * business date in the readers' order, {@link #READERS}), in {@code order}; then, when there are any, every older copy by date, id and
+     * the readers' order (the oldest first), which the writer tags as files of older copies ({@link LakeWriter#write(LakeManifest,
+     * java.util.function.IntConsumer, Predicate)}). A row without an id is always seen.
+     */
+    public static List<List<Staged>> generations(List<Ranked> rows, java.util.Comparator<Staged> order) {
+        java.util.function.Function<Ranked, String> key = r -> r.row().partitionValues().get("business_date") + "\u001f"
+                + (r.row().id() == null ? "" : r.row().id());
+        List<Ranked> sorted = new ArrayList<>(rows);
+        sorted.sort(java.util.Comparator.comparing(key).thenComparing(READERS));
+        List<Staged> seen = new ArrayList<>();
+        List<Staged> older = new ArrayList<>();
+        for (int i = 0; i < sorted.size(); i++) {
+            Staged r = sorted.get(i).row();
+            boolean last = r.id() == null || i + 1 == sorted.size() || !key.apply(sorted.get(i)).equals(key.apply(sorted.get(i + 1)));
+            (last ? seen : older).add(r);
+        }
+        seen.sort(order);
+        List<List<Staged>> out = new ArrayList<>();
+        out.add(seen);
+        if (!older.isEmpty()) {
+            out.add(older);
+        }
+        return out;
+    }
+
     /** What a table holds now: its version, data files, bytes (their lengths), and how many are below a size. */
     public record Shape(long version, int files, long bytes, int smallFiles, long rows) {}
 
@@ -78,17 +141,27 @@ public final class TableUpkeep {
      * or {@code list<float>} column is carried too (a JSON array), else such a table gives null.
      */
     public static List<Staged> rows(Engine engine, Snapshot s, Predicate<Map<String, String>> keep, boolean vectors) throws IOException {
+        List<Staged> out = new ArrayList<>();
+        return rows(engine, s, keep, vectors, (file, row) -> out.add(row)) ? out : null;
+    }
+
+    /**
+     * As {@link #rows(Engine, Snapshot, Predicate, boolean)}, each row handed with the path of the data file it is in (as the read API's
+     * {@code DataFile.path} names it), file by file and in each file's order; false (nothing handed) when the table has a column the
+     * lines cannot carry.
+     */
+    public static boolean rows(Engine engine, Snapshot s, Predicate<Map<String, String>> keep, boolean vectors,
+            java.util.function.BiConsumer<String, Staged> sink) throws IOException {
         StructType schema = s.getSchema();
         List<String> parts = s.getPartitionColumnNames();
         for (StructField f : schema.fields()) {
             if (!parts.contains(f.getName()) && !simple(f.getDataType()) && !(vectors && vector(f.getDataType()))) {
-                return null;
+                return false;
             }
         }
         Scan scan = s.getScanBuilder().build();
         Row state = scan.getScanState(engine);
         StructType physical = ScanStateRow.getPhysicalDataReadSchema(state);
-        List<Staged> out = new ArrayList<>();
         try (CloseableIterator<FilteredColumnarBatch> files = scan.getScanFiles(engine)) {
             while (files.hasNext()) {
                 try (CloseableIterator<Row> fileRows = files.next().getRows()) {
@@ -106,7 +179,7 @@ public final class TableUpkeep {
                             while (data.hasNext()) {
                                 try (CloseableIterator<Row> rows = data.next().getRows()) {
                                     while (rows.hasNext()) {
-                                        out.add(staged(rows.next(), parts, new LinkedHashMap<>(pv)));
+                                        sink.accept(fs.getPath(), staged(rows.next(), parts, new LinkedHashMap<>(pv)));
                                     }
                                 }
                             }
@@ -115,7 +188,7 @@ public final class TableUpkeep {
                 }
             }
         }
-        return out;
+        return true;
     }
 
     /**

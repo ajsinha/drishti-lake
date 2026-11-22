@@ -33,7 +33,7 @@ import java.util.Map;
  * @param columns every column with its type ({@code string}, {@code double}, {@code long}, {@code date}, {@code vector}: a list of
  *     doubles)
  * @param promoted the promoted columns, read from the third element of a staged row
- * @param mode {@code overwrite-dates}, {@code overwrite-partitions} or {@code append}
+ * @param mode {@code overwrite-dates}, {@code overwrite-partitions}, {@code append}, {@code replace} or {@code rearrange-dates} ({@link #MODES})
  * @param batchRows rows per batch handed to the Parquet writer
  * @param statsColumns the columns that keep min/max statistics (never the document)
  * @param parts the staged files
@@ -74,8 +74,12 @@ public record LakeManifest(String table, List<String> partitionColumns, List<Col
         }
     }
 
-    /** {@code replace}: the load is the whole table (every earlier file removed in the same commit; the in-memory lake's replace mode). */
-    public static final List<String> MODES = List.of("overwrite-dates", "overwrite-partitions", "append", "replace");
+    /**
+     * {@code replace}: the load is the whole table (every earlier file removed in the same commit; the in-memory lake's replace mode).
+     * {@code rearrange-dates}: as {@code overwrite-dates} with the same rows (compaction, relayout): the removes carry {@code dataChange:
+     * false}, as Delta's OPTIMIZE writes them, so an append-only table ({@code delta.appendOnly}) takes it.
+     */
+    public static final List<String> MODES = List.of("overwrite-dates", "overwrite-partitions", "append", "replace", "rearrange-dates");
 
     /** Reads and checks a manifest file. */
     public static LakeManifest read(Path file) throws IOException {

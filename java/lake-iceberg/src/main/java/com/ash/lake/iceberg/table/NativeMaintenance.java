@@ -192,23 +192,35 @@ final class NativeMaintenance {
 
     /** As {@link IcebergMaintenance#relayout}: rewrites the days that drifted (every day when {@code force}); returns how many. */
     static int relayout(Table t, boolean force, Path spillDir, long budget) {
+        return relayoutDates(t, force, false, null, d -> true, spillDir, budget).size();
+    }
+
+    /** As {@link #relayout}: the dates rewritten (on a dry run: the dates that would be, nothing written). */
+    static List<LocalDate> relayoutDates(Table t, boolean force, boolean dryRun, Integer rowsAFile, java.util.function.Predicate<LocalDate> wanted,
+            Path spillDir, long budget) {
         t.refresh();
+        List<LocalDate> rewritten = new ArrayList<>();
         if (t.currentSnapshot().isEmpty() || IcebergMaintenance.shardSorted(t.metadata().properties())) {
-            return 0;                                           // laid out by the parallel loader's sort-by: left in its order
+            return rewritten;                                   // laid out by the parallel loader's sort-by: left in its order
         }
-        int fileRows = NativeLayout.fileRows(t);
-        int rewritten = 0;
+        int fileRows = rowsAFile != null && rowsAFile > 0 ? rowsAFile : NativeLayout.fileRows(t);
         try (ExecutorService pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
             NativeKindTable k = new NativeKindTable(t, pool);
             Layout l = layout(t, pool);
             List<NestedField> promoted = t.metadata().schema().columns().stream().filter(f -> f.id() > 3).toList();
             for (Day day : l.days().values()) {
-                if (LocalDate.MIN.equals(day.date()) || !(force || drifted(day, fileRows, promoted))) {
+                if (LocalDate.MIN.equals(day.date()) || !wanted.test(day.date()) || !(force || drifted(day, fileRows, promoted))) {
                     continue;
                 }
+                if (dryRun) {
+                    rewritten.add(day.date());
+                    continue;
+                }
+                KindTable.IdMap won = k.ids(l, day);                 // each id's copy readers see: the newest load's
                 try (SortedRuns rows = new SortedRuns(spillDir, "relayout-" + day.date())) {
                     for (int f = 0; f < day.files().size(); f++) {
-                        copy(k, l, day, f, promoted, rows, budget);
+                        int file = f;
+                        copyWhere(k, l, day, f, promoted, rows, budget, r -> won.file(r.id()) != file, new long[1]);
                     }
                     List<DataFile> files = NativeLayout.writeDay(t, day.date(), rows.merged(), fileRows);
                     Set<String> remove = dayFiles(t, day);
@@ -220,7 +232,7 @@ final class NativeMaintenance {
                         files.forEach(f -> deleteQuietly(t, f.path()));      // no orphans from a rewrite that did not commit
                         throw e;
                     }
-                    rewritten++;
+                    rewritten.add(date);
                 }
             }
         }
@@ -231,9 +243,12 @@ final class NativeMaintenance {
      * Compaction ({@code lake maintain --compact}): each business date in more files than its rows need (or with delete files), and for a
      * table sorted by id one whose files drifted from that order, is rewritten into files of the table's {@code file-rows}, one
      * iceberg-core rewrite a date (validated: a date another writer changed meanwhile fails the commit, nothing lost). Unlike relayout,
-     * every row is kept (an append's repeated ids too): the rows are only regrouped, by id, or for a table laid out by more than the id
-     * ({@code lake.layout.sort-by}) by those fields then the id, its files then claiming no sort order. The dates rewritten (on a dry run:
-     * the dates that would be, nothing written).
+     * every row is kept (an append's repeated ids too): the rows readers see (each id's newest load's copy) are regrouped, by id, or for a
+     * table laid out by more than the id ({@code lake.layout.sort-by}) by those fields then the id, its files then claiming no sort order;
+     * every older copy an append left goes to files of their own (by id, the oldest load first), so readers still read the newest copy and
+     * an undo of the newer load still finds the older one. A date already in as few files as that takes is left (a second run has nothing
+     * to do).
+     * The dates rewritten (on a dry run: the dates that would be, nothing written).
      */
     static List<LocalDate> compactDates(Table t, boolean dryRun, Path spillDir, long budget) {
         t.refresh();
@@ -251,18 +266,24 @@ final class NativeMaintenance {
             List<NestedField> promoted = t.metadata().schema().columns().stream().filter(f -> f.id() > 3).toList();
             for (Day day : l.days().values()) {
                 boolean tooMany = day.deletes() || day.files().size() > Math.max(1, (day.rows() + fileRows - 1) / fileRows);
-                if (LocalDate.MIN.equals(day.date()) || !(tooMany || !shard && drifted(day, fileRows, promoted))) {
+                boolean drift = !shard && drifted(day, fileRows, promoted);
+                if (LocalDate.MIN.equals(day.date()) || !(tooMany || drift)) {
                     continue;
+                }
+                KindTable.IdMap won = k.ids(l, day);
+                long newest = won.size();
+                long older = Math.max(0, day.rows() - newest);
+                long fewest = (newest + fileRows - 1) / fileRows + (older + fileRows - 1) / fileRows;
+                if (!day.deletes() && day.files().size() <= Math.max(1, fewest) && (older > 0 || !drift)) {
+                    continue;                                   // already as few files as compaction makes (the rows readers see, the older copies)
                 }
                 if (dryRun) {
                     done.add(day.date());
                     continue;
                 }
-                try (SortedRuns rows = new SortedRuns(spillDir, "compact-" + day.date(), order, false)) {
-                    for (int f = 0; f < day.files().size(); f++) {
-                        copy(k, l, day, f, promoted, rows, budget);
-                    }
-                    List<DataFile> files = NativeLayout.writeDay(t, day.date(), rows.merged(), fileRows, sortOrder);
+                try (SortedRuns all = new SortedRuns(spillDir, "compact-" + day.date(), BY_ID_RANK, false)) {
+                    addRanked(k, l, day, promoted, all, budget, null, null, '1', Set.of());
+                    List<DataFile> files = writeGenerations(t, day.date(), all, spillDir, budget, fileRows, order, sortOrder);
                     Set<String> remove = dayFiles(t, day);
                     Set<String> read = new HashSet<>(remove);
                     LocalDate date = day.date();
@@ -277,6 +298,74 @@ final class NativeMaintenance {
             }
         }
         return done;
+    }
+
+    /** The key a row's place in the readers' order is carried under while a day is rewritten (never a column: writeDay leaves it). */
+    private static final String RANK = "\u0000rank";
+
+    /** Rows by id, then each id's copies in the readers' order, the newest last. */
+    private static final Comparator<Row> BY_ID_RANK = Comparator.comparing(Row::id).thenComparing(r -> (String) r.columns().get(RANK));
+
+    /**
+     * Adds the day's rows to {@code all}, each with its place in the readers' order ({@link KindTable#newestWins}, {@link
+     * com.ash.lake.rows.LoadOrder}): the {@code layer} (an undo's rows of before a replace '0', below the day's rows now '1'), the file's
+     * data sequence number (its commit), a file of older copies first, then (in another file) the run's time and the load id, then the file
+     * and the row. Rows {@code skip} accepts are left out (counted in {@code skipped[0]}); the files named in {@code leaveOut} are not read.
+     */
+    private static void addRanked(NativeKindTable k, Layout l, Day day, List<NestedField> promoted, SortedRuns all, long budget,
+            java.util.function.Predicate<Row> skip, long[] skipped, char layer, Set<String> leaveOut) {
+        for (int f = 0; f < day.files().size(); f++) {
+            if (leaveOut.contains(NativeKindTable.tasks(day).get(f).file().path())) {
+                continue;
+            }
+            boolean older = k.olderCopies(day, f);
+            String head = layer + String.format("%019d", k.sequence(day, f)) + (older ? '0' : '1');
+            String file = String.format("%010d", f);
+            long[] at = {0};
+            copyWhere(k, l, day, f, promoted, all, budget, r -> {
+                long place = at[0]++;
+                if (skip != null && skip.test(r)) {
+                    return true;
+                }
+                String lid = String.valueOf(r.columns().getOrDefault(KindTable.LOAD_ID, ""));
+                r.columns().put(RANK, head + (older ? "" : com.ash.lake.rows.LoadOrder.time(lid) + "\u0000" + lid + "\u0000") + file
+                        + String.format("%019d", place));
+                return false;
+            }, skipped == null ? new long[1] : skipped);
+        }
+    }
+
+    /**
+     * Writes a day's ranked rows ({@link #addRanked}) so readers answer as they did: each id's newest copy into the day's files in
+     * {@code order}, every older copy, by id and in the readers' order, into files of older copies of their own. The files written (not
+     * committed).
+     */
+    private static List<DataFile> writeGenerations(Table t, LocalDate date, SortedRuns all, Path spillDir, long budget, int fileRows,
+            Comparator<Row> order, int sortOrder) {
+        try (SortedRuns seen = new SortedRuns(spillDir, "seen-" + date, order, false);
+             SortedRuns older = new SortedRuns(spillDir, "older-" + date, BY_ID_RANK, false)) {
+            java.util.Iterator<Row> it = all.merged();
+            Row prev = null;
+            while (it.hasNext()) {
+                Row r = it.next();
+                if (prev != null) {
+                    SortedRuns to = prev.id().equals(r.id()) ? older : seen;
+                    to.add(prev);
+                    if (to.bufferedBytes() > budget) {
+                        to.spill();
+                    }
+                }
+                prev = r;
+            }
+            if (prev != null) {
+                seen.add(prev);
+            }
+            List<DataFile> files = new ArrayList<>(NativeLayout.writeDay(t, date, seen.merged(), fileRows, sortOrder));
+            if (older.rows() > 0) {
+                files.addAll(NativeLayout.writeDay(t, date, older.merged(), fileRows, sortOrder, true));
+            }
+            return files;
+        }
     }
 
     /** The order of a layout's {@code sort-by} fields ({@code LEGAL_ENTITY,DESK,id}): each field's value (absent first), then the id. */
@@ -326,11 +415,11 @@ final class NativeMaintenance {
                     continue;
                 }
                 LocalDate date = day.date();
-                try (SortedRuns rows = new SortedRuns(spillDir, "undo-" + date)) {
+                // every other row of the day stays, each copy in its place in the readers' order: the newest by commit is what readers see after
+                try (SortedRuns rows = new SortedRuns(spillDir, "undo-" + date, BY_ID_RANK, false)) {
                     long[] removed = {0};
-                    for (int f = 0; f < day.files().size(); f++) {
-                        copy(k, l, day, f, promoted, rows, budget, id, removed);
-                    }
+                    addRanked(k, l, day, promoted, rows, budget, r -> id.equals(String.valueOf(r.columns().get(KindTable.LOAD_ID))), removed, '1',
+                            Set.of());
                     if (removed[0] == 0) {
                         continue;
                     }
@@ -341,9 +430,11 @@ final class NativeMaintenance {
                         Day was = old.days().get(date);
                         if (was != null) {
                             long n0 = rows.rows();
-                            for (int f = 0; f < was.files().size(); f++) {
-                                copy(k, old, was, f, promoted, rows, budget, null, null);
-                            }
+                            // the rows of before the replace, older than every row written since; a file still in the day (a replace of
+                            // other partitions left it) is there once
+                            Set<String> still = new HashSet<>();
+                            NativeKindTable.tasks(day).forEach(task -> still.add(task.file().path()));
+                            addRanked(k, old, was, promoted, rows, budget, null, null, '0', still);
                             restored = rows.rows() - n0;
                         }
                     }
@@ -361,7 +452,8 @@ final class NativeMaintenance {
                     if (rows.rows() == 0) {
                         Operations.deletePartitions(t, f -> date.equals(NativeLayout.dateOf(t, f)), Map.of(com.ash.lake.PersistedNames.key("undo"), id));
                     } else {
-                        List<DataFile> files = NativeLayout.writeDay(t, date, rows.merged(), fileRows);
+                        List<DataFile> files = writeGenerations(t, date, rows, spillDir, budget, fileRows, Comparator.comparing(Row::id),
+                                t.metadata().sortOrder().orderId());
                         try {
                             Operations.overwriteFiles(t, remove, files, f -> date.equals(NativeLayout.dateOf(t, f)), read,
                                     Map.of(com.ash.lake.PersistedNames.key("undo"), id));   // the rows change: an overwrite, never a rewrite
@@ -424,18 +516,19 @@ final class NativeMaintenance {
                     continue;
                 }
                 java.time.Instant dayStart = date.atStartOfDay().toInstant(java.time.ZoneOffset.UTC);
-                try (SortedRuns rows = new SortedRuns(spillDir, "retention-" + date)) {
+                // the rows kept stay in their place in the readers' order: an id's newest copy by commit is still what readers see
+                try (SortedRuns rows = new SortedRuns(spillDir, "retention-" + date, BY_ID_RANK, false)) {
                     long[] skipped = {0};
-                    for (int f = 0; f < day.files().size(); f++) {
-                        copyWhere(k, l, day, f, promoted, rows, budget, v -> !judge.keeps(r.ageOfRow(v.doc(), v.columns()::get, dayStart)), skipped);
-                    }
+                    addRanked(k, l, day, promoted, rows, budget, v -> !judge.keeps(r.ageOfRow(v.doc(), v.columns()::get, dayStart)), skipped, '1',
+                            Set.of());
                     Set<String> remove = dayFiles(t, day);
                     Set<String> read = new HashSet<>(remove);
                     if (rows.rows() == 0) {
                         Operations.deletePartitions(t, f -> date.equals(NativeLayout.dateOf(t, f)), Map.of(com.ash.lake.PersistedNames.key("retention"), "rows"));
                         continue;
                     }
-                    List<DataFile> files = NativeLayout.writeDay(t, date, rows.merged(), fileRows);
+                    List<DataFile> files = writeGenerations(t, date, rows, spillDir, budget, fileRows, Comparator.comparing(Row::id),
+                            t.metadata().sortOrder().orderId());
                     try {
                         Operations.rewriteFiles(t, remove, files, f -> date.equals(NativeLayout.dateOf(t, f)), read);
                     } catch (RuntimeException e) {
@@ -527,42 +620,19 @@ final class NativeMaintenance {
         return false;
     }
 
-    /** Copies one file's live rows (deletes applied) into the sorter, filling promoted columns the file lacks from the document. */
-    private static void copy(NativeKindTable k, Layout l, Day day, int file, List<NestedField> promoted, SortedRuns rows, long budget) {
-        copy(k, l, day, file, promoted, rows, budget, null, null);
-    }
-
-    /** As above, leaving out the rows of load {@code skip} (counted in {@code skipped[0]}); null: every row. */
-    private static void copy(NativeKindTable k, Layout l, Day day, int file, List<NestedField> promoted, SortedRuns rows, long budget, String skip,
-            long[] skipped) {
-        copyWhere(k, l, day, file, promoted, rows, budget, skip == null ? null : v -> skip.equals(String.valueOf(v.columns().get(KindTable.LOAD_ID))), skipped);
-    }
-
-    /** As above, leaving out the rows {@code skip} accepts (counted in {@code skipped[0]}); null: every row. */
+    /**
+     * Copies one file's live rows (deletes applied) into the sorter, leaving out the rows {@code skip} accepts (counted in {@code
+     * skipped[0]}; null: every row). A promoted column the file was written without reads null, as readers read it: a rewrite never
+     * changes a row.
+     */
     private static void copyWhere(NativeKindTable k, Layout l, Day day, int file, List<NestedField> promoted, SortedRuns rows, long budget,
             java.util.function.Predicate<Row> skip, long[] skipped) {
-        DataFile f = NativeKindTable.tasks(day).get(file).file();
         List<String> cols = new ArrayList<>(List.of(IcebergLayout.ID, IcebergLayout.DOC));
         promoted.forEach(p -> cols.add(p.name()));
         k.scan(l, day, file, cols, null, r -> {
             Map<String, Object> values = new LinkedHashMap<>();
-            JsonNode doc = null;
             for (int c = 0; c < promoted.size(); c++) {
-                NestedField field = promoted.get(c);
-                String path = field.name().replace("__", ".");
-                // a vector column is copied as it is (its document holds only a marker, never the values)
-                boolean inFile = !(field.type() instanceof Type.Primitive) || f.valueCounts().isEmpty() || f.valueCounts().containsKey(field.id());
-                Object v = r[c + 2];
-                if (!inFile && r[1] != null) {
-                    try {
-                        doc = doc == null ? JSON.readTree(r[1].toString()) : doc;
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
-                    }
-                    JsonNode n = at(doc, path);
-                    v = n == null || n.isNull() || n.isContainerNode() ? null : n.isNumber() ? (Object) n.asDouble() : n.asText();
-                }
-                values.put(path, v);
+                values.put(promoted.get(c).name().replace("__", "."), r[c + 2]);
             }
             Row row = new Row(r[0].toString(), r[1] == null ? null : r[1].toString(), values);
             if (skip != null && skip.test(row)) {

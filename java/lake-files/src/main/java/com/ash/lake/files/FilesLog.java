@@ -31,7 +31,8 @@ import java.util.Locale;
 
 /**
  * A files table's log, {@code <root>/<domain>/_log/<table>/}, beside its day files (visible names only), on the storage the lake lives on
- * (local disk, S3, memory: {@link Place}): {@code columns.json} (the table's columns and types, fixed by its first load; the load columns
+ * (local disk, S3, memory: {@link Place}): {@code properties.json} (the table's properties, set when a load creates it: TableProperties),
+ * {@code columns.json} (the table's columns and types, fixed by its first load; the load columns
  * added later as Delta adds them), and per commit, numbered from 0, {@code <n>.json} (the commit: its date, operation, load ids, batch,
  * rows and the name of its content file, {@code <uuid>.jsonl}: the date's whole content at that version). A commit is the exclusive
  * creation of its {@code <n>.json} (two writers never take one number; the loser reads the log again and checks what it was built on, as
@@ -140,6 +141,27 @@ final class FilesLog {
         ArrayNode a = o.putArray("columns");
         cols.all().forEach(c -> a.addObject().put("name", c.name()).put("type", c.type().name().toLowerCase(Locale.ROOT)));
         dir.resolve("columns.json").put(JSON.writerWithDefaultPrettyPrinter().writeValueAsBytes(o));
+    }
+
+    /** The table's properties ({@code properties.json}, written when a load creates the table: TableProperties); empty without. */
+    java.util.Map<String, String> properties() throws IOException {
+        java.util.Map<String, String> out = new java.util.LinkedHashMap<>();
+        try {
+            JSON.readTree(dir.resolve("properties.json").readAll()).properties().forEach(e -> out.put(e.getKey(), e.getValue().asText()));
+        } catch (java.io.FileNotFoundException | java.nio.file.NoSuchFileException none) {
+            // none set
+        }
+        return out;
+    }
+
+    /** Writes the properties a new table is created with (TableProperties.forStore): nothing when there are none. */
+    void properties(java.util.Map<String, String> props) throws IOException {
+        if (props.isEmpty()) {
+            return;
+        }
+        ObjectNode o = JSON.createObjectNode();
+        props.forEach(o::put);
+        dir.resolve("properties.json").put(JSON.writerWithDefaultPrettyPrinter().writeValueAsBytes(o));
     }
 
     List<Commit> commits() throws IOException {

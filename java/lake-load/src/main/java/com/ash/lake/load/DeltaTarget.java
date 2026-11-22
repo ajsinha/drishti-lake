@@ -79,10 +79,11 @@ import java.util.Optional;
  * {@code business_date} then the partition columns). The Parquet files are written by the loader's threads (Drishti's own writer, no
  * Hadoop) into the folders Delta Kernel names, and each date is committed through Kernel as ONE version that adds its files and removes
  * the date's earlier ones, as {@link LakeWriter} does. A new table is created by its first date's commit, with {@code target.properties}.
- * An existing table keeps its schema and partitioning: a load column it lacks is left out (and reported), a column the load lacks is null.
- * The two load columns ({@code _load_id}, {@code _source_file}) are the exception: a table made before them gains them, as two nullable
- * columns added at the end in one metadata commit ({@link #withLoadColumns}); its files are not rewritten, their rows read them as null
- * (the oldest load).
+ * A table laid out by more than the id ({@code sort-by}) says so in {@code lake.layout.sort-by}, as an Iceberg table does, so lake maintain
+ * keeps its order. An existing table keeps its partitioning; a column the load sends that the table lacks (a promoted or vector column
+ * first sent by a later load, the two load columns {@code _load_id} and {@code _source_file} of a table made before them) is added,
+ * nullable, at the end in one metadata commit ({@link LakeWriter#withColumns}), as the Iceberg and files stores add it; the files are not
+ * rewritten, their rows read it as null. A column the load lacks is null.
  */
 final class DeltaTarget implements TableWriter {
 
@@ -152,9 +153,8 @@ final class DeltaTarget implements TableWriter {
                 throw new IllegalStateException(path + " is partitioned by " + before.getPartitionColumnNames() + ", this load by " + parts
                         + " (give the table's partition-by, or write a new table)");
             }
-            if (spec.loadColumns()) {
-                before = withLoadColumns(before);
-            }
+            com.ash.lake.spi.TableProperties.refuseReplace(((io.delta.kernel.internal.SnapshotImpl) before).getMetadata().getConfiguration(), spec);
+            before = LakeWriter.withColumns(engine, path, before, wanted);
             schema = before.getSchema();
             partitionColumns = before.getPartitionColumnNames();
             for (StructField f : wanted.fields()) {
@@ -184,48 +184,6 @@ final class DeltaTarget implements TableWriter {
         base.put("write.metadata.metrics.default", "full");             // Delta statistics: exact minimum and maximum
         base.put("write.metadata.metrics.column.doc", "none");
         options = TargetRules.writerOptions(base, spec.layout(), "snappy", vectors);
-    }
-
-    /**
-     * A table made before the load columns, with {@code _load_id} and {@code _source_file} added: one commit of a {@code metaData} action
-     * whose schema is the table's with the two nullable string columns at the end (what Delta's merge-schema writes; Kernel itself evolves
-     * a schema only under column mapping). No file is rewritten. Written with put-if-absent through the engine; when another writer took
-     * the version, read again. A table under column mapping or in-commit timestamps keeps its schema (the columns left out, reported).
-     */
-    private Snapshot withLoadColumns(Snapshot snap) throws IOException {
-        for (int attempt = 0; ; attempt++) {
-            StructType s = snap.getSchema();
-            List<String> add = new ArrayList<>();
-            for (String c : List.of(RowPlan.LOAD_ID, RowPlan.SOURCE_FILE)) {
-                if (s.indexOf(c) < 0) {
-                    add.add(c);
-                }
-            }
-            if (add.isEmpty()) {
-                return snap;
-            }
-            SnapshotImpl si = (SnapshotImpl) snap;
-            Metadata meta = si.getMetadata();
-            Map<String, String> conf = meta.getConfiguration();
-            if (ColumnMapping.isColumnMappingModeEnabled(ColumnMapping.getColumnMappingMode(conf))
-                    || "true".equalsIgnoreCase(conf.get("delta.enableInCommitTimestamps"))) {
-                return snap;                                            // left out by open(): the report lists them
-            }
-            StructType grown = s;
-            for (String c : add) {
-                grown = grown.add(c, StringType.STRING, true);
-            }
-            Row action = SingleAction.createMetadataSingleAction(meta.withNewSchema(grown).toRow());
-            String file = FileNames.deltaFile(si.getLogPath(), si.getVersion() + 1);
-            try {
-                engine.getJsonHandler().writeJsonFileAtomically(file, Utils.singletonCloseableIterator(action), false);
-            } catch (java.nio.file.FileAlreadyExistsException e) {
-                if (attempt >= 10) {
-                    throw new IOException(path + ": the load columns could not be added (the table changed ten times meanwhile)", e);
-                }
-            }
-            snap = table.getLatestSnapshot(engine);
-        }
     }
 
     private static Type icebergType(StructField f, int elementId) {
@@ -266,8 +224,12 @@ final class DeltaTarget implements TableWriter {
         if (before == null) {
             tb = table.createTransactionBuilder(engine, ENGINE_INFO, Operation.CREATE_TABLE).withSchema(engine, schema)
                     .withPartitionColumns(engine, partitionColumns);
-            if (!spec.properties().isEmpty()) {
-                tb = tb.withTableProperties(engine, spec.properties());
+            Map<String, String> props = new LinkedHashMap<>(spec.properties());
+            if (!spec.sortedById()) {                                 // as the Iceberg store: lake maintain keeps such a table's order
+                props.putIfAbsent(com.ash.lake.PersistedNames.key("layout.sort-by"), String.join(",", spec.sortBy()));
+            }
+            if (!props.isEmpty()) {
+                tb = tb.withTableProperties(engine, props);
             }
         } else {
             tb = table.createTransactionBuilder(engine, ENGINE_INFO, Operation.WRITE);
@@ -347,7 +309,9 @@ final class DeltaTarget implements TableWriter {
         if (before != null && !spec.appends()) {   // replace: the date's earlier files go in the same commit; append keeps them
             String day = date.toString();
             Map<String, String> slice = spec.slice();      // a shared table: only this load's slice of the date
-            actions.addAll(LakeWriter.removals(engine, before, pv -> day.equals(pv.get("business_date")) && TargetRules.inSlice(pv, slice)));
+            java.util.Set<List<String>> parts = spec.partitionsOnly() ? TableWriter.partitionsOf(files) : null;   // overwrite-partitions: those only
+            actions.addAll(LakeWriter.removals(engine, before, pv -> day.equals(pv.get("business_date")) && TargetRules.inSlice(pv, slice)
+                    && (parts == null || parts.contains(partitionOf(pv)))));
         }
         Map<List<String>, List<DataFileStatus>> byPartition = new LinkedHashMap<>();
         for (WrittenFile f : files) {
@@ -379,6 +343,16 @@ final class DeltaTarget implements TableWriter {
         }
         before = snapshot();
         return result.getVersion();
+    }
+
+    /** A file's partition values after the date, in the table's order, an empty value as null (TableWriter.partitionsOf). */
+    private List<String> partitionOf(Map<String, String> pv) {
+        List<String> out = new ArrayList<>(partitionColumns.size() - 1);
+        for (int i = 1; i < partitionColumns.size(); i++) {
+            String v = pv.get(partitionColumns.get(i));
+            out.add(v == null || v.isEmpty() ? null : v);
+        }
+        return out;
     }
 
     @Override

@@ -231,12 +231,17 @@ abstract class KindTable {
         return file;
     }
 
+    /** Whether the day's file {@code file} holds older copies only ({@link com.ash.lake.rows.LoadOrder#OLDER_NAME}); none by default. */
+    boolean olderCopies(Day day, int file) {
+        return false;
+    }
+
     /** The column every row carries: the load that wrote it ({@code <run>.<file>}, in time order; DATA_LAKE_GUIDE.md). */
     static final String LOAD_ID = "_load_id";
 
     /**
      * Per snapshot and day: the ids more than one load wrote, each with the index of the file whose copy readers see (the newest load:
-     * the largest {@code _load_id}, then the later file); empty when none. Kept for a few days.
+     * the later commit, then {@link com.ash.lake.rows.LoadOrder}); empty when none. Kept for a few days.
      */
     private final Map<String, Map<String, Integer>> shadows = java.util.Collections.synchronizedMap(new LinkedHashMap<>(16, 0.75f, true));   // at most 64, the least used first out
 
@@ -265,7 +270,8 @@ abstract class KindTable {
 
     /**
      * The day's ids, read from the id column alone (no document is read), sorted, with the file each is in. An id that several loads
-     * wrote (appends: DATA_LAKE_GUIDE.md) is the newest load's: the largest {@code _load_id}, then the later file.
+     * wrote (appends: DATA_LAKE_GUIDE.md) is the newest load's: the later commit (the file's data sequence number), then
+     * {@link com.ash.lake.rows.LoadOrder}'s rule within a commit, then the later file and row.
      */
     IdMap ids(Layout l, Day day) {
         boolean loads = day.files().size() > 1 && l.hasColumn(LOAD_ID);
@@ -335,15 +341,17 @@ abstract class KindTable {
         for (int i = 0; i < idx.length; i++) {
             idx[i] = i;
         }
-        // the one load order (LoadOrder): the commit (the file's data sequence number), the run's time, the id
+        // the one load order (LoadOrder): the commit (the file's data sequence number), a file of older copies first, the run's time, the
+        // id; then the file and the row (a stable sort)
         long[] seq = new long[perFile.size()];
-        if (com.ash.lake.rows.LoadOrder.needsCommits(lids)) {
-            for (int f = 0; f < seq.length; f++) {
-                seq[f] = sequence(day, f);
-            }
+        boolean[] older = new boolean[perFile.size()];
+        for (int f = 0; f < seq.length; f++) {
+            seq[f] = sequence(day, f);                       // in each file's task: never a read
+            older[f] = olderCopies(day, f);
         }
         Arrays.sort(idx, Comparator.comparing((Integer i) -> ids.get(i))
-                .thenComparing((x, y) -> com.ash.lake.rows.LoadOrder.compare(lids.get(x), seq[fileOf.get(x)], lids.get(y), seq[fileOf.get(y)]))
+                .thenComparing((x, y) -> com.ash.lake.rows.LoadOrder.compare(lids.get(x), seq[fileOf.get(x)], older[fileOf.get(x)],
+                        lids.get(y), seq[fileOf.get(y)], older[fileOf.get(y)]))
                 .thenComparing(fileOf::get));
         List<String> outIds = new ArrayList<>();
         List<Integer> outFiles = new ArrayList<>();

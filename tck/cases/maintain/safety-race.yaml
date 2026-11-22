@@ -1,0 +1,41 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# Data safety of lake maintain racing a load: an append (ids repeated) and a compaction of the same date started together (each that lost its commit run
+# again); the table then holds exactly the rows the same two loads leave without maintain (a twin table: same as twin=true, each row once)
+# and readers see the same documents, nothing lost and nothing twice
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 30, scenarios: 2, seed: 21}}
+  more/pv.2026-10-27.jsonl: {pv: {n: 20, scenarios: 2, seed: 22, first: 10}}
+  extra/pv.2026-10-27.jsonl: {pv: {n: 10, scenarios: 2, seed: 23, first: 25}}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
+  more: |
+    source: {files: '${in}/more/*', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  extra: |
+    source: {files: '${in}/extra/*', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  twin: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/twin', domain: risk, kind: twin}
+  twin-more: |
+    source: {files: '${in}/more/*', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/twin', domain: risk, kind: twin, mode: append}
+  twin-extra: |
+    source: {files: '${in}/extra/*', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/twin', domain: risk, kind: twin, mode: append}
+steps:
+  - load: {config: twin}
+  - load: {config: twin-more}
+  - load: {config: twin-extra}
+  - store: [raw-digest, '${store}', '${lake}', risk, twin, twin]
+  - store: [read-visible, '${store}', '${lake}', risk, twin, twin-seen]
+  - load: {config: main}
+  - load: {config: more}
+  - settled:
+    - load: {config: extra}
+    - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, twin-seen]
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, twin]

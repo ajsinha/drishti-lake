@@ -130,7 +130,10 @@ final class IcebergTarget implements TableWriter {
                 table = catalog.create(name, new Schema(0, fields), spec, order, properties());
             } catch (Catalog.TableExists e) {
                 table = catalog.load(name).orElseThrow(() -> e);        // another writer created it
+                com.ash.lake.spi.TableProperties.refuseReplace(table.metadata().properties(), this.spec);
             }
+        } else {
+            com.ash.lake.spi.TableProperties.refuseReplace(table.metadata().properties(), this.spec);
         }
         Map<String, Type> missing = new LinkedHashMap<>();
         want.forEach((col, type) -> {
@@ -166,7 +169,10 @@ final class IcebergTarget implements TableWriter {
                 table.metadata().property("write.parquet.compression-codec", "zstd"), listCols);
     }
 
-    /** The layout's table properties (as the Iceberg loader creates a table), with the sort columns when they are more than the id. */
+    /**
+     * The layout's table properties (as the Iceberg loader creates a table), with the sort columns when they are more than the id, then
+     * the load's {@code target.properties} (their Iceberg names: TableProperties), which win.
+     */
     private Map<String, String> properties() {
         long rowGroup = spec.layout().rowGroupBytes() > 0 ? spec.layout().rowGroupBytes() : DEFAULT_ROW_GROUP;
         Map<String, String> p = new LinkedHashMap<>();
@@ -184,6 +190,8 @@ final class IcebergTarget implements TableWriter {
         if (!spec.sortedById()) {
             p.put(com.ash.lake.PersistedNames.key(SORT_BY), String.join(",", spec.sortBy()));
         }
+        p.putAll(spec.properties());
+        p.put("format-version", "2");                           // the layout's: sequence numbers are the loader's versions
         return p;
     }
 
@@ -274,14 +282,37 @@ final class IcebergTarget implements TableWriter {
             Map<String, String> slice = spec.slice();      // a shared table: only this load's slice of the date
             Map<String, String> where = new LinkedHashMap<>(slice);
             where.put("business_date", date.toString());
+            java.util.Set<List<String>> parts = spec.partitionsOnly() ? TableWriter.partitionsOf(files) : null;   // overwrite-partitions: those only
             try {
-                s = Operations.replacePartitions(table, f -> date.equals(dateOf(f)) && inSlice(f, slice), add, summary, new Operations.Since(base, where))
+                s = Operations.replacePartitions(table, f -> date.equals(dateOf(f)) && inSlice(f, slice) && (parts == null || parts.contains(partitionOf(f))),
+                        add, summary, new Operations.Since(base, where))
                         .orElseThrow(() -> new IllegalStateException("the commit of " + date + " made no snapshot"));
             } catch (Operations.ValidationFailed lost) {
                 throw new TableWriter.LostReplace(spec.domain() + "/" + spec.table(), date);
             }
         }
-        return s.snapshotId();
+        committed.put(s.sequenceNumber(), s.snapshotId());
+        return s.sequenceNumber();                // the loader's version (TableWriter.commit); the snapshot's id is nativeVersion
+    }
+
+    /** This load's commits: sequence number to snapshot id. */
+    private final Map<Long, Long> committed = new java.util.concurrent.ConcurrentHashMap<>();
+
+    @Override
+    public long nativeVersion(long version) {
+        return committed.getOrDefault(version, version);
+    }
+
+    /** A data file's partition values after the date, in the load's partition-by order, an empty value as null (TableWriter.partitionsOf). */
+    private List<String> partitionOf(DataFile f) {
+        String[] out = new String[spec.partition().size()];
+        for (int i = 0; i < partIndex.length; i++) {
+            if (partIndex[i] >= 0) {
+                Object v = f.partition()[i];
+                out[partIndex[i]] = v == null || v.toString().isEmpty() ? null : v.toString();
+            }
+        }
+        return java.util.Arrays.asList(out);
     }
 
     /**

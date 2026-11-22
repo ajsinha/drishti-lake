@@ -20,7 +20,7 @@ CASES = ROOT / "tck" / "cases"
 JAVA_HOME = os.environ.get("LAKE_JAVA_HOME", "/usr/lib/jvm/java-21-openjdk-amd64")
 
 
-def pv_lines(n, scenarios, dates, seed, start="2026-10-27"):
+def pv_lines(n, scenarios, dates, seed, start="2026-10-27", first=0):
     """Synthetic scenario-PV positions (the shape of the loader tests' PvData; not real data)."""
     import datetime as dt
     r = random.Random(seed)
@@ -28,7 +28,7 @@ def pv_lines(n, scenarios, dates, seed, start="2026-10-27"):
     out = []
     for i in range(n):
         desk = ["DESK-RATES", "DESK-FX", "DESK-COMM", "DESK-CREDIT"][r.randrange(4)]
-        doc = {"POSITION_ID": f"P-{1000000 + i}", "BUSINESS_DATE": str(d0 + dt.timedelta(days=i % dates)),
+        doc = {"POSITION_ID": f"P-{1000000 + first + i}", "BUSINESS_DATE": str(d0 + dt.timedelta(days=i % dates)),
                "LEGAL_ENTITY": ["LE-NY", "LE-LDN", "LE-TKY"][r.randrange(3)], "DESK": desk,
                "TT_BOOK": f"BOOK-{desk[5:]}-{r.randrange(5)}", "TRADE_ID": 2000000 + i, "QUANTITY": r.randrange(2000) - 1000,
                "BASE_PV": round(r.gauss(0, 1e5), 2), "CCY": "EUR" if i % 7 == 0 else "USD",
@@ -40,12 +40,12 @@ def pv_lines(n, scenarios, dates, seed, start="2026-10-27"):
 
 
 def content(spec):
-    """An input file's lines: literal text, or {pv: {n, scenarios, dates, seed, date?}} (only lines of that date when given); with
+    """An input file's lines: literal text, or {pv: {n, scenarios, dates, seed, date?, first?}} (``first``: the first position's number, 0) (only lines of that date when given); with
     ``array: true`` the same rows as one JSON array, an element a line (the loader's JSON-array input)."""
     if isinstance(spec, str):
         return spec if spec.endswith("\n") else spec + "\n"
     g = spec["pv"]
-    lines = pv_lines(g["n"], g.get("scenarios", 4), g.get("dates", 1), g.get("seed", 1), g.get("start", "2026-10-27"))
+    lines = pv_lines(g["n"], g.get("scenarios", 4), g.get("dates", 1), g.get("seed", 1), g.get("start", "2026-10-27"), g.get("first", 0))
     if "date" in g:
         lines = [l for l in lines if f'"BUSINESS_DATE":"{g["date"]}"' in l]
     if spec.get("array"):
@@ -112,17 +112,20 @@ ROW = {"mem": MEM, "s3": S3}
 
 def step(s, work, env, loader="java"):
     """One step of a case: {load|undo|retention|store: args}, {parallel: [steps]} (writers started together, their results in the
-    order listed) or {race: [steps]} (writers started together whose winner is not known: their results sorted). ``loader``: who runs
+    order listed), {race: [steps]} (writers started together whose winner is not known: their results sorted) or {settled: [steps]}
+    (writers started together, each that failed run again alone: only their final exits recorded). ``loader``: who runs
     its loads (the matrix's loader column: java, or python for the Python path; every other step is the Java tools')."""
     (op, arg), = s.items()
-    if op in ("parallel", "race"):
+    if op in ("parallel", "race", "settled"):
         return {"op": op, "steps": [step(x, work, env, loader) for x in arg]}
     arg = arg or []
     if op == "load":
-        cfg = "main"
+        cfg, error = "main", False
         if isinstance(arg, dict):
-            cfg, arg = arg.get("config", "main"), arg.get("args", [])
+            cfg, arg, error = arg.get("config", "main"), arg.get("args", []), arg.get("error", False)
         out = {"op": op, "args": ["--config", str(work / f"{cfg}.yaml")] + subst(arg, env)}
+        if error:
+            out["error"] = True                                  # the failed load's reason (its summary's error) in the result
         if loader != "java":
             out["loader"] = loader
         return out

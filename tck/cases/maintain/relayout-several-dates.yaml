@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# lake maintain --relayout over several drifted dates in one run: each date is its own commit, and relayout's own commit of one date is
+# never taken for another writer's (it once refused the second date with "another writer committed while relayout read the date"); every
+# date is laid out, what readers see is the same after it (same as seen=true), the table holds one copy an id, and a second run has nothing to do
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 15, scenarios: 2, seed: 6}}
+  pv.2026-10-28.jsonl: {pv: {n: 12, scenarios: 2, seed: 8, start: '2026-10-28'}}
+  more/pv.2026-10-27.jsonl: {pv: {n: 5, scenarios: 2, seed: 7}}
+  more/pv.2026-10-28.jsonl: {pv: {n: 4, scenarios: 2, seed: 9, start: '2026-10-28'}}
+configs:
+  main: |
+    source: {files: '${in}/pv.*.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, layout: {sort-by: [POSITION_ID]}}
+  more: |
+    source: {files: '${in}/more/*', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append, layout: {sort-by: [POSITION_ID]}}
+steps:
+  - load: {config: main}
+  - load: {config: more}
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, seen]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --relayout]
+  - store: [read-layout, '${store}', '${lake}', risk, scenario-pv]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, seen]
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --relayout]

@@ -39,18 +39,19 @@ public final class S3MockServer implements AutoCloseable {
         this.endpoint = new S3Endpoint(NAME, "http://127.0.0.1:" + port, "key", "secret");
     }
 
-    /** Starts S3Mock on a free port in 18750-18759 with these buckets, its files under {@code root}. */
+    /**
+     * Starts S3Mock with these buckets, its files under {@code root}, on ports the server itself binds ({@link S3MockApplication#RANDOM_PORT}):
+     * the endpoint names the port it bound (read back once it listens), so no other process can take a port between a pick and a bind.
+     */
     public static S3MockServer start(Path root, String... buckets) throws Exception {
         Files.createDirectories(root);
         // hadoop-client-runtime registers its shaded (older) Woodstox as the StAX provider, which S3Mock's XML converter rejects:
         // name S3Mock's own Woodstox unless the test already chose one
         System.getProperties().putIfAbsent("javax.xml.stream.XMLOutputFactory", "com.ctc.wstx.stax.WstxOutputFactory");
         System.getProperties().putIfAbsent("javax.xml.stream.XMLInputFactory", "com.ctc.wstx.stax.WstxInputFactory");
-        int http = S3Endpoint.freePort();
-        int https = S3Endpoint.freePort();
         Map<String, Object> p = new HashMap<>();
-        p.put(S3MockApplication.PROP_HTTP_PORT, http);
-        p.put(S3MockApplication.PROP_HTTPS_PORT, https);
+        p.put(S3MockApplication.PROP_HTTP_PORT, S3MockApplication.RANDOM_PORT);
+        p.put(S3MockApplication.PROP_HTTPS_PORT, S3MockApplication.RANDOM_PORT);
         p.put(S3MockApplication.PROP_ROOT_DIRECTORY, root.toAbsolutePath().toString());
         p.put(S3MockApplication.PROP_INITIAL_BUCKETS, String.join(",", buckets));
         p.put(S3MockApplication.PROP_SILENT, true);
@@ -63,7 +64,8 @@ public final class S3MockServer implements AutoCloseable {
                 "org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration",
                 "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration",
                 "org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration"));
-        return new S3MockServer(S3MockApplication.start(p), http);
+        S3MockApplication app = S3MockApplication.start(p);
+        return new S3MockServer(app, app.getHttpPort());
     }
 
     /** Where it listens and how to sign in. */

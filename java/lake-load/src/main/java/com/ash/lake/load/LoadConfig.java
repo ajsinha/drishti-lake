@@ -82,9 +82,12 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
     }
 
     /** The table and its layout. */
+    /** The load mode that replaces, of each date, only the partitions the input brings ({@code WriteSpec#partitionsOnly}). */
+    static final String OVERWRITE_PARTITIONS = "overwrite-partitions";
+
     record Target(String format, String path, String lake, String domain, String kind, String table, Map<String, String> storage,
             Map<String, String> properties, Map<String, String> iceberg, Layout layout, String loadMode, String batchId, String modeFrom,
-            com.ash.lake.contract.Contract contract) {
+            com.ash.lake.contract.Contract contract, boolean partitionsOnly) {
 
         /** Where the load mode came from, in words (the report's {@code modeFrom}). */
         String modeWords() {
@@ -98,6 +101,11 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
 
         boolean isIceberg() {
             return format.equals("iceberg");
+        }
+
+        /** The mode as the summary names it: append, overwrite-dates or overwrite-partitions. */
+        String modeName() {
+            return appends() ? "append" : partitionsOnly ? OVERWRITE_PARTITIONS : "overwrite-dates";
         }
 
         /** Whether the load adds its rows (load-mode append, each batch committed once) rather than replacing its dates. */
@@ -525,10 +533,12 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         String mode = (given != null ? given : entry != null ? (entry.appends() ? "append" : "replace-date") : fallback != null ? fallback : "append")
                 .toLowerCase(Locale.ROOT);
         mode = mode.equals("overwrite-dates") || mode.equals("replace") ? "replace-date" : mode;
-        if (!mode.equals("replace-date") && !mode.equals("append")) {
+        if (!mode.equals("replace-date") && !mode.equals("append") && !mode.equals(OVERWRITE_PARTITIONS)) {
             throw new IllegalArgumentException("target.mode " + mode + ": append (the default: each business date's rows are added, one commit "
-                    + "per date) or replace-date (each business date of the input replaced by one commit; also replace, overwrite-dates)");
+                    + "per date), replace-date (each business date of the input replaced by one commit; also replace, overwrite-dates) or "
+                    + "overwrite-partitions (of each date, only the partitions the input brings replaced)");
         }
+        boolean partitionsOnly = mode.equals(OVERWRITE_PARTITIONS);
         String loadMode = mode.equals("append") ? LakeTable.APPEND : LakeTable.REPLACE;
         // target.batch-id names the batch: an append of it is committed once (a retried load of the same batch is skipped); the data
         // inbox names every file's. Without one an append is not guarded against a second run (each run's rows carry their _load_id)
@@ -591,8 +601,9 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
                 iceberg = cat;
             }
         }
+        props = com.ash.lake.spi.TableProperties.forStore(tf, props);     // the product's names as the format's own (TableProperties)
         Target tgt = new Target(tf, path, r.text(t, "lake", null), domain, r.text(t, "kind", null), table, targetStorage, props, iceberg, layout,
-                loadMode, batchId, modeFrom, contract(r.text(t, "contract", null)));
+                loadMode, batchId, modeFrom, contract(r.text(t, "contract", null)), partitionsOnly);
         if (tgt.path() == null) {
             throw new IllegalArgumentException("target: give lake (a lake file's name, with kind) or path (the table's folder)");
         }
@@ -603,7 +614,12 @@ record LoadConfig(Source source, Target target, Parallel parallel, Memory memory
         Rejects rej = new Rejects(r.text(rj, "file", null), rj.has("max-pct") ? rj.get("max-pct").asDouble() : 100.0, rj.path("keep").asInt(50));
         Report rep = new Report(r.text(rp, "summary", null), r.text(rp, "manifest", null), r.text(rp, "progress", null), r.bool(rp, "run-log", true),
                 r.bool(rp, "dry-run", false));
-        return new LoadConfig(src, tgt, par, memory, rej, rep, tree.path("lock").asBoolean(true), archive(r, s), guard(r, tree.path("guard")), Map.of(),
+        Guard guard = guard(r, tree.path("guard"));
+        if (partitionsOnly && guard.maxDropShare() != null && !guard.forceDrop()) {
+            throw new IllegalArgumentException("guard.max-drop-share counts whole dates; target.mode overwrite-partitions replaces some partitions "
+                    + "of a date: give one of them");
+        }
+        return new LoadConfig(src, tgt, par, memory, rej, rep, tree.path("lock").asBoolean(true), archive(r, s), guard, Map.of(),
                 null, tree, rt);
     }
 

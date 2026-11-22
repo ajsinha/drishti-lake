@@ -1,0 +1,34 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# a laid-out table keeps its id order on every store (how many files an append leaves before it is the store's own: not compared): lake maintain --relayout rewrites a date an append made drift (two files with
+# overlapping id ranges) as readers see it, sorted by id, each file its own id range, the newest load's copy the one kept (the documents
+# read are the same before and after); a second run has nothing to do; --compact after another append keeps every row and the same
+# documents and ids (the newest copy read, the older kept apart for undo: how many files that takes is the store's own), then --relayout
+# lays the date out again
+inputs:
+  pv.2026-10-27.jsonl: {pv: {n: 15, scenarios: 2, seed: 6}}
+  more/pv.2026-10-27.jsonl: {pv: {n: 5, scenarios: 2, seed: 7}}
+configs:
+  main: |
+    source: {files: '${in}/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, layout: {sort-by: [POSITION_ID]}}
+  more: |
+    source: {files: '${in}/more/pv.2026-10-27.jsonl', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append, layout: {sort-by: [POSITION_ID]}}
+steps:
+  - load: []
+  - load: {config: more}
+  - store: [read-ids, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --relayout, --dry-run]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --relayout]
+  - store: [read-layout, '${store}', '${lake}', risk, scenario-pv]
+  - store: [read-ids, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --relayout]
+  - load: {config: more}
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact]
+  - store: [read-ids, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --relayout]
+  - store: [read-layout, '${store}', '${lake}', risk, scenario-pv]
+  - store: [read-ids, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']

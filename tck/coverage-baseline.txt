@@ -20,7 +20,6 @@ config:source.storage-options
 config:source.vector
 config:target.iceberg
 config:target.layout.shard-aligned
-config:target.properties
 config:target.storage-options
 config:target.table
 flag:--kind

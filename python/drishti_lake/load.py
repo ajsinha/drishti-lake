@@ -225,7 +225,7 @@ class Report:
     def summary(self, error: str | None, seconds: float) -> dict:
         c = self.cfg
         s = {"run": self.run, "startedAt": self.started, "finishedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
-             "status": self.status, "exitCode": self.exit_code(), "dryRun": c.dry_run, "mode": "append" if c.mode == "append" else "replace-date",
+             "status": self.status, "exitCode": self.exit_code(), "dryRun": c.dry_run, "mode": c.mode,
              "format": "delta", "engine": "python", "engineWhy": "the Python path (drishti_lake" + (", Polars" if delta.polars_installed() else "")
              + ")", "table": c.table_path, "domain": c.domain, "kind": c.table, "key": c.key, "date": c.date,
              "asOf": c.as_of.isoformat() if c.as_of else None, "promote": c.promote, "partitionBy": c.partition_by,
@@ -328,7 +328,7 @@ class Loader:
         if rep.accepted == 0:
             raise LoadError("no document could be loaded (every one was rejected: see rejects)")
         w = delta.Writer(cfg.table_path, self.plan, types.kinds(), list(self.plan.vectors), cfg.batch_id, cfg.mode == "append",
-                         cfg.float32)
+                         cfg.float32, cfg.properties, cfg.mode == configs.OVERWRITE_PARTITIONS, f"{cfg.domain}/{cfg.table}")
         rep.columns, rep.left_out = w.column_types(), w.left_out
         for day in sorted(by_date):
             d = rowrule.day_of(day)
@@ -338,7 +338,7 @@ class Loader:
                 continue
             table = w.frame(d, list(by_date[day].values()), load_ids, sources, cfg.sort_by)
             version = w.commit(d, table)
-            rep.commits[d.isoformat()] = {"version": version, "rows": table.num_rows}
+            rep.commits[d.isoformat()] = {"version": version, "nativeVersion": version, "rows": table.num_rows}
         rep.status = "partial" if rep.rejected > 0 else "ok"
 
     def decide(self, f, today: date, latest: date | None = None) -> filedate.Decided:

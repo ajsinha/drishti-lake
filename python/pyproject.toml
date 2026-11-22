@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "drishti-lake"
-version = "0.9.0"
+version = "0.9.1"
 description = "Drishti Lake's Python path: the Java loader's rules and configuration, writing Delta tables (Polars when installed)"
 requires-python = ">=3.11"
 license = {text = "Proprietary"}

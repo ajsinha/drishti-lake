@@ -1,0 +1,34 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# a promoted column first sent in a later load is added to the table (schema evolution), never dropped: load 1 promotes DESK and
+# BASE_PV; load 2 (an append of the same date) and load 3 (a replace of another date) also promote MATURITY_DATE. The column is the
+# table's on every store; load 2's and load 3's rows carry its value, load 1's rows read it as null (P-1's document has the field: a
+# column is what the load promoted, never filled from the document later); lake maintain --compact changes no row (same as rows=true)
+inputs:
+  one/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"FX","BASE_PV":10,"MATURITY_DATE":"2027-03-01"}
+    {"POSITION_ID":"P-2","DESK":"FX","BASE_PV":20}
+  two/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-3","DESK":"RATES","BASE_PV":30,"MATURITY_DATE":"2026-01-15"}
+  three/pv.2026-10-28.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"FX","BASE_PV":11,"MATURITY_DATE":"2027-03-01"}
+    {"POSITION_ID":"P-2","DESK":"FX","BASE_PV":21}
+configs:
+  one: |
+    source: {files: '${in}/one/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
+  two: |
+    source: {files: '${in}/two/*', id: POSITION_ID, promote: [DESK, BASE_PV, MATURITY_DATE]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  three: |
+    source: {files: '${in}/three/*', id: POSITION_ID, promote: [DESK, BASE_PV, MATURITY_DATE]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
+steps:
+  - load: {config: one, args: [--run-id, 20261121T100000.000-1]}
+  - load: {config: two, args: [--run-id, 20261121T100100.000-1]}
+  - load: {config: three, args: [--run-id, 20261121T100200.000-1]}
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t', 'MATURITY_DATE:t']
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-28', 'DESK:t', 'MATURITY_DATE:t']
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact]
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t', 'MATURITY_DATE:t']

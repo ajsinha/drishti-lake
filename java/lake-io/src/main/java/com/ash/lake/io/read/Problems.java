@@ -15,8 +15,8 @@
  */
 package com.ash.lake.io.read;
 
-import com.ash.lake.common.LakeError;
-import com.ash.lake.common.LakeException;
+import com.ash.lake.LakeError;
+import com.ash.lake.LakeException;
 import com.ash.lake.read.ReadProblem;
 import com.ash.lake.read.ReadProblems;
 import java.time.Instant;
@@ -37,19 +37,41 @@ import java.util.function.Function;
 public final class Problems implements ReadProblems {
 
     private static final System.Logger LOGGER = System.getLogger(Problems.class.getName());
-    private static final int MAX_REASON = 300;
+    /** Long enough for a moved table's two folders and the {@code relocate} pair to copy. */
+    private static final int MAX_REASON = 1000;
 
     private record Listing(String reason, Instant at, Instant keptFrom) {}
 
     private final String source;
-    private final Function<Throwable, String> reason;
+    private final Classifier classifier;
     private final Map<String, ReadProblem> byKey = new ConcurrentHashMap<>();
     private final Map<String, Listing> listings = new ConcurrentHashMap<>();
 
     /** Problems of the reader of {@code source} (for the log), with the store's reason words. */
     public Problems(String source, Function<Throwable, String> reason) {
+        this(source, (table, e) -> reason.apply(e));
+    }
+
+    /** Problems of the reader of {@code source} (for the log), worded by the store's {@code classifier}. */
+    public Problems(String source, Classifier classifier) {
         this.source = source;
-        this.reason = reason;
+        this.classifier = classifier;
+    }
+
+    /**
+     * How a store words a failed read of a table: the reason recorded (Admin → Health: what is wrong and what to do, folders included) and
+     * the words the failure thrown to the reader carries (shown with a host's error: no folder or file in them).
+     */
+    @FunctionalInterface
+    public interface Classifier {
+
+        /** Why reading {@code table} failed with {@code e}, in words a reader can act on. */
+        String reason(String table, Throwable e);
+
+        /** The words the thrown failure carries instead of the reason (null: the reason), when the reason names folders. */
+        default String forReaders(String table, Throwable e) {
+            return null;
+        }
     }
 
     private static String key(String table, String where) {
@@ -77,7 +99,8 @@ public final class Problems implements ReadProblems {
                 throw own.failure();                             // the caller's own sink refused: its exception as it was, no read problem
             }
             String why = failed(table, where, version, e);
-            throw new LakeException(LakeError.UNREADABLE, table + " " + where + ": " + why, e);
+            String told = classifier.forReaders(table, e);
+            throw new LakeException(LakeError.UNREADABLE, table + " " + where + ": " + (told == null ? why : shorten(told)), e);
         }
         ok(table, where);
         return out;
@@ -149,7 +172,7 @@ public final class Problems implements ReadProblems {
 
     /** Records that reading {@code where} of {@code table} failed with {@code e}; returns the reason recorded. */
     public String failed(String table, String where, long version, Throwable e) {
-        String why = shorten(reason.apply(e));
+        String why = shorten(classifier.reason(table, e));
         ReadProblem was = byKey.put(key(table, where), new ReadProblem(table, where, version, why, Instant.now()));
         if (was == null || !was.reason().equals(why)) {
             LOGGER.log(System.Logger.Level.WARNING, "{0}: {1} {2} cannot be read: {3}", source, table, where, why);
@@ -177,7 +200,7 @@ public final class Problems implements ReadProblems {
     /** The table could not be listed again; what was listed before (from {@code keptFrom}, null when none) is served meanwhile. */
     public void listingFailed(String table, Throwable e, Instant keptFrom) {
         Listing was = listings.get(table);
-        listings.put(table, new Listing(shorten(reason.apply(e)), was == null ? Instant.now() : was.at(), keptFrom));
+        listings.put(table, new Listing(shorten(classifier.reason(table, e)), was == null ? Instant.now() : was.at(), keptFrom));
     }
 
     public void listingOk(String table) {

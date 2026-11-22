@@ -329,10 +329,11 @@ final class LoadReport {
         leftOut = left;
     }
 
-    synchronized void committed(LocalDate date, long version, List<WrittenFile> f) {
+    synchronized void committed(LocalDate date, long version, long nativeVersion, List<WrittenFile> f) {
         long rows = f.stream().mapToLong(WrittenFile::rows).sum();
         long bytes = f.stream().mapToLong(x -> Math.max(0, x.bytes())).sum();
-        commits.put(date.toString(), JSON.createObjectNode().put("version", version).put("files", f.size()).put("rows", rows).put("bytes", bytes));
+        commits.put(date.toString(), JSON.createObjectNode().put("version", version).put("nativeVersion", nativeVersion).put("files", f.size())
+                .put("rows", rows).put("bytes", bytes));
         written.put(date.toString(), f);
     }
 
@@ -392,7 +393,7 @@ final class LoadReport {
         ObjectNode s = JSON.createObjectNode();
         String[] dt = cfg.domainAndTable();
         s.put("run", run).put("startedAt", startedAt).put("finishedAt", now()).put("status", status).put("exitCode", exitCode())
-                .put("dryRun", cfg.report().dryRun()).put("mode", cfg.target().appends() ? "append" : "overwrite-dates").put("modeFrom", cfg.target().modeWords()).put("format", cfg.target().format())
+                .put("dryRun", cfg.report().dryRun()).put("mode", cfg.target().modeName()).put("modeFrom", cfg.target().modeWords()).put("format", cfg.target().format())
                 .put("engine", "java-loader").put("engineWhy", "the parallel lake loader (drishti-lakeload)").put("table", cfg.tablePath())
                 .put("domain", dt[0]).put("kind", cfg.target().kind() != null ? cfg.target().kind() : dt[1]).put("key", plan.key);
         s.put("date", plan.date).put("asOf", plan.asOf == null ? null : plan.asOf.toString());
@@ -475,6 +476,7 @@ final class LoadReport {
             ObjectNode d = dates.putObject(day);
             ObjectNode c = commits.get(day);
             d.put("version", c.path("version").asLong());
+            d.put("nativeVersion", c.path("nativeVersion").asLong());
             ArrayNode fs = d.putArray("files");
             for (WrittenFile f : list) {
                 ObjectNode n = fs.addObject();

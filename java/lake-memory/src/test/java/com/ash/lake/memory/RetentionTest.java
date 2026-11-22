@@ -18,7 +18,7 @@ package com.ash.lake.memory;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ash.lake.common.LakeException;
+import com.ash.lake.LakeException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
