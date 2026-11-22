@@ -22,11 +22,13 @@ load/future-date-refused
 load/lake-folder-refused
 load/loader-rows
 load/loader-rows-stored-vectors
+load/new-promoted-column
 load/overwrite-partitions
 load/rerun-replaces-the-date
 load/two-dates
 load/vector-nulls-and-text
 maintain/compact-checkpoint-vacuum
+maintain/compact-commit-order
 maintain/keep-days-and-drop-guard
 maintain/relayout-several-dates
 maintain/safety-compact
@@ -64,6 +66,7 @@ read/tables-and-new-tables
 rejects/counted-and-named
 rejects/too-many-stop-the-load
 retention/max-rows
+retention/ttl-keeps-commit-order
 time-travel/versions-and-earlier-rows
 undo/undo-a-replace-restores-the-date
 undo/unknown-load-id

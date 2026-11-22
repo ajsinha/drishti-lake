@@ -4,8 +4,9 @@
 
 The table: ``id``, ``doc`` (text), ``business_date`` (date), the partition columns (text), the promoted columns (``double``, ``array<string>``
 or text), the vector columns (``array<double>``), ``_load_id`` and ``_source_file``; partitioned by ``business_date`` then the partition
-columns. An existing table keeps its schema and its partitioning (another partitioning is refused in the Java loader's words; a column
-it lacks is left out and reported). A replace takes out the date's files and adds the new ones in one commit; an append adds; a batch's
+columns. An existing table keeps its partitioning (another partitioning is refused in the Java loader's words); a column the load sends
+that it lacks (a promoted or vector column first sent by a later load) is added, nullable, at the end, as the Java loader adds it: the
+rows written before read it as null. A replace takes out the date's files and adds the new ones in one commit; an append adds; a batch's
 append of a date records ``drishti-batch:<batch>:<date>`` (version 1) and is never committed twice.
 
 **One mechanism, Polars when installed.** A date's rows, in the layout's order (``sort-by``, then the id), become one Arrow table:
@@ -55,6 +56,14 @@ def _type(kind: str):
             "vector32": pa.list_(pa.float32())}.get(kind, pa.string())
 
 
+def _field(name: str, kind: str):
+    """A nullable Delta column of the loader's kind (``_type``), for a column added to an existing table."""
+    from deltalake.schema import ArrayType, Field, PrimitiveType
+    element = {"list": "string", "vector": "double", "vector32": "float"}.get(kind)
+    t = ArrayType(PrimitiveType(element), True) if element else PrimitiveType({"double": "double", "date": "date"}.get(kind, "string"))
+    return Field(name, t, nullable=True)
+
+
 def _kind_of(t: pa.DataType) -> str:
     if pa.types.is_list(t) or pa.types.is_large_list(t):
         if pa.types.is_string(t.value_type) or pa.types.is_large_string(t.value_type):
@@ -100,6 +109,12 @@ class Writer:
                 raise TableError(f"{path} is partitioned by [{', '.join(have)}], this load by [{', '.join(self.parts)}] (give the table's "
                                  "partition-by, or write a new table)")
             schema = pa.schema(self.table.schema().to_arrow())
+            names = {f.name for f in schema}
+            missing = [(n, k) for n, k in wanted if n not in names]
+            if missing:                                    # schema evolution: one metadata commit, no file rewritten
+                self.table.alter.add_columns([_field(n, k) for n, k in missing])
+                self.table = DeltaTable(path)
+                schema = pa.schema(self.table.schema().to_arrow())
             self.columns = [(f.name, _kind_of(f.type)) for f in schema]
             names = {n for n, _ in self.columns}
             self.left_out = [n for n, _ in wanted if n not in names]

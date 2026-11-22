@@ -110,8 +110,18 @@ otherwise is refused with both values named; a kind the lake file lacks is refus
   other load's rows stand. Appends of one date at once all land. The lock (`--no-lock` turns it off) only makes loads of one lake on one
   machine wait for each other.
 - **The newest load.** Where a date holds several loads' copies of an id (appends), the reader keeps the copy of the **later commit**
-  (the table version, the data sequence number, the files log's order), whatever the loaders' clocks said; the run's time orders only
-  copies of one commit.
+  (the table version, the data sequence number, the files log's order), whatever the loaders' clocks said: a run id (`--run-id`, or the
+  loader's start time) is a name, never an order, and no value in the data decides between two commits. Every rewrite of a date keeps
+  that answer: compaction, an undo and row retention write the rows readers see into files of their own and every older copy (by id,
+  in the readers' order) into files marked as **files of older copies** (on Delta the add action's tag `lake.copies: older`, on Iceberg
+  `-older-` in the file's name), which readers put before the commit's other files. Kit cases `maintain/compact-commit-order` (loads
+  committed in the order opposite to their run ids, then compaction and undo) and `retention/ttl-keeps-commit-order`.
+- **New columns.** A promoted or vector column first sent by a later load of an existing table is **added** to the table, nullable, on
+  every store (Delta: one metadata commit, as merge-schema writes it; Iceberg: a schema update; files: the table's column list; the Python
+  path: delta-rs's add-columns); no file is rewritten, so the rows written before read it as **null** (never filled from their documents,
+  by the load or by maintenance). A Delta table under column mapping or in-commit timestamps (written by another engine) is not widened
+  by the loader: such a load is **refused**, naming the column, nothing written. A column is never accepted and dropped. Kit case
+  `load/new-promoted-column`.
 - **Output.** A local lake gets `_drishti-lake/` beside its tables: `runs/<run>.json` (the summary), `runs/<run>.manifest.json` (every file
   written, with its row counts and key bounds), `runs.log`, `last-run.json`, and the lock.
 
@@ -148,7 +158,7 @@ LakeMaintain --lake ROOT --format delta|iceberg|files --table domain/table
 | `--keep-days N` | the business dates before the day N business days (Monday to Friday) before `--as-of` (the business today in `--zone`) removed in one commit: `--as-of` and the N business days before it stay, counted on the calendar, never from the newest date the table holds (Monday with 2 keeps from the Thursday before); **refused, nothing removed, over `--max-drop-share` (0.5) of the table's rows** unless `--force-drop`; never a date within `--floor-days` of `--as-of` | same | same |
 | `--relayout` | a table laid out by id: each date whose files drifted from it (two files sharing an id range, a file over the table's `lake.layout.file-rows`, 250,000, more files than its rows need) rewritten as readers see it (each id's newest copy), sorted by id into files of `file-rows` (`--file-rows N`: N instead, a host's own layout; `--dates` only those dates; `--force` even a date in the layout: another codec, smaller row groups), each file its own id range, one commit a date (Delta Kernel); a table laid out by more than the id (`lake.layout.sort-by`) is left in its order | the same, by iceberg-core | a day file that holds an id twice rewritten with the last copy of each, sorted by id |
 | `--ttl` / `--max-rows` | the row retention above | same | same |
-| `--compact` | each date in two or more files under `--target-file-mb` rewritten (OPTIMIZE), one commit a date, every row kept: the rows readers see in the table's order (by id, or its `sort-by` then the id), every older copy an append left in one more file (by id, the oldest load first), so the newest copy is still the one read and an undo still finds the older; a date already in that form is left | each date in more files than its rows need (or with delete files, or drifted from its id order) rewritten into files of the table's `file-rows`, every row kept, the older copies as on Delta; a table laid out by more than the id keeps that order | nothing to do: a date is one day file |
+| `--compact` | each date in two or more files under `--target-file-mb` rewritten (OPTIMIZE), one commit a date, every row kept: the rows readers see in the table's order (by id, or its `sort-by` then the id), every older copy an append left in one more file of older copies (by id, in the readers' order: the commit, never the run id), so the newest copy is still the one read and an undo still finds the older; a date already in that form is left | each date in more files than its rows need (or with delete files, or drifted from its id order) rewritten into files of the table's `file-rows`, every row kept, the older copies as on Delta; a table laid out by more than the id keeps that order | nothing to do: a date is one day file |
 | `--checkpoint` | a checkpoint of the latest version | the manifests regrouped one per month | nothing to do: the day files are the current state |
 | `--vacuum-hours H` | the data files no version of the last H hours references deleted (VACUUM) | the snapshots older than H expired, then orphan files | the log's content files of versions older than H deleted |
 

@@ -80,10 +80,10 @@ import java.util.Optional;
  * Hadoop) into the folders Delta Kernel names, and each date is committed through Kernel as ONE version that adds its files and removes
  * the date's earlier ones, as {@link LakeWriter} does. A new table is created by its first date's commit, with {@code target.properties}.
  * A table laid out by more than the id ({@code sort-by}) says so in {@code lake.layout.sort-by}, as an Iceberg table does, so lake maintain
- * keeps its order. An existing table keeps its schema and partitioning: a load column it lacks is left out (and reported), a column the load lacks is null.
- * The two load columns ({@code _load_id}, {@code _source_file}) are the exception: a table made before them gains them, as two nullable
- * columns added at the end in one metadata commit ({@link #withLoadColumns}); its files are not rewritten, their rows read them as null
- * (the oldest load).
+ * keeps its order. An existing table keeps its partitioning; a column the load sends that the table lacks (a promoted or vector column
+ * first sent by a later load, the two load columns {@code _load_id} and {@code _source_file} of a table made before them) is added,
+ * nullable, at the end in one metadata commit ({@link #withColumns}), as the Iceberg and files stores add it; the files are not
+ * rewritten, their rows read it as null. A column the load lacks is null.
  */
 final class DeltaTarget implements TableWriter {
 
@@ -154,9 +154,7 @@ final class DeltaTarget implements TableWriter {
                         + " (give the table's partition-by, or write a new table)");
             }
             com.ash.lake.spi.TableProperties.refuseReplace(((io.delta.kernel.internal.SnapshotImpl) before).getMetadata().getConfiguration(), spec);
-            if (spec.loadColumns()) {
-                before = withLoadColumns(before);
-            }
+            before = withColumns(before, wanted);
             schema = before.getSchema();
             partitionColumns = before.getPartitionColumnNames();
             for (StructField f : wanted.fields()) {
@@ -189,18 +187,21 @@ final class DeltaTarget implements TableWriter {
     }
 
     /**
-     * A table made before the load columns, with {@code _load_id} and {@code _source_file} added: one commit of a {@code metaData} action
-     * whose schema is the table's with the two nullable string columns at the end (what Delta's merge-schema writes; Kernel itself evolves
-     * a schema only under column mapping). No file is rewritten. Written with put-if-absent through the engine; when another writer took
-     * the version, read again. A table under column mapping or in-commit timestamps keeps its schema (the columns left out, reported).
+     * The table with the columns of {@code wanted} it lacks added, each nullable, at the end (schema evolution, as the Iceberg and files
+     * stores add them: a promoted or vector column first sent by a later load, the load columns of a table made before them): one commit
+     * of a {@code metaData} action whose schema is the table's grown (what Delta's merge-schema writes; Kernel itself evolves a schema only
+     * under column mapping). No file is rewritten: the rows written before read the new column as null. Written with put-if-absent through
+     * the engine; when another writer took the version, read again. A table under column mapping or in-commit timestamps (written by
+     * another engine) is not grown here: a data column it lacks refuses the load, naming it (never written and dropped); the load
+     * columns are left out, reported.
      */
-    private Snapshot withLoadColumns(Snapshot snap) throws IOException {
+    private Snapshot withColumns(Snapshot snap, StructType wanted) throws IOException {
         for (int attempt = 0; ; attempt++) {
             StructType s = snap.getSchema();
-            List<String> add = new ArrayList<>();
-            for (String c : List.of(RowPlan.LOAD_ID, RowPlan.SOURCE_FILE)) {
-                if (s.indexOf(c) < 0) {
-                    add.add(c);
+            List<StructField> add = new ArrayList<>();
+            for (StructField f : wanted.fields()) {
+                if (s.indexOf(f.getName()) < 0) {
+                    add.add(f);
                 }
             }
             if (add.isEmpty()) {
@@ -211,11 +212,22 @@ final class DeltaTarget implements TableWriter {
             Map<String, String> conf = meta.getConfiguration();
             if (ColumnMapping.isColumnMappingModeEnabled(ColumnMapping.getColumnMappingMode(conf))
                     || "true".equalsIgnoreCase(conf.get("delta.enableInCommitTimestamps"))) {
-                return snap;                                            // left out by open(): the report lists them
+                List<String> data = new ArrayList<>();
+                add.forEach(f -> {
+                    if (!f.getName().equals(RowPlan.LOAD_ID) && !f.getName().equals(RowPlan.SOURCE_FILE)) {
+                        data.add(f.getName());
+                    }
+                });
+                if (!data.isEmpty()) {
+                    throw new IllegalStateException(path + " has no column " + String.join(", ", data) + " and is a table under column mapping "
+                            + "or in-commit timestamps, which the loader does not widen: add the column with the engine that wrote the table, "
+                            + "or leave it out of promote and vectors; nothing was written");
+                }
+                return snap;                                            // the load columns: left out by open(), the report lists them
             }
             StructType grown = s;
-            for (String c : add) {
-                grown = grown.add(c, StringType.STRING, true);
+            for (StructField f : add) {
+                grown = grown.add(f.getName(), f.getDataType(), true);
             }
             Row action = SingleAction.createMetadataSingleAction(meta.withNewSchema(grown).toRow());
             String file = FileNames.deltaFile(si.getLogPath(), si.getVersion() + 1);
@@ -223,7 +235,8 @@ final class DeltaTarget implements TableWriter {
                 engine.getJsonHandler().writeJsonFileAtomically(file, Utils.singletonCloseableIterator(action), false);
             } catch (java.nio.file.FileAlreadyExistsException e) {
                 if (attempt >= 10) {
-                    throw new IOException(path + ": the load columns could not be added (the table changed ten times meanwhile)", e);
+                    throw new IOException(path + ": the columns " + add.stream().map(StructField::getName).toList() + " could not be added "
+                            + "(the table changed ten times meanwhile)", e);
                 }
             }
             snap = table.getLatestSnapshot(engine);

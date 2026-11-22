@@ -117,7 +117,7 @@ final class DeltaUpkeep {
                 if (files == null || toCompact(new TreeMap<>(Map.of(date, files)), targetBytes).isEmpty()) {
                     break;                                       // another writer replaced or removed the date meanwhile: nothing to do
                 }
-                List<List<TableUpkeep.Staged>> groups = compacted(runtime, store, root, domain, kind, engine, s, date);
+                List<List<TableUpkeep.Staged>> groups = compacted(engine, path, s, date);
                 if (groups != null && !groups.isEmpty() && groups.size() >= files.size()) {
                     break;                                       // already as few files as compaction makes (the rows readers see, the older copies)
                 }
@@ -291,61 +291,13 @@ final class DeltaUpkeep {
 
     /**
      * A date's rows as compaction writes them (class comment): first the rows readers see, in the table's order, then, when an append left
-     * any, every older copy in one group by id and load (the oldest first). Null when the table has a column the lines cannot carry; empty when the
-     * read API's snapshot is not the version {@code s} (a commit landed meanwhile: read again).
+     * any, every older copy in one group by id and in the readers' order (the oldest first). Null when the table has a column the lines
+     * cannot carry. Which copy readers see is the readers' own order ({@link TableUpkeep#ranked}): the commit, never a value in the data.
      */
-    static List<List<TableUpkeep.Staged>> compacted(com.ash.lake.LakeRuntime runtime, com.ash.lake.spi.TableStore store, String root, String domain,
-            String kind, Engine engine, Snapshot s, String date) throws IOException {
+    static List<List<TableUpkeep.Staged>> compacted(Engine engine, String path, Snapshot s, String date) throws IOException {
         Map<String, String> conf = ((io.delta.kernel.internal.SnapshotImpl) s).getMetadata().getConfiguration();
-        Map<String, String> winner = new java.util.HashMap<>();
-        try (com.ash.lake.read.LakeReader lake = store.open(runtime, com.ash.lake.read.LakeAddress.of(root, domain))) {
-            com.ash.lake.read.TableSnapshot snap = lake.table(kind).snapshot(com.ash.lake.spi.AsOf.LATEST).orElse(null);
-            if (snap == null || snap.version() != s.getVersion()) {
-                return List.of();
-            }
-            java.time.LocalDate d = java.time.LocalDate.parse(date);
-            List<com.ash.lake.read.DataFile> files = snap.day(d).map(com.ash.lake.read.DayFiles::files).orElse(List.of());
-            com.ash.lake.read.IdMap ids = snap.ids(d);
-            for (int i = 0; i < ids.size(); i++) {
-                int f = ids.file(ids.id(i));
-                if (f >= 0 && f < files.size()) {
-                    winner.put(ids.id(i), files.get(f).path());
-                }
-            }
-        }
-        List<TableUpkeep.Staged> seen = new ArrayList<>();
-        Map<String, TableUpkeep.Staged> newest = new java.util.HashMap<>();
-        List<TableUpkeep.Staged> older = new ArrayList<>();
-        boolean simple = TableUpkeep.rows(engine, s, pv -> date.equals(pv.get("business_date")), true, (file, row) -> {
-            if (row.id() != null && file.equals(winner.get(row.id())) && !newest.containsKey(row.id())) {
-                newest.put(row.id(), row);
-                seen.add(row);
-            } else {
-                older.add(row);
-            }
-        });
-        if (!simple) {
-            return null;
-        }
-        seen.sort(order(sortedByMore(conf)));
-        List<List<TableUpkeep.Staged>> out = new ArrayList<>();
-        out.add(seen);
-        if (!older.isEmpty()) {
-            older.sort(java.util.Comparator.comparing((TableUpkeep.Staged r) -> r.id() == null ? "" : r.id())
-                    .thenComparing(DeltaUpkeep::loadOf, (a, b) -> com.ash.lake.rows.LoadOrder.compare(a, 0, b, 0)));
-            out.add(older);
-        }
-        return out;
-    }
-
-    /** A staged row's load id ({@code _load_id}); "" when it has none. */
-    static String loadOf(TableUpkeep.Staged r) {
-        try {
-            com.fasterxml.jackson.databind.JsonNode c = JSON.readTree(r.line()).path("columns").path(RowPlan.LOAD_ID);
-            return c.isTextual() ? c.asText() : "";
-        } catch (IOException e) {
-            return "";
-        }
+        List<TableUpkeep.Ranked> rows = TableUpkeep.ranked(engine, path, s, pv -> date.equals(pv.get("business_date")), 1, null, null);
+        return rows == null ? null : TableUpkeep.generations(rows, order(sortedByMore(conf)));
     }
 
     /** The table's row order: by its sort-by fields (the staged row's columns: numbers by value, else text; absent first) then the id. */

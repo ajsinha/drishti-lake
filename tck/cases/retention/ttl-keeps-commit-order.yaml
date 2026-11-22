@@ -1,0 +1,49 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# row retention rewrites a date and keeps the readers' order by COMMIT, never by run id: four appends of one date committed in the order
+# opposite to their run ids (c, a, b, d); retention by AT drops d's P-1 and c's P-3, so readers then see P-1 = 11 (b, committed after
+# a) and P-2 = 21 (b), every older copy still kept (raw-digest: 4 rows); a compaction after it changes nothing readers see. The expected
+# answer is a table loaded with those rows alone (want: same as want=true)
+inputs:
+  c/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-3","DESK":"C","BASE_PV":3,"AT":"2020-01-01T00:00:00Z"}
+  a/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"A","BASE_PV":10,"AT":"2026-10-27T10:00:00Z"}
+    {"POSITION_ID":"P-2","DESK":"A","BASE_PV":20,"AT":"2026-10-27T10:00:00Z"}
+  b/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"B","BASE_PV":11,"AT":"2026-10-27T11:00:00Z"}
+    {"POSITION_ID":"P-2","DESK":"B","BASE_PV":21,"AT":"2026-10-27T11:00:00Z"}
+  d/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"D","BASE_PV":12,"AT":"2020-01-01T00:00:00Z"}
+  want/pv.2026-10-27.jsonl: |
+    {"POSITION_ID":"P-1","DESK":"B","BASE_PV":11,"AT":"2026-10-27T11:00:00Z"}
+    {"POSITION_ID":"P-2","DESK":"B","BASE_PV":21,"AT":"2026-10-27T11:00:00Z"}
+configs:
+  c: |
+    source: {files: '${in}/c/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  a: |
+    source: {files: '${in}/a/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  b: |
+    source: {files: '${in}/b/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  d: |
+    source: {files: '${in}/d/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  want: |
+    source: {files: '${in}/want/*', id: POSITION_ID, promote: [DESK, BASE_PV]}
+    target: {format: ${store}, path: '${lake}/risk/want', domain: risk, kind: want}
+steps:
+  - load: {config: want}
+  - store: [read-visible, '${store}', '${lake}', risk, want, want]
+  - load: {config: c, args: [--run-id, 20261121T131440.000-3-1]}
+  - load: {config: a, args: [--run-id, 20261121T131510.000-1-1]}
+  - load: {config: b, args: [--run-id, 20261121T131500.000-2-1]}
+  - load: {config: d, args: [--run-id, 20261121T131450.000-4-1]}
+  - retention: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --ttl, 1000d, --on, AT]
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want]
+  - store: [read-columns, '${store}', '${lake}', risk, scenario-pv, '2026-10-27', 'DESK:t', 'BASE_PV:n']
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact]
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, want]

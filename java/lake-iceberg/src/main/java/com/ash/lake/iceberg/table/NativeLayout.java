@@ -183,6 +183,14 @@ final class NativeLayout {
 
     /** As above, the files' sort order id given ({@code 0}: unsorted, for rows in another order than the table's sort order). */
     static List<DataFile> writeDay(Table table, LocalDate date, Iterator<Row> sorted, int fileRows, int sortOrder) {
+        return writeDay(table, date, sorted, fileRows, sortOrder, false);
+    }
+
+    /**
+     * As above; with {@code older} the files are files of older copies: their names hold {@link com.ash.lake.rows.LoadOrder#OLDER_NAME}
+     * ({@code <date>-older-<n>-<uuid>.parquet}), so readers put them before the commit's other files, and in the order written.
+     */
+    static List<DataFile> writeDay(Table table, LocalDate date, Iterator<Row> sorted, int fileRows, int sortOrder, boolean older) {
         Schema schema = table.metadata().schema();
         PartitionSpec spec = table.metadata().spec();
         int dateIndex = dateIndex(spec, schema);
@@ -228,7 +236,8 @@ final class NativeLayout {
                 List<Object> key = Arrays.asList(partition);
                 ParquetDataWriter w = open.get(key);
                 if (w == null) {
-                    String name = date + "-" + String.format("%05d", files.size() + open.size()) + "-" + UUID.randomUUID() + ".parquet";
+                    String name = date + (older ? com.ash.lake.rows.LoadOrder.OLDER_NAME : "-") + String.format("%05d", files.size() + open.size())
+                            + "-" + UUID.randomUUID() + ".parquet";
                     w = new ParquetDataWriter(table.io(), dir + "/" + name, schema, props, spec.specId(), partition, sortOrder);
                     open.put(key, w);
                 }

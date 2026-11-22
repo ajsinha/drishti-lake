@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** The one load order: the commit, then the run's time (within one commit), then the id. */
+/** The one load order: the commit, then a file of older copies first, then the run's time (within one commit), then the id. */
 class LoadOrderTest {
 
     private static final String A = "20261121T131500.123-77-9.pv.2026-10-27.jsonl";
@@ -55,5 +55,19 @@ class LoadOrderTest {
         assertEquals("20261121T131500.123-77-9", LoadOrder.run(A));
         assertTrue(LoadOrder.compare("20261121T131500.123-77-9.a", 0, "20261121T131500.123-77-9.b", 0) < 0);
         assertEquals("", LoadOrder.time(null));
+    }
+
+    @Test
+    void inOneCommitAFileOfOlderCopiesIsOlderWhateverItsRunSays() {
+        String late = "20261121T131510.000-1-1.1";                     // a run id later than the copy readers see
+        String early = "20261121T131500.000-2-1.1";
+        assertTrue(LoadOrder.compare(late, 5, true, early, 5, false) < 0);
+        assertTrue(LoadOrder.compare(early, 5, false, late, 5, true) > 0);
+        assertEquals(0, LoadOrder.compare(late, 5, true, early, 5, true));   // two files of older copies: the caller's order (file, row)
+        assertTrue(LoadOrder.compare(early, 6, true, late, 5, false) > 0);   // the commit first: a later commit's older copies are newer
+        assertTrue(LoadOrder.olderByName("s3://b/t/data/business_date=2026-10-27/2026-10-27-older-00000-0f.parquet"));
+        assertFalse(LoadOrder.olderByName("/t/data/2026-10-27-00000-0f.parquet"));
+        assertFalse(LoadOrder.olderByName("/older-copies/2026-10-27-00000-0f.parquet"));
+        assertEquals("lake.copies", LoadOrder.OLDER_TAG);
     }
 }

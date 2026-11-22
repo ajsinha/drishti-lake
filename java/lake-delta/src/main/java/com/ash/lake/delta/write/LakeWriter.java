@@ -151,6 +151,15 @@ public final class LakeWriter {
 
     /** Writes the manifest's parts; {@code partsDone} is told after each part. */
     public Result write(LakeManifest m, IntConsumer partsDone) throws IOException {
+        return write(m, partsDone, p -> false);
+    }
+
+    /**
+     * As {@link #write(LakeManifest, IntConsumer)}, the files of the parts {@code older} accepts tagged as files of older copies (their add
+     * actions' tag {@code lake.copies: older}, {@link com.ash.lake.rows.LoadOrder#OLDER_TAG}): a rewrite of a date that keeps an id's
+     * older copies beside the rows readers see, in the same commit, so the readers' order still puts them first.
+     */
+    public Result write(LakeManifest m, IntConsumer partsDone, java.util.function.Predicate<LakeManifest.Part> older) throws IOException {
         if (com.ash.lake.io.LocalPaths.isLocal(m.table())) {
             Files.createDirectories(LocalWriteFileIO.local(m.table()));
         }
@@ -206,8 +215,9 @@ public final class LakeWriter {
                  CloseableIterator<FilteredColumnarBatch> physical = Transaction.transformLogicalData(engine, state, data, pv);
                  CloseableIterator<DataFileStatus> written = engine.getParquetHandler().writeParquetFiles(targetDirectory(ctx), physical, stats);
                  CloseableIterator<Row> adds = Transaction.generateAppendActions(engine, state, written, ctx)) {
+                boolean mark = older.test(part);
                 while (adds.hasNext()) {
-                    actions.add(adds.next());
+                    actions.add(mark ? olderCopies(adds.next()) : adds.next());
                     files++;
                 }
                 rows += data.rows;
@@ -223,6 +233,39 @@ public final class LakeWriter {
             }
         }
         return new Result(result.getVersion(), files, rows, removed, leftOut);
+    }
+
+    /** An add action (a single action row) with the tag of a file of older copies added to its tags. */
+    static Row olderCopies(Row single) {
+        int at = single.getSchema().indexOf("add");
+        Row add = single.getStruct(at);
+        StructType s = add.getSchema();
+        Map<Integer, Object> values = new HashMap<>();
+        for (int i = 0; i < s.length(); i++) {
+            if (add.isNullAt(i)) {
+                continue;
+            }
+            io.delta.kernel.types.DataType t = s.at(i).getDataType();
+            values.put(i, t instanceof StringType ? add.getString(i) : t instanceof LongType ? (Object) add.getLong(i)
+                    : t instanceof io.delta.kernel.types.IntegerType ? (Object) add.getInt(i)
+                    : t instanceof io.delta.kernel.types.BooleanType ? (Object) add.getBoolean(i)
+                    : t instanceof io.delta.kernel.types.MapType ? add.getMap(i) : t instanceof StructType ? add.getStruct(i)
+                    : t instanceof ArrayType ? add.getArray(i) : null);
+            if (values.get(i) == null) {
+                throw new IllegalStateException("an add action's field " + s.at(i).getName() + " of type " + t + " is not carried");
+            }
+        }
+        Map<String, String> tags = new java.util.LinkedHashMap<>();
+        int ti = s.indexOf("tags");
+        if (ti < 0) {
+            throw new IllegalStateException("Delta Kernel's add action has no tags field");
+        }
+        if (!add.isNullAt(ti)) {
+            tags.putAll(io.delta.kernel.internal.util.VectorUtils.toJavaMap(add.getMap(ti)));
+        }
+        tags.put(com.ash.lake.rows.LoadOrder.OLDER_TAG, com.ash.lake.rows.LoadOrder.OLDER_VALUE);
+        values.put(ti, io.delta.kernel.internal.util.VectorUtils.stringStringMapValue(tags));
+        return io.delta.kernel.internal.actions.SingleAction.createAddFileSingleAction(new io.delta.kernel.internal.data.GenericRow(s, values));
     }
 
     /** The table's columns: id, doc, business_date, the partition columns, the promoted columns. */

@@ -337,23 +337,21 @@ public final class LakeRetention {
             }
         }
         RowRetention.Judge judge = r.judge(ages, now);
+        String sortBy = DeltaUpkeep.sortedByMore(((io.delta.kernel.internal.SnapshotImpl) s).getMetadata().getConfiguration());
         for (String date : dates) {
-            List<TableUpkeep.Staged> part = TableUpkeep.rows(engine, s, pv -> date.equals(pv.get("business_date")), true);
-            if (part == null) {
+            // the rows kept stay in their place in the readers' order: an id's newest copy by commit is still what readers see
+            long[] dropped = {0};
+            List<TableUpkeep.Ranked> kept = TableUpkeep.ranked(engine, path, s, pv -> date.equals(pv.get("business_date")), 1,
+                    st -> !judge.keeps(r.ageOfLine(st.line(), RowRetention.dayStart(date))), dropped);
+            if (kept == null) {
                 throw new IOException(table + ": a column the retention cannot carry");
             }
-            List<TableUpkeep.Staged> kept = new ArrayList<>(part.size());
-            for (TableUpkeep.Staged st : part) {
-                if (judge.keeps(r.ageOfLine(st.line(), RowRetention.dayStart(date)))) {
-                    kept.add(st);
-                }
-            }
-            if (kept.size() == part.size()) {
+            if (dropped[0] == 0) {
                 continue;
             }
-            line(out, date, part.size(), part.size() - kept.size());
+            line(out, date, kept.size() + dropped[0], dropped[0]);
             if (!dryRun) {
-                LakeUndo.rewrite(runtime, engine, path, s, date, kept);
+                LakeUndo.rewriteGroups(runtime, engine, path, s, date, TableUpkeep.generations(kept, DeltaUpkeep.order(sortBy)), Integer.MAX_VALUE, false);
                 s = Table.forPath(engine, path).getLatestSnapshot(engine);
             }
         }

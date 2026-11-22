@@ -89,16 +89,20 @@ final class FilesWriter implements TableWriter {
         } else {
             com.ash.lake.spi.TableProperties.refuseReplace(log.properties(), spec);
             List<Column> cols = new ArrayList<>(before.all());
-            if (spec.loadColumns()) {
-                for (String l : List.of(LOAD_ID, SOURCE_FILE)) {
-                    if (before.indexOf(l) < 0) {
-                        cols.add(new Column(l, ColumnType.STRING));       // a table made before the load columns gains them
-                        columnsChanged = true;
-                    }
+            List<String> newParts = spec.partition().stream().filter(p -> before.indexOf(p) < 0).toList();
+            if (!newParts.isEmpty()) {
+                throw new IllegalStateException(spec.table() + " has no partition column " + String.join(", ", newParts) + ": give the table's "
+                        + "partition-by, or write a new table");
+            }
+            // a column the load sends that the table lacks (a promoted or vector column first sent by a later load, the load columns of a
+            // table made before them) is added, as Delta and Iceberg add it: the rows written before read it as null
+            for (Column w : wanted) {
+                if (before.indexOf(w.name()) < 0) {
+                    cols.add(w);
+                    columnsChanged = true;
                 }
             }
             columns = Columns.of(cols);
-            wanted.stream().map(Column::name).filter(n -> columns.indexOf(n) < 0).forEach(leftOut::add);
         }
         kind = new char[columns.size()];
         index = new int[columns.size()];

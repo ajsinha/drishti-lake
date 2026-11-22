@@ -62,6 +62,22 @@ public final class DeltaRows {
     private DeltaRows() {
     }
 
+    /**
+     * Each data file of snapshot {@code s} of the table at {@code path} with its place among its business date's files, newest last, as
+     * the readers order them (a reader keeps an id's copy from the last file holding it, and in that file its last row): by the path a
+     * scan file's status names. What a rewrite of a date ranks the copies by, so it keeps what readers see (the newest copy by commit).
+     */
+    public static Map<String, Integer> readersOrder(Engine engine, String path, io.delta.kernel.Snapshot s) {
+        DeltaTable t = new DeltaTable(engine, path, "id", "doc", "business_date");
+        Map<String, Integer> out = new java.util.HashMap<>();
+        for (List<Row> files : t.layout(s).files().values()) {
+            for (int i = 0; i < files.size(); i++) {
+                out.put(InternalScanFileUtils.getAddFileStatus(files.get(i)).getPath(), i);
+            }
+        }
+        return out;
+    }
+
     /** A Delta schema as the product's columns. */
     public static Columns columns(StructType schema) {
         List<Column> out = new ArrayList<>();
