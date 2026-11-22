@@ -5,6 +5,17 @@ Entries are written per release; unreleased work is listed first.
 
 ## 0.9.0 (2026-11-21): the move from Drishti
 
+- **One table maintenance for every store (`lake maintain`, G4 lake gap)**: `LakeMaintain` (and `python -m drishti_lake maintain`) keeps
+  a Delta, Iceberg or files table by the same options, in one order: keep-days under the drop guard (`--max-drop-share`, `--force-drop`)
+  and the retention floor (`--floor-days`), row retention, compaction, checkpoint and vacuum. Delta through Delta Kernel alone (no delta-rs):
+  compaction rewrites each date held in two or more small files (OPTIMIZE), a checkpoint of the latest version, a vacuum that deletes the
+  data files no version of the last `--vacuum-hours` references (a file no commit names: after 72 hours too; nothing deleted unless every
+  file of the latest version is matched). Iceberg through iceberg-core: compaction (`NativeMaintenance.compactDates`: a date in more files
+  than its rows need, every row kept, a table laid out by more than the id kept in that order; `SortedRuns` takes an order and keeps every
+  row on request), the manifests regrouped, snapshots expired then orphan files. Files: the log's content files of older versions vacuumed
+  (a version whose content went is refused by name); compaction and checkpoint have nothing to do there. The printed line is the same on
+  every store; kit cases `maintain/compact-checkpoint-vacuum` and `maintain/keep-days-and-drop-guard`; the runner's `read-files` verb.
+  LOADER.md "Maintenance".
 - **Drishti Tools 1.1.0**: `drishti.tools.version` moves from 1.0.0 to the 1.1.0 tag (its jars name an `Automatic-Module-Name`), the
   version every product of the family pins.
 - **The files store on S3 and in memory (G3 F4, decision O3: built, not declared)**: the files store reads and writes through the

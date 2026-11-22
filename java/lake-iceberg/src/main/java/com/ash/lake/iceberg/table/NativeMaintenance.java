@@ -228,6 +228,73 @@ final class NativeMaintenance {
     }
 
     /**
+     * Compaction ({@code lake maintain --compact}): each business date in more files than its rows need (or with delete files), and for a
+     * table sorted by id one whose files drifted from that order, is rewritten into files of the table's {@code file-rows}, one
+     * iceberg-core rewrite a date (validated: a date another writer changed meanwhile fails the commit, nothing lost). Unlike relayout,
+     * every row is kept (an append's repeated ids too): the rows are only regrouped, by id, or for a table laid out by more than the id
+     * ({@code lake.layout.sort-by}) by those fields then the id, its files then claiming no sort order. The dates rewritten (on a dry run:
+     * the dates that would be, nothing written).
+     */
+    static List<LocalDate> compactDates(Table t, boolean dryRun, Path spillDir, long budget) {
+        t.refresh();
+        List<LocalDate> done = new ArrayList<>();
+        if (t.currentSnapshot().isEmpty()) {
+            return done;
+        }
+        int fileRows = NativeLayout.fileRows(t);
+        boolean shard = IcebergMaintenance.shardSorted(t.metadata().properties());
+        Comparator<Row> order = shard ? sortBy(com.ash.lake.PersistedNames.get(t.metadata().properties(), "layout.sort-by", "")) : Comparator.comparing(Row::id);
+        int sortOrder = shard ? 0 : t.metadata().sortOrder().orderId();
+        try (ExecutorService pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            NativeKindTable k = new NativeKindTable(t, pool);
+            Layout l = layout(t, pool);
+            List<NestedField> promoted = t.metadata().schema().columns().stream().filter(f -> f.id() > 3).toList();
+            for (Day day : l.days().values()) {
+                boolean tooMany = day.deletes() || day.files().size() > Math.max(1, (day.rows() + fileRows - 1) / fileRows);
+                if (LocalDate.MIN.equals(day.date()) || !(tooMany || !shard && drifted(day, fileRows, promoted))) {
+                    continue;
+                }
+                if (dryRun) {
+                    done.add(day.date());
+                    continue;
+                }
+                try (SortedRuns rows = new SortedRuns(spillDir, "compact-" + day.date(), order, false)) {
+                    for (int f = 0; f < day.files().size(); f++) {
+                        copy(k, l, day, f, promoted, rows, budget);
+                    }
+                    List<DataFile> files = NativeLayout.writeDay(t, day.date(), rows.merged(), fileRows, sortOrder);
+                    Set<String> remove = dayFiles(t, day);
+                    Set<String> read = new HashSet<>(remove);
+                    LocalDate date = day.date();
+                    try {
+                        Operations.rewriteFiles(t, remove, files, f -> date.equals(NativeLayout.dateOf(t, f)), read);
+                    } catch (RuntimeException e) {
+                        files.forEach(f -> deleteQuietly(t, f.path()));      // no orphans from a rewrite that did not commit
+                        throw e;
+                    }
+                    done.add(date);
+                }
+            }
+        }
+        return done;
+    }
+
+    /** The order of a layout's {@code sort-by} fields ({@code LEGAL_ENTITY,DESK,id}): each field's value (absent first), then the id. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    static Comparator<Row> sortBy(String fields) {
+        Comparator<Row> c = (a, b) -> 0;
+        for (String f : fields.split(",")) {
+            String name = f.trim();
+            if (name.isEmpty() || name.equals("id")) {
+                continue;
+            }
+            c = c.thenComparing((Row r) -> r.columns().get(name), Comparator.nullsFirst((x, y) -> x.getClass() == y.getClass() && x instanceof Comparable cx
+                    ? cx.compareTo(y) : String.valueOf(x).compareTo(String.valueOf(y))));
+        }
+        return c.thenComparing(Row::id);
+    }
+
+    /**
      * Undoes load {@code id} (docs/guides/DATA_LAKE_GUIDE.md section 5.5): each day whose files may hold its rows ({@code _load_id}
      * bounds) is rewritten without them, one commit a day; a day the load replaced (its commit an overwrite naming the load in
      * {@code lake.load-ids}) gets the rows it had before back, with the rows later loads appended kept. Returns a line per day undone.

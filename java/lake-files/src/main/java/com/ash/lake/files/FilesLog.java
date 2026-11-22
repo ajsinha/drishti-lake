@@ -177,7 +177,12 @@ final class FilesLog {
         if (c == null || c.content() == null) {
             return List.of();
         }
-        return dir.resolve(c.content()).lines();
+        try {
+            return dir.resolve(c.content()).lines();
+        } catch (java.io.FileNotFoundException | java.nio.file.NoSuchFileException gone) {
+            throw new IOException("version " + c.version() + " of " + table + " (" + c.date() + ") is no longer held: lake maintain's vacuum "
+                    + "removed its content (time travel reaches back --vacuum-hours)", gone);
+        }
     }
 
     /** A commit that does not check the date's version it was built on (a replace, a delete, an undo's rewrite). */

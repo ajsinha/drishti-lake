@@ -87,8 +87,35 @@ All in `com.ash.lake.load`, run like `LakeLoad`. **Undo** removes exactly a load
 is undone by restoring the date as it was (rows appended by later loads kept). **Retention** removes whole business dates (`--dates`) in one
 commit, or the rows older than `--ttl` on a field (default the `arrived_at` column, else the business date) or beyond `--max-rows`. **Check**
 reads the lake files and the tables on disk and reports findings.
-Iceberg upkeep (compaction, snapshot expiry, orphan files) is `com.ash.lake.iceberg.table.IcebergMaintenance`. The same commands are
-`python -m drishti_lake undo|retention|check|maintain|lakes` ([PYTHON.md](PYTHON.md)).
+The same commands are `python -m drishti_lake undo|retention|check|maintain|lakes` ([PYTHON.md](PYTHON.md)).
+
+## Maintenance: `lake maintain`
+
+One table's upkeep, the same options and the same order on every store (Delta, Iceberg, files; local disk, S3, memory), through the
+official libraries (Delta Kernel, iceberg-core), each step an ordinary commit:
+
+```text
+LakeMaintain --lake ROOT --format delta|iceberg|files --table domain/table
+    [--keep-days N [--as-of D] [--zone Z] [--max-drop-share F] [--force-drop]] [--floor-days D]
+    [--ttl 8h [--on FIELD] [--max-rows N]] [--compact [--target-file-mb 128]] [--checkpoint] [--vacuum-hours H] [--dry-run] [--json]
+```
+
+| Step | Delta | Iceberg | Files |
+|---|---|---|---|
+| `--keep-days N` | the business dates older than the newest N on or before `--as-of` (the business today in `--zone`) removed in one commit; **refused, nothing removed, over `--max-drop-share` (0.5) of the table's rows** unless `--force-drop`; never a date within `--floor-days` of `--as-of` | same | same |
+| `--ttl` / `--max-rows` | the row retention above | same | same |
+| `--compact` | each date in two or more files under `--target-file-mb` rewritten (OPTIMIZE), one commit a date, every row kept | each date in more files than its rows need (or with delete files, or drifted from its id order) rewritten into files of the table's `file-rows`, every row kept; a table laid out by more than the id keeps that order | nothing to do: a date is one day file |
+| `--checkpoint` | a checkpoint of the latest version | the manifests regrouped one per month | nothing to do: the day files are the current state |
+| `--vacuum-hours H` | the data files no version of the last H hours references deleted (VACUUM) | the snapshots older than H expired, then orphan files | the log's content files of versions older than H deleted |
+
+Vacuum keeps every version committed in the last H hours and the version current at the cut, so time travel reaches back H hours; an older
+version is then refused by name. A file no commit names (a load still running, or one that died) goes only when it is older than 72 hours
+as well. `--floor-days D` raises H to D days. A dry run changes nothing and says what would change. The printed line is the same on every
+store (the table's dates and rows before and after, the steps run); `--json` gives each step's detail (dates compacted, files and bytes
+vacuumed). The run fails (exit 1) for an absent table, a negative `--vacuum-hours`, or the drop guard; a Delta vacuum that cannot match
+every file of the latest version to the table's folder deletes nothing. The parity kit's cases: `maintain/compact-checkpoint-vacuum`,
+`maintain/keep-days-and-drop-guard`. `IcebergMaintenance` (an Iceberg lake's domains at once: relayout, `--columns`, undo) stays the Iceberg
+store's own tool.
 
 ## The inbox: hand-over by `.ready` files
 

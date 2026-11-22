@@ -178,12 +178,16 @@ final class NativeLayout {
      * file its own id range). Nothing is committed: {@link #commitDays} makes the files the day's data.
      */
     static List<DataFile> writeDay(Table table, LocalDate date, Iterator<Row> sorted, int fileRows) {
+        return writeDay(table, date, sorted, fileRows, table.metadata().sortOrder().orderId());
+    }
+
+    /** As above, the files' sort order id given ({@code 0}: unsorted, for rows in another order than the table's sort order). */
+    static List<DataFile> writeDay(Table table, LocalDate date, Iterator<Row> sorted, int fileRows, int sortOrder) {
         Schema schema = table.metadata().schema();
         PartitionSpec spec = table.metadata().spec();
         int dateIndex = dateIndex(spec, schema);
         List<NestedField> cols = schema.columns();
         Map<String, String> props = table.metadata().properties();
-        int sortOrder = table.metadata().sortOrder().orderId();
         String base = table.metadata().location().replaceAll("/+$", "") + "/data/" + IcebergLayout.DATE + "=" + date;
         // one open file per partition tuple (the date, then the partition-by fields' values), each its own run of the sorted rows
         Map<List<Object>, ParquetDataWriter> open = new LinkedHashMap<>();

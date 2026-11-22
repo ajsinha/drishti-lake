@@ -135,6 +135,7 @@ public final class TckRunner {
             case "load" -> LakeLoad.run(RT, argv, ps);
             case "undo" -> LakeUndo.run(RT, argv, ps);
             case "retention" -> LakeRetention.run(RT, argv, ps);
+            case "maintain" -> com.ash.lake.load.LakeMaintain.run(RT, argv, ps);   // lake-only
             case "store" -> store(argv, ps);   // lake-only
             default -> throw new IllegalArgumentException("unknown op " + op);
         };
@@ -496,6 +497,7 @@ final class ReadVerbs {   // lake-only
                 case "read-tables" -> lake.tables() + " new " + lake.newTables(java.util.Set.of(a[4]));   // lake-only
                 case "read-health" -> { var h = lake.health(java.time.Instant.now()); yield "reachable=" + h.reachable() + " memory=" + h.memoryOnly() + " engine=" + !h.engine().isEmpty(); }   // lake-only
                 case "read-days" -> days(lake, a[2] + "|" + a[4], a[4]);   // lake-only
+                case "read-files" -> files(snap(lake, a[4]));   // lake-only: data files per date (compaction)
                 case "read-ids" -> ids(snap(lake, a[4]), LocalDate.parse(args.get(0)));   // lake-only
                 case "read-doc" -> docs(snap(lake, a[4]), LocalDate.parse(args.get(0)));   // lake-only
                 case "read-columns" -> columns(snap(lake, a[4]), LocalDate.parse(args.get(0)), args.subList(1, args.size()));   // lake-only
@@ -619,6 +621,14 @@ final class ReadVerbs {   // lake-only
                     .append(was == null ? "" : was.containsKey(d) && was.get(d).equals(day.stamp()) ? ", unchanged" : ", changed");   // lake-only
         }   // lake-only
         STAMPS.put(key, now);   // lake-only
+        return out.toString();   // lake-only
+    }   // lake-only
+
+    static String files(com.ash.lake.read.TableSnapshot s) throws java.io.IOException {   // lake-only
+        StringBuilder out = new StringBuilder("dates " + s.dates().size());   // lake-only
+        for (LocalDate d : s.dates()) {   // lake-only
+            out.append("\n").append(d).append(": files=").append(s.day(d).orElseThrow().files().size());   // lake-only
+        }   // lake-only
         return out.toString();   // lake-only
     }   // lake-only
 

@@ -60,6 +60,7 @@ class public final class com.ash.lake.load.FileRows
 class public final class com.ash.lake.load.IcebergStore implements com.ash.lake.spi.TableStore
 class public final class com.ash.lake.load.LakeCheck
 class public final class com.ash.lake.load.LakeLoad
+class public final class com.ash.lake.load.LakeMaintain
 class public final class com.ash.lake.load.LakeRetention
 class public final class com.ash.lake.load.LakeUndo
 class public final class com.ash.lake.load.Stores
@@ -132,6 +133,7 @@ class public static final record com.ash.lake.inbox.Routes$Route
 class public static final record com.ash.lake.inbox.Signal$Landed
 class public static final record com.ash.lake.load.FileRows$Counted
 class public static final record com.ash.lake.load.LakeCheck$Finding
+class public static final record com.ash.lake.load.LakeMaintain$Steps
 class public static final record com.ash.lake.load.LakeUndo$Done
 class public static final record com.ash.lake.load.TableDateRows$Counts
 class public static final record com.ash.lake.memory.MemoryLakeSettings$Compaction
@@ -797,6 +799,26 @@ com.ash.lake.load.LakeLoad :: public static int com.ash.lake.load.LakeLoad.run(j
 com.ash.lake.load.LakeLoad :: public static java.lang.String com.ash.lake.load.LakeLoad.packDomain(com.ash.lake.LakeRuntime,java.nio.file.Path) throws java.io.IOException
 com.ash.lake.load.LakeLoad :: public static java.util.Map<java.lang.String, java.util.SortedSet<java.time.LocalDate>> com.ash.lake.load.LakeLoad.tarTables(com.ash.lake.LakeRuntime,java.lang.String) throws java.io.IOException
 com.ash.lake.load.LakeLoad :: public static void com.ash.lake.load.LakeLoad.main(java.lang.String[])
+com.ash.lake.load.LakeMaintain :: public static int com.ash.lake.load.LakeMaintain.run(com.ash.lake.LakeRuntime,java.lang.String[],java.io.PrintStream)
+com.ash.lake.load.LakeMaintain :: public static int com.ash.lake.load.LakeMaintain.run(java.lang.String[],java.io.PrintStream)
+com.ash.lake.load.LakeMaintain :: public static java.util.Map<java.lang.String, java.lang.Object> com.ash.lake.load.LakeMaintain.maintain(com.ash.lake.LakeRuntime,java.lang.String,java.lang.String,java.lang.String,com.ash.lake.load.LakeMaintain$Steps,java.time.Instant,boolean) throws java.lang.Exception
+com.ash.lake.load.LakeMaintain :: public static void com.ash.lake.load.LakeMaintain.main(java.lang.String[])
+com.ash.lake.load.LakeMaintain$Steps :: public boolean com.ash.lake.load.LakeMaintain$Steps.checkpoint()
+com.ash.lake.load.LakeMaintain$Steps :: public boolean com.ash.lake.load.LakeMaintain$Steps.compact()
+com.ash.lake.load.LakeMaintain$Steps :: public boolean com.ash.lake.load.LakeMaintain$Steps.forceDrop()
+com.ash.lake.load.LakeMaintain$Steps :: public com.ash.lake.common.RowRetention com.ash.lake.load.LakeMaintain$Steps.rows()
+com.ash.lake.load.LakeMaintain$Steps :: public com.ash.lake.load.LakeMaintain$Steps(int,java.time.LocalDate,java.lang.String,double,boolean,int,com.ash.lake.common.RowRetention,boolean,long,boolean,java.lang.Long)
+com.ash.lake.load.LakeMaintain$Steps :: public double com.ash.lake.load.LakeMaintain$Steps.maxDropShare()
+com.ash.lake.load.LakeMaintain$Steps :: public final boolean com.ash.lake.load.LakeMaintain$Steps.equals(java.lang.Object)
+com.ash.lake.load.LakeMaintain$Steps :: public final int com.ash.lake.load.LakeMaintain$Steps.hashCode()
+com.ash.lake.load.LakeMaintain$Steps :: public final java.lang.String com.ash.lake.load.LakeMaintain$Steps.toString()
+com.ash.lake.load.LakeMaintain$Steps :: public int com.ash.lake.load.LakeMaintain$Steps.floorDays()
+com.ash.lake.load.LakeMaintain$Steps :: public int com.ash.lake.load.LakeMaintain$Steps.keepDays()
+com.ash.lake.load.LakeMaintain$Steps :: public java.lang.Long com.ash.lake.load.LakeMaintain$Steps.vacuumHours()
+com.ash.lake.load.LakeMaintain$Steps :: public java.lang.String com.ash.lake.load.LakeMaintain$Steps.zone()
+com.ash.lake.load.LakeMaintain$Steps :: public java.time.LocalDate com.ash.lake.load.LakeMaintain$Steps.asOf()
+com.ash.lake.load.LakeMaintain$Steps :: public long com.ash.lake.load.LakeMaintain$Steps.targetFileMb()
+com.ash.lake.load.LakeMaintain$Steps :: public static com.ash.lake.load.LakeMaintain$Steps com.ash.lake.load.LakeMaintain$Steps.none()
 com.ash.lake.load.LakeRetention :: public static int com.ash.lake.load.LakeRetention.run(com.ash.lake.LakeRuntime,java.lang.String[],java.io.PrintStream)
 com.ash.lake.load.LakeRetention :: public static int com.ash.lake.load.LakeRetention.run(java.lang.String[],java.io.PrintStream)
 com.ash.lake.load.LakeRetention :: public static java.util.Map<java.lang.String, java.lang.Object> com.ash.lake.load.LakeRetention.apply(com.ash.lake.LakeRuntime,java.lang.String,java.lang.String,java.lang.String,com.ash.lake.common.RowRetention,java.time.Instant,boolean) throws java.lang.Exception

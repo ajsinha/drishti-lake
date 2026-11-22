@@ -65,9 +65,20 @@ final class SortedRuns implements Closeable {
     private int nextSeq;
     private long rows;
 
+    /** The order of the rows, and whether equal ids keep only the last added (else every row is kept, equal keys in input order). */
+    private final Comparator<Row> order;
+    private final boolean dedupe;
+
     SortedRuns(Path dir, String name) {
+        this(dir, name, BY_ID, true);
+    }
+
+    /** Rows in {@code order} (stable: equal rows in input order), every row kept: a compaction's rewrite, which never drops one. */
+    SortedRuns(Path dir, String name, Comparator<Row> order, boolean dedupe) {
         this.dir = dir;
         this.name = name.replaceAll("[^A-Za-z0-9_.-]", "_");
+        this.order = order;
+        this.dedupe = dedupe;
     }
 
     /** About what a row takes in memory: its text (one byte a character for ASCII), objects and promoted values. */
@@ -154,9 +165,12 @@ final class SortedRuns implements Closeable {
     }
 
     /** Sorted by id, the last added of equal ids kept (a stable sort keeps the input order among equals). */
-    private static List<Row> dedupe(List<Row> rows) {
+    private List<Row> dedupe(List<Row> rows) {
         List<Row> sorted = new ArrayList<>(rows);
-        sorted.sort(BY_ID);
+        sorted.sort(order);
+        if (!dedupe) {
+            return sorted;
+        }
         List<Row> out = new ArrayList<>(sorted.size());
         for (int i = 0; i < sorted.size(); i++) {
             if (i + 1 < sorted.size() && sorted.get(i + 1).id().equals(sorted.get(i).id())) {
@@ -184,8 +198,9 @@ final class SortedRuns implements Closeable {
         }
         Taken rest = take();
         cursors.add(new ListCursor(dedupe(rest.rows()).iterator(), Integer.MAX_VALUE));   // the newest input
-        PriorityQueue<Cursor> queue = new PriorityQueue<>(Comparator.comparing((Cursor c) -> c.current().id())
-                .thenComparing(Comparator.comparingInt(Cursor::seq).reversed()));
+        Comparator<Cursor> bySeq = Comparator.comparingInt(Cursor::seq);
+        PriorityQueue<Cursor> queue = new PriorityQueue<>(Comparator.comparing((Cursor c) -> c.current(), order)
+                .thenComparing(dedupe ? bySeq.reversed() : bySeq));
         for (Cursor c : cursors) {
             if (c.advance()) {
                 queue.add(c);
@@ -207,7 +222,7 @@ final class SortedRuns implements Closeable {
                 Cursor top = queue.poll();
                 Row row = top.current();
                 requeue(top);
-                while (!queue.isEmpty() && queue.peek().current().id().equals(row.id())) {
+                while (dedupe && !queue.isEmpty() && queue.peek().current().id().equals(row.id())) {
                     requeue(queue.poll());                      // an older copy of the same id: dropped
                 }
                 return row;

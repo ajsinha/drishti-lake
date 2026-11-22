@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# lake maintain's keep-days on every store, under the drop guard (LoadGuard: more than --max-drop-share of the rows is refused, nothing
+# removed, unless --force-drop) and the retention floor (--floor-days: no date within D days of --as-of goes); counted back from --as-of
+inputs:
+  pv.2026-10-26.jsonl: {pv: {n: 10, scenarios: 2, seed: 1, start: '2026-10-26'}}
+  pv.2026-10-27.jsonl: {pv: {n: 10, scenarios: 2, seed: 2}}
+  pv.2026-10-28.jsonl: {pv: {n: 10, scenarios: 2, seed: 3, start: '2026-10-28'}}
+  pv.2026-10-29.jsonl: {pv: {n: 10, scenarios: 2, seed: 4, start: '2026-10-29'}}
+config: |
+  source: {files: '${in}/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+  target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv}
+steps:
+  - load: []
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --keep-days, '1', --as-of, '2026-10-29']
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --keep-days, '1', --as-of, '2026-10-29', --floor-days, '3', --dry-run]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --keep-days, '3', --as-of, '2026-10-29', --zone, America/New_York]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --keep-days, '1', --as-of, '2026-10-29', --max-drop-share, '0.6']
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --keep-days, '1', --as-of, '2026-10-29', --force-drop]
+  - store: [dates, '${store}', '${lake}', risk, scenario-pv]

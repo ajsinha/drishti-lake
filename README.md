@@ -22,7 +22,8 @@ licence: proprietary (LICENSE)
 Drishti Lake is the data-lake layer a risk or analytics system needs to keep its lake right. One library reads a lake file; writes and reads
 Delta and Iceberg tables through the official libraries (Delta Kernel, iceberg-core, Parquet) and plain JSON Lines day files through the same
 interface; loads JSON Lines (plain, gzip, zstd, zip, tar) concurrently; takes hand-overs from an inbox (`.ready` files); and keeps tables healthy
-(retention, delete by date, undo of a load, relocation, Iceberg maintenance). The three stores are **feature-identical**, local, on S3 or in memory,
+(retention, delete by date, undo of a load, relocation, and one maintenance command for every store: compaction, checkpoint, vacuum). The
+three stores are **feature-identical**, local, on S3 or in memory,
 and a parity kit proves it case by case. It is not a query engine and not a catalog service.
 
 Author: Ashutosh Sinha. Proprietary. All rights reserved (see [LICENSE](LICENSE)).

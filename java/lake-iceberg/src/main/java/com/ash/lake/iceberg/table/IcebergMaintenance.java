@@ -156,6 +156,58 @@ public final class IcebergMaintenance {
         }
     }
 
+    /**
+     * {@code lake maintain}'s steps on the one Iceberg table {@code domain/kind} of the lake at {@code root} ({@code LakeMaintain}, the
+     * Delta side, calls it by name): {@code compact} rewrites each business date in more files than its rows need (small appends), or
+     * whose files drifted from the table's id order, into files of its {@code file-rows}, every row kept
+     * ({@link NativeMaintenance#compactDates}, iceberg-core's rewrite, one commit a date);
+     * {@code checkpoint} regroups the manifests one per month (Iceberg's equivalent of a Delta checkpoint: planning opens a few manifests);
+     * {@code vacuumHours} (null: none) expires the snapshots older than that, the current one kept, deleting the files only they
+     * referenced, then removes the orphan files older than that and than {@link OrphanFiles#MIN_AGE_HOURS}. A line per step; a dry run
+     * changes nothing and says which dates compaction would rewrite and which orphans would go. An absent table: an empty answer.
+     */
+    public static Map<String, Object> maintainTable(com.ash.lake.LakeRuntime runtime, String root, String domain, String kind, boolean compact,
+            boolean checkpoint, Long vacuumHours, boolean dryRun, Path spillDir) throws Exception {
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        try (LayoutLake view = LayoutLake.of(runtime, new HashMap<>(Map.of("root", root, "domain", domain, "engine", "native")))) {
+            var table = view.load(kind);
+            if (table.isEmpty()) {
+                return out;
+            }
+            com.ash.lake.iceberg.Table t = ((LayoutLake.Native.Kind) table.get()).t();
+            if (compact) {
+                List<LocalDate> days = NativeMaintenance.compactDates(t, dryRun, spillDir, 256L << 20);
+                out.put("compact", Map.of("dates", days.stream().map(LocalDate::toString).toList()));
+            }
+            if (checkpoint) {
+                if (!dryRun) {
+                    NativeMaintenance.rewriteManifests(t);
+                }
+                out.put("checkpoint", Map.of("manifests", dryRun ? "would be regrouped" : "regrouped"));
+            }
+            if (vacuumHours != null) {
+                if (vacuumHours < 0) {
+                    throw new IllegalArgumentException("--vacuum-hours must be 0 or more: " + vacuumHours);
+                }
+                Map<String, Object> v = new java.util.LinkedHashMap<>();
+                v.put("hours", vacuumHours);
+                int before = t.metadata().snapshots().size();
+                if (!dryRun) {
+                    NativeMaintenance.expireSnapshots(t, vacuumHours);
+                    t.refresh();
+                    v.put("snapshotsExpired", before - t.metadata().snapshots().size());
+                }
+                List<OrphanFiles.Orphan> found = OrphanFiles.find(t, Math.max(vacuumHours, OrphanFiles.MIN_AGE_HOURS), System.currentTimeMillis());
+                int removed = dryRun ? 0 : OrphanFiles.remove(t, found);
+                v.put("files", dryRun ? found.size() : removed);
+                v.put("bytes", found.stream().mapToLong(OrphanFiles.Orphan::size).sum());
+                v.put("first", found.stream().limit(5).map(OrphanFiles.Orphan::path).toList());
+                out.put("vacuum", v);
+            }
+        }
+        return out;
+    }
+
     public static void main(String[] args) throws Exception {
         com.ash.lake.LakeRuntime runtime = com.ash.lake.LakeRuntime.fromProcess();             // a command line: the process's settings
         Map<String, String> settings = new HashMap<>();

@@ -487,4 +487,78 @@ public final class FilesStore implements TableStore {
         out.put("dates", lines);
         return out;
     }
+
+    /** The youngest a content file no commit names may be when vacuum removes it: longer than the longest load (as Iceberg's orphans). */
+    public static final long UNCOMMITTED_MIN_AGE_HOURS = 72;
+
+    /**
+     * The files store's vacuum ({@code lake maintain --vacuum-hours H}, as Delta's vacuum and Iceberg's snapshot expiry): the content files
+     * of the log ({@code _log/<table>/<uuid>.jsonl}) no version still kept references, older than {@code hours} at {@code nowMs}, are
+     * deleted. Kept: every commit made in the last {@code hours} and, per date, the commit that was the date's newest then (its version as
+     * of the cut), so time travel reaches back {@code hours}; the day files (the newest versions) are never touched. A content file no commit
+     * names (a load that died before its commit) goes only when older than {@link #UNCOMMITTED_MIN_AGE_HOURS} too. The commits stay in the
+     * log; reading a version whose content went is refused naming it. Answers {@code hours}, {@code files}, {@code bytes}, {@code first}
+     * (the first five paths); nothing is deleted on a dry run.
+     */
+    public static Map<String, Object> vacuum(LakeRuntime runtime, String root, String domain, String table, long hours, long nowMs, boolean dryRun)
+            throws IOException {
+        if (hours < 0) {
+            throw new IllegalArgumentException("--vacuum-hours must be 0 or more: " + hours);
+        }
+        Place base = domain.isEmpty() ? Place.root(runtime, root) : Place.root(runtime, root).resolve(domain);
+        FilesLog log = new FilesLog(base, table);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("hours", hours);
+        List<String> gone = new ArrayList<>();
+        long bytes = 0;
+        if (log.exists()) {
+            long cut = nowMs - hours * 3_600_000L;
+            long uncommittedCut = nowMs - Math.max(hours, UNCOMMITTED_MIN_AGE_HOURS) * 3_600_000L;
+            List<com.ash.lake.spi.FileEntry> listed = log.dir().storage().files(log.dir().path());   // listed before the commits are read
+            List<FilesLog.Commit> commits = log.commits();
+            java.util.Set<String> named = new java.util.HashSet<>();
+            java.util.Set<String> kept = new java.util.HashSet<>();
+            Map<LocalDate, FilesLog.Commit> asOfCut = new TreeMap<>();
+            for (FilesLog.Commit c : commits) {
+                if (c.content() != null) {
+                    named.add(c.content());
+                }
+                if (c.at() >= cut) {
+                    if (c.content() != null) {
+                        kept.add(c.content());
+                    }
+                } else {
+                    asOfCut.put(c.date(), c);                    // the date's newest commit before the cut (commits are in order)
+                }
+            }
+            asOfCut.values().forEach(c -> {
+                if (c.content() != null) {
+                    kept.add(c.content());
+                }
+            });
+            List<com.ash.lake.spi.FileEntry> drop = new ArrayList<>();
+            for (com.ash.lake.spi.FileEntry e : listed) {
+                String name = e.path().substring(e.path().lastIndexOf('/') + 1);
+                if (!name.endsWith(".jsonl") || kept.contains(name)) {
+                    continue;
+                }
+                if (e.modified() < (named.contains(name) ? cut : uncommittedCut)) {
+                    drop.add(e);
+                }
+            }
+            drop.sort(java.util.Comparator.comparing(com.ash.lake.spi.FileEntry::path));
+            for (com.ash.lake.spi.FileEntry e : drop) {
+                String name = e.path().substring(e.path().lastIndexOf('/') + 1);
+                gone.add(log.dir().resolve(name).path());
+                bytes += e.size();
+                if (!dryRun) {
+                    log.dir().resolve(name).delete();
+                }
+            }
+        }
+        out.put("files", gone.size());
+        out.put("bytes", bytes);
+        out.put("first", gone.stream().limit(5).toList());
+        return out;
+    }
 }

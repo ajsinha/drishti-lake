@@ -20,7 +20,7 @@ ENTRY = {"name": "risk/scenario-pv", "domain": "risk", "table": "scenario_pv", "
 def test_each_tool_runs_its_java_class_with_the_product_class_path():
     env = {"LAKE_CLASSPATH": "/cp/a.jar:/cp/b.jar", "LAKE_JAVA": "/jdk/bin/java"}
     assert java.command("undo", ["--lake", "/l"], env) == ["/jdk/bin/java", "-cp", "/cp/a.jar:/cp/b.jar", "com.ash.lake.load.LakeUndo", "--lake", "/l"]
-    assert java.command("maintain", [], env)[3] == "com.ash.lake.iceberg.table.IcebergMaintenance"
+    assert java.command("maintain", [], env)[3] == "com.ash.lake.load.LakeMaintain"
     assert java.command("lakes", [], {"LAKE_CLASSPATH": "x", "JAVA_HOME": "/j"})[0] == "/j/bin/java"
     with pytest.raises(java.JavaError, match="set LAKE_CLASSPATH"):
         java.command("retention", [], {})
