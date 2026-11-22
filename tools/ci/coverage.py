@@ -40,7 +40,7 @@ def items():
     ready = src("lake-load/src/main/java/com/ash/lake/inbox/ReadyNote.java")
     keys = ready[ready.index("KEYS = List.of("):]
     out |= {"ready:" + k for k in re.findall(r'"([^"]+)"', keys[:keys.index(");")])}
-    out |= {"code:" + c for c in re.findall(r'"(LK-\d+)"', src("lake-io/src/main/java/com/ash/lake/common/LakeError.java"))}
+    out |= {"code:" + c for c in re.findall(r'"(LK-\d+)"', src("lake-api/src/main/java/com/ash/lake/LakeError.java"))}
     return out
 
 

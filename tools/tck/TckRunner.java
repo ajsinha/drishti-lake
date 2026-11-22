@@ -496,7 +496,7 @@ public final class TckRunner {
             if (done == null) throw new IllegalArgumentException("unknown store op " + a[0]);   // lake-only
             out.println(done);   // lake-only
             return 0;   // lake-only
-        } catch (UnsupportedOperationException | com.ash.lake.common.LakeException | java.io.IOException e) {   // lake-only
+        } catch (UnsupportedOperationException | com.ash.lake.LakeException | java.io.IOException e) {   // lake-only
             out.println(e.getMessage());   // lake-only
             return 1;   // lake-only
         }   // lake-only
@@ -640,7 +640,7 @@ final class ReadVerbs {   // lake-only
         com.ash.lake.read.TableSnapshot s;   // lake-only
         try {   // lake-only
             s = t.snapshot(com.ash.lake.spi.AsOf.LATEST).orElse(null);   // lake-only
-        } catch (com.ash.lake.common.LakeException e) {   // lake-only
+        } catch (com.ash.lake.LakeException e) {   // lake-only
             return "refused " + e.getMessage();   // lake-only
         }   // lake-only
         if (s == null) return "no table " + name;   // lake-only

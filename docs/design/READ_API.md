@@ -237,8 +237,9 @@ public record ReadProblem(String table, String where, long version, String reaso
 ```
 
 Every read of 2.2 to 2.6 **records its own failure and its own recovery**: it throws `LakeException` with the classified reason
-(today's `TableProblems.classify`: a missing file, a moved table, access refused) and the next good read of the same table and date
-clears it. The adapters' 18 `problems.failed(..)`/`problems.ok(..)` calls (13 Delta, 5 Iceberg) and the 4 version and listing notes go; they catch `LakeException` only to map the code.
+(each store's `Problems.Classifier`: a missing file, a moved table, access refused) and the next good read of the same table and date
+clears it. The reason recorded is for Health (folders included: a moved Iceberg table names its old folder and the `relocate` pair that
+reads it); the exception thrown carries the classifier's words for readers when the reason names folders (no path in a host's error). The adapters' 18 `problems.failed(..)`/`problems.ok(..)` calls (13 Delta, 5 Iceberg) and the 4 version and listing notes go; they catch `LakeException` only to map the code.
 
 ### 2.9 What stays out
 

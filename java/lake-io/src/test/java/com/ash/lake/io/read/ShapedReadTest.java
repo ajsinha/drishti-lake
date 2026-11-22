@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.ash.lake.common.LakeException;
+import com.ash.lake.LakeException;
 import com.ash.lake.read.DataFile;
 import com.ash.lake.read.FileFormat;
 import com.ash.lake.read.TableIdentity;

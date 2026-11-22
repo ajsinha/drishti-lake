@@ -15,8 +15,8 @@
  */
 package com.ash.lake.inbox;
 
-import com.ash.lake.common.LakeException;
-import com.ash.lake.common.LakeError;
+import com.ash.lake.LakeException;
+import com.ash.lake.LakeError;
 import com.ash.lake.common.FileDates;
 import com.ash.lake.load.FileRows;
 import com.ash.lake.load.LakeLoad;

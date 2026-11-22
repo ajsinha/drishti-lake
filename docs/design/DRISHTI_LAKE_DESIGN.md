@@ -158,6 +158,16 @@ break. Errors are `LakeException` with `LK-` codes; the host maps them once at i
 or anchored to a named root the caller passes (`explicit-paths`); the resolved path of every table is readable (`t.location()`).
 The runtime reads configuration and never writes a configuration file (`connectors-read-only`).
 
+**What a host calls for each need** (the public packages are those of `java/api-surface.txt`; a host imports nothing else):
+
+| Need | Public API | Not public (internal, may change in any release) |
+|---|---|---|
+| map Lake's errors at the edge | `com.ash.lake.LakeException` (`error()`), `com.ash.lake.LakeError` (`code()`, `status()`) | |
+| a read that fails | `LakeException` with `LakeError.UNREADABLE` (`LK-1006`): the message says what cannot be read and what to do, without a folder (a moved Iceberg table names the `relocate` in `LakeReader.problems()`) | `io.PageDecodeException`, `io.UnsupportedCodec` |
+| a host's own store loader (PostgreSQL, MongoDB, ...) reading loader rows by the load rules | `com.ash.lake.load.RowFeed` | |
+| write rows into a Delta or Iceberg table (append or replace a date, table properties, vectors) | the loader: `com.ash.lake.load.LakeLoad.run(runtime, args, out)` with `source.format: loader-rows`, `target.mode`, `target.properties`; the version committed is in the summary (`--summary`) | `delta.write.LakeWriter`, `LakeManifest`, `LakeCli`; `iceberg.table.IcebergAppender` |
+| files beside the tables (write a file, check what a folder holds) on local disk, S3 or `mem://` | `com.ash.lake.load.LakeStorage` (`storage(path)`: a `spi.Storage`; `isLocal`, `localPath`) | `io.S3Storage`, `io.S3Settings`, `io.LocalPaths` |
+
 ### 3.2 The SPI (`com.ash.lake.spi`)
 
 | SPI | Who implements | Shape | From today's |

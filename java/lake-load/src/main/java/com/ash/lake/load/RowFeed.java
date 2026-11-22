@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.common;
+package com.ash.lake.load;
 
 import com.ash.lake.common.FileDates;
 

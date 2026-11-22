@@ -13,7 +13,7 @@
  *
  * See the LICENSE file in the root of this repository for the full terms.
  */
-package com.ash.lake.common;
+package com.ash.lake;
 
 /** Drishti Lake's error codes ({@code LK-}), each with the HTTP status a host that serves the lake answers with. Codes are never reused. */
 public enum LakeError {
