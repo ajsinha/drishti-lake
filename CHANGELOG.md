@@ -6,7 +6,10 @@ Entries are written per release; unreleased work is listed first.
 ## 0.9.0 (2026-11-21): the move from Drishti
 
 - **IDE launchers follow the platform standard**: one `run-configs/` at the repository root, every launcher named `Lake: <verb> <what>` (IntelliJ folder `Lake`), the same names as the VS Code tasks and launches; missing launchers added; the check `python/tests/test_launchers.py` (a test) keeps names, files and workspace in step.
-
+- **A caller's refusal is its own (G4 triage)**: an exception thrown by the caller's sink inside a read (a vector, document or row sink:
+  a host refusing a duplicate trade, say) leaves the read as it was thrown, unchanged, and records no read problem; before, every store
+  wrapped it as `LK-1006` (data that cannot be read) and listed the date among the table's read problems, so a host's own refusal (Drishti's
+  duplicate-trade 422) became a 502. `Problems.caller` marks the sink's failures; `ProblemsCallerTest`.
 - **Loader rows keep their vectors (G4 triage)**: a loader row (`source.format: loader-rows`) whose document holds a vector in its stored
   form `{"$vector": "<column>"}` (the row as a lake keeps it, the form Drishti's fixtures and exports write) takes the vector's numbers from
   the wrapper's `columns` list, as the loader Drishti had before the move did; a null there is no vector, a missing or non-list value is

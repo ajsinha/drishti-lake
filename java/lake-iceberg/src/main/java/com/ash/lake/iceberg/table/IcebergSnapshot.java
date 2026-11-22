@@ -178,7 +178,8 @@ final class IcebergSnapshot implements TableSnapshot {
     }
 
     @Override
-    public void documents(LocalDate date, DocumentSink sink) {
+    public void documents(LocalDate date, DocumentSink callerSink) {
+        DocumentSink sink = com.ash.lake.io.read.Problems.caller(callerSink);       // the caller's refusal stays its own, never a read problem
         read(date, () -> {
             IcebergVectors.documents(table, layout, dayOf(date), sink::document);
             return null;
@@ -196,7 +197,8 @@ final class IcebergSnapshot implements TableSnapshot {
     }
 
     @Override
-    public void vectors(VectorRequest request, VectorSink sink) {
+    public void vectors(VectorRequest request, VectorSink callerSink) {
+        VectorSink sink = com.ash.lake.io.read.Problems.caller(callerSink);       // the caller's refusal stays its own, never a read problem
         LocalDate date = request.date();
         read(date, () -> {
             KindTable.Day d = dayOf(date);
@@ -243,7 +245,8 @@ final class IcebergSnapshot implements TableSnapshot {
     }
 
     @Override
-    public void scanFile(LocalDate date, int file, List<String> wanted, Expr where, RowSink sink) {
+    public void scanFile(LocalDate date, int file, List<String> wanted, Expr where, RowSink callerSink) {
+        RowSink sink = com.ash.lake.io.read.Problems.caller(callerSink);       // the caller's refusal stays its own, never a read problem
         read(date, () -> {
             KindTable.Day d = dayOf(date);
             if (file < 0 || file >= d.files().size()) {

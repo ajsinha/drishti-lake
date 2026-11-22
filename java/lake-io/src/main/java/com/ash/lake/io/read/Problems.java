@@ -72,11 +72,79 @@ public final class Problems implements ReadProblems {
         try {
             out = body.run();
         } catch (Exception e) {
+            CallerFailure own = callerFailure(e);
+            if (own != null) {
+                throw own.failure();                             // the caller's own sink refused: its exception as it was, no read problem
+            }
             String why = failed(table, where, version, e);
             throw new LakeException(LakeError.UNREADABLE, table + " " + where + ": " + why, e);
         }
         ok(table, where);
         return out;
+    }
+
+    /**
+     * The caller's own failure inside a read: its sink ({@link #caller}) threw. It is not a read problem (the data was read; the caller
+     * refused it, a duplicate row for one): {@link #read} records nothing and throws the caller's exception unchanged.
+     */
+    public static final class CallerFailure extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        CallerFailure(RuntimeException e) {
+            super(e.getMessage(), e, false, false);
+        }
+
+        /** The caller's exception. */
+        public RuntimeException failure() {
+            return (RuntimeException) getCause();
+        }
+    }
+
+    /** The caller's failure in {@code e} or its causes (a parallel read wraps a worker's), null when the read itself failed. */
+    static CallerFailure callerFailure(Throwable e) {
+        for (Throwable c = e; c != null; c = c.getCause() == c ? null : c.getCause()) {
+            if (c instanceof CallerFailure f) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    private static RuntimeException own(RuntimeException e) {
+        return e instanceof CallerFailure ? e : new CallerFailure(e);
+    }
+
+    /** The caller's vector sink, its exceptions marked as the caller's ({@link CallerFailure}). */
+    public static com.ash.lake.read.VectorSink caller(com.ash.lake.read.VectorSink sink) {
+        return (id, values, length, texts) -> {
+            try {
+                sink.row(id, values, length, texts);
+            } catch (RuntimeException e) {
+                throw own(e);
+            }
+        };
+    }
+
+    /** The caller's document sink, its exceptions marked as the caller's. */
+    public static com.ash.lake.read.DocumentSink caller(com.ash.lake.read.DocumentSink sink) {
+        return (id, json) -> {
+            try {
+                sink.document(id, json);
+            } catch (RuntimeException e) {
+                throw own(e);
+            }
+        };
+    }
+
+    /** The caller's row sink, its exceptions marked as the caller's. */
+    public static com.ash.lake.read.RowSink caller(com.ash.lake.read.RowSink sink) {
+        return values -> {
+            try {
+                sink.row(values);
+            } catch (RuntimeException e) {
+                throw own(e);
+            }
+        };
     }
 
     /** Records that reading {@code where} of {@code table} failed with {@code e}; returns the reason recorded. */

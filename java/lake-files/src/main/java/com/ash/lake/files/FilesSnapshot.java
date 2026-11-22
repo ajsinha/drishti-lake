@@ -317,7 +317,8 @@ final class FilesSnapshot implements TableSnapshot {
     }
 
     @Override
-    public void documents(LocalDate date, DocumentSink sink) {
+    public void documents(LocalDate date, DocumentSink callerSink) {
+        DocumentSink sink = com.ash.lake.io.read.Problems.caller(callerSink);       // the caller's refusal stays its own, never a read problem
         read(date, () -> {
             Map<String, Integer> shadow = shadow(date);
             lines(date, (i, line) -> {
@@ -437,7 +438,8 @@ final class FilesSnapshot implements TableSnapshot {
     }
 
     @Override
-    public void vectors(VectorRequest request, VectorSink sink) {
+    public void vectors(VectorRequest request, VectorSink callerSink) {
+        VectorSink sink = com.ash.lake.io.read.Problems.caller(callerSink);       // the caller's refusal stays its own, never a read problem
         LocalDate date = request.date();
         read(date, () -> {
             Optional<DayFiles> day = day(date);
@@ -490,7 +492,8 @@ final class FilesSnapshot implements TableSnapshot {
     }
 
     @Override
-    public void scanFile(LocalDate date, int file, List<String> wanted, Expr where, RowSink sink) {
+    public void scanFile(LocalDate date, int file, List<String> wanted, Expr where, RowSink callerSink) {
+        RowSink sink = com.ash.lake.io.read.Problems.caller(callerSink);       // the caller's refusal stays its own, never a read problem
         read(date, () -> {
             if (file != 0) {
                 return null;
