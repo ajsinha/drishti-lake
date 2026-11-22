@@ -19,7 +19,7 @@
   <parent>
     <groupId>com.ash.lake</groupId>
     <artifactId>lake-parent</artifactId>
-    <version>0.9.0</version>
+    <version>0.9.1</version>
   </parent>
   <artifactId>lake-iceberg</artifactId>
   <name>Drishti Lake: Iceberg tables on iceberg-core (native reader and writer), the table layer</name>

@@ -3,7 +3,7 @@
 # Drishti Lake. Proprietary: see the LICENSE file at the root of this repository.
 """The release script, skeleton (design section 6, step L1; completed at L14): it checks and prints the plan, and changes nothing.
 
-    python3 tools/release/release.py --version 0.9.0
+    python3 tools/release/release.py --version 0.9.1
 
 A release is tagged only with the owner's word (no tag before the G3 gate). The full script will: refuse a dirty tree or a branch other
 than main; run tools/ci/check.py (the parity kit green, the guards green); set the version in every POM; tag v<version>; build from

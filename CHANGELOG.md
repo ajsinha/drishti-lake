@@ -3,30 +3,44 @@
 
 Entries are written per release; unreleased work is listed first.
 
-## Unreleased
+## 0.9.1 (2026-11-21): maintenance data safety
 
+- **Compaction keeps what readers see (accuracy defect in 0.9.0)**: in 0.9.0, `lake maintain --compact` on a Delta or Iceberg date that
+  appends had written with repeated ids merged every copy into one file; the rows were all kept, but readers then answered wrongly: a
+  whole-day read returned the superseded copies as well (Delta and Iceberg), and on Iceberg the id map held each such id twice and a
+  document could be the older copy. Now the rows readers see (each id's newest copy) are written in the table's order into one file and
+  every older copy into one more (by id, the oldest load first), so readers answer exactly as before the compaction and an undo of the
+  newer load still finds the older copy; a date already in that form is left (a second run changes nothing, on every store). Shown by the
+  new kit case `maintain/safety-compact`, which fails on 0.9.0.
+- **Maintenance proven safe on every store**: kit cases on Delta, Iceberg and files, on local disk, memory and S3:
+  `maintain/safety-compact` (compaction, checkpoint and vacuum: every row the table holds the same, each copy, document, column and
+  vector; what readers see the same; a reader opened before maintain reads the same after it), `maintain/safety-relayout` (what readers
+  see the same, a date relayout does not touch unchanged), `maintain/safety-keep-days` (exactly `--as-of` and the N business days before
+  it kept, with a later date, their rows unchanged; a reader opened before still reads), `maintain/safety-race` (an append racing a
+  compaction: the table equals a twin loaded without maintain, row for row; nothing lost or twice). Kit verbs `raw-digest`,
+  `read-visible`, `hold` and `read-held` (labelled comparisons: `same as <label>=true`), and the step group `settled`.
 - **keep-days keeps what Drishti kept (G4 defect)**: `lake maintain --keep-days N` removes the business dates before the day N business
   days (Monday to Friday) before `--as-of`, so `--as-of` and the N business days before it stay, counted on the calendar, never from the
-  newest date the table holds (Drishti's rule before the move, `maintain.py`'s `keep-business-days`); before, the newest N dates on or
-  before `--as-of` were kept, one date fewer. Every store alike; `LakeMaintain.keepFrom`; kit case `maintain/keep-days-and-drop-guard`
-  (the weekend not counted, the floor, the drop guard).
+  newest date the table holds (Drishti's rule before the move); before, the newest N dates on or before `--as-of` were kept, one date
+  fewer. Every store alike; `LakeMaintain.keepFrom`; kit cases `maintain/keep-days-and-drop-guard`, `maintain/safety-keep-days`.
 - **A laid-out table keeps its id order on every store (G4 lake gap)**: `lake maintain --relayout` rewrites each business date whose
   files drifted from the id layout (an append whose ids overlap the date's files, a file over the table's `file-rows`, more files than its
-  rows need) as readers see it, sorted by id into files of `file-rows` rows (`--file-rows`, `--dates`, `--force`), each file its own id range: Delta through Delta Kernel
-  (`DeltaUpkeep.relayout`), Iceberg its relayout, files the day file that holds an id twice. A table laid out by more than the id
-  (`lake.layout.sort-by`, which a Delta table now records too) is left in its order. `--compact` keeps the readers' answer: the rows
-  readers see are written in the table's order and each older copy an append left goes to a file of its load's own (Delta and Iceberg),
-  so the newest copy is still the one read (before, a compacted append on Delta and Iceberg could answer the older copy, and the Iceberg
-  id map held an id twice) and an undo of the newer load still finds the older copy; a date already in that form is left. Kit cases
-  `maintain/sorted-layout` (the read-ids check sorted on every store; `read-layout`, a new kit verb) and `maintain/compact-checkpoint-vacuum`.
-
-## 0.9.0 (2026-11-21): the move from Drishti
-
-- **IDE launchers follow the platform standard**: one `run-configs/` at the repository root, every launcher named `Lake: <verb> <what>` (IntelliJ folder `Lake`), the same names as the VS Code tasks and launches; missing launchers added; the check `python/tests/test_launchers.py` (a test) keeps names, files and workspace in step.
+  rows need) as readers see it, sorted by id into files of `file-rows` rows (`--file-rows`, `--dates`, `--force`), each file its own id
+  range: Delta through Delta Kernel (`DeltaUpkeep.relayout`), Iceberg its relayout (which now keeps each id's newest copy: before, an
+  appended copy could lose to the older one), files the day file that holds an id twice. A table laid out by more than the id
+  (`lake.layout.sort-by`, which a Delta table now records too) is left in its order. The id map reports sorted-and-filed on every store
+  after maintenance; kit case `maintain/sorted-layout`, kit verb `read-layout`.
+- **lake maintain's report**: `before` and `after` give `files`, `mb`, `latestDate` and `latestRows` as well, on every store.
 - **A caller's refusal is its own (G4 triage)**: an exception thrown by the caller's sink inside a read (a vector, document or row sink:
   a host refusing a duplicate trade, say) leaves the read as it was thrown, unchanged, and records no read problem; before, every store
   wrapped it as `LK-1006` (data that cannot be read) and listed the date among the table's read problems, so a host's own refusal (Drishti's
   duplicate-trade 422) became a 502. `Problems.caller` marks the sink's failures; `ProblemsCallerTest`.
+- **The S3 simulator binds its own ports**: `S3MockServer` starts S3Mock on ports the server binds itself and reports the port it bound,
+  so no other process can take a port between a pick and a bind (`S3LoadTest` failed now and then on a busy machine).
+
+## 0.9.0 (2026-11-21): the move from Drishti
+
+- **IDE launchers follow the platform standard**: one `run-configs/` at the repository root, every launcher named `Lake: <verb> <what>` (IntelliJ folder `Lake`), the same names as the VS Code tasks and launches; missing launchers added; the check `python/tests/test_launchers.py` (a test) keeps names, files and workspace in step.
 - **Loader rows keep their vectors (G4 triage)**: a loader row (`source.format: loader-rows`) whose document holds a vector in its stored
   form `{"$vector": "<column>"}` (the row as a lake keeps it, the form Drishti's fixtures and exports write) takes the vector's numbers from
   the wrapper's `columns` list, as the loader Drishti had before the move did; a null there is no vector, a missing or non-list value is
