@@ -27,6 +27,11 @@ load/two-dates
 load/vector-nulls-and-text
 maintain/compact-checkpoint-vacuum
 maintain/keep-days-and-drop-guard
+maintain/safety-compact
+maintain/safety-keep-days
+maintain/safety-race
+maintain/safety-relayout
+maintain/sorted-layout
 modes/dry-run-date-from-and-mode
 modes/key-override
 names/ready-file-business-date

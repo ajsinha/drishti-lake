@@ -49,8 +49,17 @@ import java.util.TreeMap;
  *
  * <ul>
  *   <li><b>compact</b>: each business date held in two or more files under the target size is rewritten into the writer's files, one
- *       commit a date (the date's files removed, the same rows added: what {@code OPTIMIZE} does). A date another writer changed while it
- *       was read is read again; a lost race fails as any concurrent replace does.</li>
+ *       commit a date (the date's files removed, the same rows added: what {@code OPTIMIZE} does). The rows readers see (each id's newest
+ *       load's copy) are written in the table's order (by id, or by its {@code lake.layout.sort-by} fields then the id) into one file, and
+ *       every older copy an append left into one more (by id, the oldest load first; its newest load is older than the first file's), so
+ *       readers still read the newest copy and an undo of the newer load still finds the older one. A date already in as few files is
+ *       left (a second run has nothing to do). A date another writer changed while it was read is read again; a lost race fails as any concurrent replace
+ *       does.</li>
+ *   <li><b>relayout</b>: a table laid out by id (the loader's sort, {@code lake.layout.sort-by} absent or {@code id}) keeps that layout:
+ *       each business date whose files drifted from it (two files of one partition sharing an id range, as an append makes; a file over
+ *       the table's {@code lake.layout.file-rows}, 250,000; more files than its rows need; a file without id statistics) is rewritten as
+ *       readers see it (the newest load's copy of each id), sorted by id and cut into files of {@code file-rows} rows, each file its own id
+ *       range, one commit a date ({@link #relayout}). A table laid out by more than the id is left in its order.</li>
  *   <li><b>checkpoint</b>: a checkpoint of the latest version ({@code Table.checkpoint}), so a reader replays a short log.</li>
  *   <li><b>vacuum</b>: the data files no version of the last {@code hours} references are deleted ({@code VACUUM}): the versions kept are
  *       every commit since the cut and the version current at it, so time travel reaches back {@code hours}. A file never committed (a load
@@ -95,13 +104,11 @@ final class DeltaUpkeep {
     }
 
     /** Compacts the table at {@code path}: the dates rewritten (on a dry run, the dates that would be). */
-    static List<String> compact(com.ash.lake.LakeRuntime runtime, String path, long targetBytes, boolean dryRun) throws IOException {
+    static List<String> compact(com.ash.lake.LakeRuntime runtime, com.ash.lake.spi.TableStore store, String root, String domain, String kind,
+            String path, long targetBytes, boolean dryRun) throws IOException {
         Engine engine = LakeWriter.engineFor(runtime, path, Map.of());
         Snapshot s = Table.forPath(engine, path).getLatestSnapshot(engine);
         List<String> dates = toCompact(filesPerDate(engine, s), targetBytes);
-        if (dryRun) {
-            return dates;
-        }
         List<String> done = new ArrayList<>();
         for (String date : dates) {
             for (int attempt = 0; ; attempt++) {
@@ -110,24 +117,261 @@ final class DeltaUpkeep {
                 if (files == null || toCompact(new TreeMap<>(Map.of(date, files)), targetBytes).isEmpty()) {
                     break;                                       // another writer replaced or removed the date meanwhile: nothing to do
                 }
-                List<TableUpkeep.Staged> rows = TableUpkeep.rows(engine, s, pv -> date.equals(pv.get("business_date")), true);
-                if (rows == null) {
+                List<List<TableUpkeep.Staged>> groups = compacted(runtime, store, root, domain, kind, engine, s, date);
+                if (groups != null && !groups.isEmpty() && groups.size() >= files.size()) {
+                    break;                                       // already as few files as compaction makes (the rows readers see, the older copies)
+                }
+                if (dryRun && groups != null && !groups.isEmpty()) {
+                    done.add(date);
+                    break;
+                }
+                if (groups == null) {
                     throw new IOException(path + ": a column of a type the lake's writer does not write (a table written by another "
                             + "engine?): compaction leaves its files as they are");
                 }
                 long read = s.getVersion();
-                if (Table.forPath(engine, path).getLatestSnapshot(engine).getVersion() != read) {
+                if (groups.isEmpty() || Table.forPath(engine, path).getLatestSnapshot(engine).getVersion() != read) {
                     if (attempt < 3) {
                         continue;                                // a commit landed while the date was read: read it again
                     }
                     throw new IOException(path + " " + date + ": other writers committed while compaction read the date, 3 times; run it again");
                 }
-                LakeUndo.rewrite(runtime, engine, path, s, date, rows);
+                LakeUndo.rewriteGroups(runtime, engine, path, s, date, groups, Integer.MAX_VALUE);
                 done.add(date);
                 break;
             }
         }
         return done;
+    }
+
+    /** The rows a laid-out file holds at most when the table does not say ({@code lake.layout.file-rows}): as the Iceberg store's. */
+    static final int DEFAULT_FILE_ROWS = 250_000;
+
+    /** The table's {@code lake.layout.sort-by} when it is laid out by more than the id, else null (laid out by id). */
+    static String sortedByMore(Map<String, String> conf) {
+        String by = com.ash.lake.PersistedNames.get(conf, "layout.sort-by", "").trim();
+        return by.isEmpty() || by.equals("id") ? null : by;
+    }
+
+    /** The table's rows a file ({@code lake.layout.file-rows}), else {@link #DEFAULT_FILE_ROWS}. */
+    static int fileRows(Map<String, String> conf) {
+        String v = com.ash.lake.PersistedNames.get(conf, "layout.file-rows", "");
+        try {
+            return v.isBlank() ? DEFAULT_FILE_ROWS : Math.max(1, Integer.parseInt(v.trim()));
+        } catch (NumberFormatException e) {
+            return DEFAULT_FILE_ROWS;
+        }
+    }
+
+    /**
+     * Whether a date's files drifted from the id layout (class comment): files grouped by their partition values past the date, each group
+     * sorted by its smallest id must hold disjoint id ranges, no file over {@code fileRows}, no more files than {@code ceil(rows/fileRows)}.
+     */
+    static boolean drifted(com.ash.lake.read.DayFiles day, int fileRows) {
+        Map<Map<String, String>, List<com.ash.lake.read.DataFile>> groups = new LinkedHashMap<>();
+        for (com.ash.lake.read.DataFile f : day.files()) {
+            Map<String, String> pv = new java.util.TreeMap<>(f.partition() == null ? Map.of() : f.partition());
+            pv.remove("business_date");
+            groups.computeIfAbsent(pv, k -> new ArrayList<>()).add(f);
+        }
+        for (List<com.ash.lake.read.DataFile> g : groups.values()) {
+            long rows = 0;
+            for (com.ash.lake.read.DataFile f : g) {
+                if (f.rows() > fileRows || f.deletes()) {
+                    return true;
+                }
+                rows += Math.max(0, f.rows());
+            }
+            if (g.size() > Math.max(1, (rows + fileRows - 1) / fileRows)) {
+                return true;
+            }
+            if (g.size() < 2) {
+                continue;
+            }
+            List<com.ash.lake.read.Bounds> ranges = new ArrayList<>();
+            for (com.ash.lake.read.DataFile f : g) {
+                com.ash.lake.read.Bounds b = f.bounds() == null ? null : f.bounds().get("id");
+                if (b == null || b.min() == null || b.max() == null) {
+                    return true;
+                }
+                ranges.add(b);
+            }
+            ranges.sort(java.util.Comparator.comparing(com.ash.lake.read.Bounds::min));
+            for (int i = 1; i < ranges.size(); i++) {
+                if (ranges.get(i).min().compareTo(ranges.get(i - 1).max()) <= 0) {
+                    return true;                                 // two files share an id range: an append out of order
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Relayout (class comment) of the Delta table {@code domain/kind} at {@code path} in the lake {@code root}, read through the read API
+     * of {@code store} (the dates' files and their bounds, each id's winning copy): the dates rewritten (on a dry run: that would be).
+     */
+    static List<String> relayout(com.ash.lake.LakeRuntime runtime, com.ash.lake.spi.TableStore store, String root, String domain, String kind,
+            String path, Integer rowsAFile, java.util.function.Predicate<java.time.LocalDate> wanted, boolean force, boolean dryRun)
+            throws IOException {
+        Engine engine = LakeWriter.engineFor(runtime, path, Map.of());
+        Snapshot s = Table.forPath(engine, path).getLatestSnapshot(engine);
+        Map<String, String> conf = ((io.delta.kernel.internal.SnapshotImpl) s).getMetadata().getConfiguration();
+        List<String> done = new ArrayList<>();
+        if (sortedByMore(conf) != null) {
+            return done;                                         // laid out by more than the id: left in its order
+        }
+        int fileRows = rowsAFile != null && rowsAFile > 0 ? rowsAFile : fileRows(conf);
+        try (com.ash.lake.read.LakeReader lake = store.open(runtime, com.ash.lake.read.LakeAddress.of(root, domain))) {
+            com.ash.lake.read.TableSnapshot snap = lake.table(kind).snapshot(com.ash.lake.spi.AsOf.LATEST).orElse(null);
+            if (snap == null) {
+                return done;
+            }
+            if (snap.version() != s.getVersion()) {
+                throw new IOException(path + ": another writer committed while relayout read the table; run it again");
+            }
+            List<java.time.LocalDate> dates = new ArrayList<>();
+            for (java.time.LocalDate d : snap.dates()) {
+                if (!java.time.LocalDate.MIN.equals(d) && wanted.test(d) && (force || snap.day(d).map(day -> drifted(day, fileRows)).orElse(false))) {
+                    dates.add(d);
+                }
+            }
+            for (java.time.LocalDate d : dates) {
+                if (!dryRun) {
+                    relayDate(runtime, engine, path, snap, d, fileRows);
+                }
+                done.add(d.toString());
+            }
+        }
+        return done;
+    }
+
+    /** One date rewritten as readers see it: each id's winning copy (the read API's id map), sorted by id, files of {@code fileRows}. */
+    private static void relayDate(com.ash.lake.LakeRuntime runtime, Engine engine, String path, com.ash.lake.read.TableSnapshot snap,
+            java.time.LocalDate date, int fileRows) throws IOException {
+        Snapshot s = Table.forPath(engine, path).getLatestSnapshot(engine);
+        if (s.getVersion() != snap.version()) {
+            throw new IOException(path + " " + date + ": another writer committed while relayout read the date; run it again");
+        }
+        List<com.ash.lake.read.DataFile> files = snap.day(date).orElseThrow().files();
+        com.ash.lake.read.IdMap ids = snap.ids(date);
+        Map<String, String> winner = new java.util.HashMap<>();
+        for (int i = 0; i < ids.size(); i++) {
+            int f = ids.file(ids.id(i));
+            if (f >= 0 && f < files.size()) {
+                winner.put(ids.id(i), files.get(f).path());
+            }
+        }
+        String day = date.toString();
+        Map<String, TableUpkeep.Staged> kept = new java.util.TreeMap<>();
+        boolean simple = TableUpkeep.rows(engine, s, pv -> day.equals(pv.get("business_date")), true, (file, row) -> {
+            if (row.id() != null && file.equals(winner.get(row.id()))) {
+                kept.put(row.id(), row);                         // the last copy in the winning file (a file holds one, as written)
+            }
+        });
+        if (!simple) {
+            throw new IOException(path + ": a column of a type the lake's writer does not write (a table written by another engine?): "
+                    + "relayout leaves its files as they are");
+        }
+        if (kept.size() != winner.size()) {
+            throw new IOException(path + " " + day + ": " + (winner.size() - kept.size()) + " id(s) of the date were not found in their "
+                    + "files; nothing was rewritten");
+        }
+        LakeUndo.rewriteSorted(runtime, engine, path, s, day, new ArrayList<>(kept.values()), fileRows);
+    }
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /**
+     * A date's rows as compaction writes them (class comment): first the rows readers see, in the table's order, then, when an append left
+     * any, every older copy in one group by id and load (the oldest first). Null when the table has a column the lines cannot carry; empty when the
+     * read API's snapshot is not the version {@code s} (a commit landed meanwhile: read again).
+     */
+    static List<List<TableUpkeep.Staged>> compacted(com.ash.lake.LakeRuntime runtime, com.ash.lake.spi.TableStore store, String root, String domain,
+            String kind, Engine engine, Snapshot s, String date) throws IOException {
+        Map<String, String> conf = ((io.delta.kernel.internal.SnapshotImpl) s).getMetadata().getConfiguration();
+        Map<String, String> winner = new java.util.HashMap<>();
+        try (com.ash.lake.read.LakeReader lake = store.open(runtime, com.ash.lake.read.LakeAddress.of(root, domain))) {
+            com.ash.lake.read.TableSnapshot snap = lake.table(kind).snapshot(com.ash.lake.spi.AsOf.LATEST).orElse(null);
+            if (snap == null || snap.version() != s.getVersion()) {
+                return List.of();
+            }
+            java.time.LocalDate d = java.time.LocalDate.parse(date);
+            List<com.ash.lake.read.DataFile> files = snap.day(d).map(com.ash.lake.read.DayFiles::files).orElse(List.of());
+            com.ash.lake.read.IdMap ids = snap.ids(d);
+            for (int i = 0; i < ids.size(); i++) {
+                int f = ids.file(ids.id(i));
+                if (f >= 0 && f < files.size()) {
+                    winner.put(ids.id(i), files.get(f).path());
+                }
+            }
+        }
+        List<TableUpkeep.Staged> seen = new ArrayList<>();
+        Map<String, TableUpkeep.Staged> newest = new java.util.HashMap<>();
+        List<TableUpkeep.Staged> older = new ArrayList<>();
+        boolean simple = TableUpkeep.rows(engine, s, pv -> date.equals(pv.get("business_date")), true, (file, row) -> {
+            if (row.id() != null && file.equals(winner.get(row.id())) && !newest.containsKey(row.id())) {
+                newest.put(row.id(), row);
+                seen.add(row);
+            } else {
+                older.add(row);
+            }
+        });
+        if (!simple) {
+            return null;
+        }
+        seen.sort(order(sortedByMore(conf)));
+        List<List<TableUpkeep.Staged>> out = new ArrayList<>();
+        out.add(seen);
+        if (!older.isEmpty()) {
+            older.sort(java.util.Comparator.comparing((TableUpkeep.Staged r) -> r.id() == null ? "" : r.id())
+                    .thenComparing(DeltaUpkeep::loadOf, (a, b) -> com.ash.lake.rows.LoadOrder.compare(a, 0, b, 0)));
+            out.add(older);
+        }
+        return out;
+    }
+
+    /** A staged row's load id ({@code _load_id}); "" when it has none. */
+    static String loadOf(TableUpkeep.Staged r) {
+        try {
+            com.fasterxml.jackson.databind.JsonNode c = JSON.readTree(r.line()).path("columns").path(RowPlan.LOAD_ID);
+            return c.isTextual() ? c.asText() : "";
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    /** The table's row order: by its sort-by fields (the staged row's columns: numbers by value, else text; absent first) then the id. */
+    static java.util.Comparator<TableUpkeep.Staged> order(String sortBy) {
+        java.util.Comparator<TableUpkeep.Staged> byId = java.util.Comparator.comparing(r -> r.id() == null ? "" : r.id());
+        if (sortBy == null) {
+            return byId;
+        }
+        Map<TableUpkeep.Staged, com.fasterxml.jackson.databind.JsonNode> cols = new java.util.IdentityHashMap<>();
+        java.util.function.Function<TableUpkeep.Staged, com.fasterxml.jackson.databind.JsonNode> columns = r -> cols.computeIfAbsent(r, x -> {
+            try {
+                return JSON.readTree(x.line()).path("columns");
+            } catch (IOException e) {
+                return JSON.createObjectNode();
+            }
+        });
+        java.util.Comparator<TableUpkeep.Staged> c = (a, b) -> 0;
+        for (String f : sortBy.split(",")) {
+            String name = f.trim();
+            if (name.isEmpty() || name.equals("id")) {
+                continue;
+            }
+            c = c.thenComparing((a, b) -> {
+                com.fasterxml.jackson.databind.JsonNode x = columns.apply(a).path(name);
+                com.fasterxml.jackson.databind.JsonNode y = columns.apply(b).path(name);
+                boolean xa = x.isMissingNode() || x.isNull();
+                boolean ya = y.isMissingNode() || y.isNull();
+                if (xa || ya) {
+                    return Boolean.compare(!xa, !ya);
+                }
+                return x.isNumber() && y.isNumber() ? Double.compare(x.asDouble(), y.asDouble()) : x.asText().compareTo(y.asText());
+            });
+        }
+        return c.thenComparing(byId);
     }
 
     /** Writes a checkpoint of the latest version: the version (one that has one already is left as it is). */

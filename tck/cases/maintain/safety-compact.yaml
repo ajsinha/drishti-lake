@@ -1,0 +1,38 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# Data safety of lake maintain --compact, --checkpoint and --vacuum-hours: a date three appends wrote (the same ids again) and a date one
+# load wrote; after it every row the table held is there once, as it was (each copy, document, column and vector: same as before=true), what
+# readers see is the same (the newest copy of each id, vectors filled), a reader that opened the table before maintain reads the same after
+# it (vacuum keeps what an hour-old version needs), and a second run changes nothing
+inputs:
+  a/pv.2026-10-27.jsonl: {pv: {n: 12, scenarios: 3, seed: 1}}
+  b/pv.2026-10-27.jsonl: {pv: {n: 8, scenarios: 3, seed: 2}}
+  c/pv.2026-10-27.jsonl: {pv: {n: 5, scenarios: 3, seed: 3}}
+  d/pv.2026-10-28.jsonl: {pv: {n: 9, scenarios: 3, seed: 4, start: '2026-10-28'}}
+configs:
+  a: |
+    source: {files: '${in}/a/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  b: |
+    source: {files: '${in}/b/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  c: |
+    source: {files: '${in}/c/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv, mode: append}
+  d: |
+    source: {files: '${in}/d/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
+steps:
+  - load: {config: a}
+  - load: {config: b}
+  - load: {config: c}
+  - load: {config: d}
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, seen]
+  - store: [hold, '${store}', '${lake}', risk, scenario-pv, before]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact, --checkpoint, --vacuum-hours, '1']
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, seen]
+  - store: [read-held, '${store}', '${lake}', risk, scenario-pv, before, seen]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --compact, --checkpoint, --vacuum-hours, '1']
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, rows]
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, seen]

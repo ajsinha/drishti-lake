@@ -79,7 +79,8 @@ import java.util.Optional;
  * {@code business_date} then the partition columns). The Parquet files are written by the loader's threads (Drishti's own writer, no
  * Hadoop) into the folders Delta Kernel names, and each date is committed through Kernel as ONE version that adds its files and removes
  * the date's earlier ones, as {@link LakeWriter} does. A new table is created by its first date's commit, with {@code target.properties}.
- * An existing table keeps its schema and partitioning: a load column it lacks is left out (and reported), a column the load lacks is null.
+ * A table laid out by more than the id ({@code sort-by}) says so in {@code lake.layout.sort-by}, as an Iceberg table does, so lake maintain
+ * keeps its order. An existing table keeps its schema and partitioning: a load column it lacks is left out (and reported), a column the load lacks is null.
  * The two load columns ({@code _load_id}, {@code _source_file}) are the exception: a table made before them gains them, as two nullable
  * columns added at the end in one metadata commit ({@link #withLoadColumns}); its files are not rewritten, their rows read them as null
  * (the oldest load).
@@ -266,8 +267,12 @@ final class DeltaTarget implements TableWriter {
         if (before == null) {
             tb = table.createTransactionBuilder(engine, ENGINE_INFO, Operation.CREATE_TABLE).withSchema(engine, schema)
                     .withPartitionColumns(engine, partitionColumns);
-            if (!spec.properties().isEmpty()) {
-                tb = tb.withTableProperties(engine, spec.properties());
+            Map<String, String> props = new LinkedHashMap<>(spec.properties());
+            if (!spec.sortedById()) {                                 // as the Iceberg store: lake maintain keeps such a table's order
+                props.putIfAbsent(com.ash.lake.PersistedNames.key("layout.sort-by"), String.join(",", spec.sortBy()));
+            }
+            if (!props.isEmpty()) {
+                tb = tb.withTableProperties(engine, props);
             }
         } else {
             tb = table.createTransactionBuilder(engine, ENGINE_INFO, Operation.WRITE);

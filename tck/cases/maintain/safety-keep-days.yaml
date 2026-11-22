@@ -1,0 +1,33 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# Data safety of lake maintain --keep-days: nine calendar dates (a weekend among them) and one after --as-of; keep-days 3 as of Friday
+# 2026-10-30 keeps exactly that Friday and the three business days before it (from Tuesday 2026-10-27) and the later date, every row of
+# them as it was (same as before=true), removes only the dates before; a reader that opened the table before still reads every date
+inputs:
+  d/pv.2026-10-22.jsonl: {pv: {n: 45, scenarios: 2, dates: 9, seed: 11, start: '2026-10-22', date: '2026-10-22'}}
+  d/pv.2026-10-23.jsonl: {pv: {n: 45, scenarios: 2, dates: 9, seed: 11, start: '2026-10-22', date: '2026-10-23'}}
+  d/pv.2026-10-24.jsonl: {pv: {n: 45, scenarios: 2, dates: 9, seed: 11, start: '2026-10-22', date: '2026-10-24'}}
+  d/pv.2026-10-25.jsonl: {pv: {n: 45, scenarios: 2, dates: 9, seed: 11, start: '2026-10-22', date: '2026-10-25'}}
+  d/pv.2026-10-26.jsonl: {pv: {n: 45, scenarios: 2, dates: 9, seed: 11, start: '2026-10-22', date: '2026-10-26'}}
+  d/pv.2026-10-27.jsonl: {pv: {n: 45, scenarios: 2, dates: 9, seed: 11, start: '2026-10-22', date: '2026-10-27'}}
+  d/pv.2026-10-28.jsonl: {pv: {n: 45, scenarios: 2, dates: 9, seed: 11, start: '2026-10-22', date: '2026-10-28'}}
+  d/pv.2026-10-29.jsonl: {pv: {n: 45, scenarios: 2, dates: 9, seed: 11, start: '2026-10-22', date: '2026-10-29'}}
+  d/pv.2026-10-30.jsonl: {pv: {n: 45, scenarios: 2, dates: 9, seed: 11, start: '2026-10-22', date: '2026-10-30'}}
+  late/pv.2026-11-02.jsonl: {pv: {n: 4, scenarios: 2, seed: 12, start: '2026-11-02'}}
+configs:
+  main: |
+    source: {files: '${in}/d/*', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
+  late: |
+    source: {files: '${in}/late/*', id: POSITION_ID, promote: [DESK], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, path: '${lake}/risk/scenario-pv', domain: risk, kind: scenario-pv}
+steps:
+  - load: {config: main}
+  - load: {config: late}
+  - store: [dates, '${store}', '${lake}', risk, scenario-pv]
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, kept, '2026-10-27']
+  - store: [read-visible, '${store}', '${lake}', risk, scenario-pv, seen]
+  - store: [hold, '${store}', '${lake}', risk, scenario-pv, before]
+  - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --keep-days, '3', --as-of, '2026-10-30', --max-drop-share, '0.7', --vacuum-hours, '1']
+  - store: [dates, '${store}', '${lake}', risk, scenario-pv]
+  - store: [raw-digest, '${store}', '${lake}', risk, scenario-pv, kept, '2026-10-27']
+  - store: [read-held, '${store}', '${lake}', risk, scenario-pv, before, seen]

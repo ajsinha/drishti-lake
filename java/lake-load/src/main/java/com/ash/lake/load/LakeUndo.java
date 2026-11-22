@@ -457,27 +457,52 @@ public final class LakeUndo {
 
     /** The date rewritten with {@code rows} (one commit: its files replaced); with none, the date's files removed. Returns the version. */
     static long rewrite(com.ash.lake.LakeRuntime runtime, Engine engine, String table, Snapshot s, String date, List<TableUpkeep.Staged> rows) throws IOException {
+        return rewriteSorted(runtime, engine, table, s, date, rows, Integer.MAX_VALUE);
+    }
+
+    /**
+     * As {@link #rewrite}, a partition's rows written in their order into files of at most {@code fileRows} rows each (relayout: rows
+     * sorted by id, so each file holds its own id range).
+     */
+    static long rewriteSorted(com.ash.lake.LakeRuntime runtime, Engine engine, String table, Snapshot s, String date, List<TableUpkeep.Staged> rows,
+            int fileRows) throws IOException {
+        return rewriteGroups(runtime, engine, table, s, date, List.of(rows), fileRows);
+    }
+
+    /**
+     * As {@link #rewrite}, each group's rows written in their order into files of their own (never two groups in one file: compaction keeps
+     * each load's older copies apart from the newest ones), a partition's rows of a group cut every {@code fileRows} rows.
+     */
+    @SuppressWarnings("unchecked")
+    static long rewriteGroups(com.ash.lake.LakeRuntime runtime, Engine engine, String table, Snapshot s, String date,
+            List<List<TableUpkeep.Staged>> groups, int fileRows) throws IOException {
         List<String> partitions = s.getPartitionColumnNames();
-        if (rows.isEmpty()) {
+        if (groups.stream().allMatch(List::isEmpty)) {
             return removeDates(engine, table, s, date::equals);
         }
         Path dir = com.ash.lake.common.TempFiles.of(runtime).createDir("lake-undo-");
         try {
-            Map<Map<String, String>, BufferedWriter> files = new LinkedHashMap<>();
-            Map<Map<String, String>, Path> paths = new LinkedHashMap<>();
-            Map<Map<String, String>, Long> counts = new LinkedHashMap<>();
-            for (TableUpkeep.Staged r : rows) {
-                Map<String, String> pv = r.partitionValues();
-                BufferedWriter w = files.get(pv);
-                if (w == null) {
-                    Path p = dir.resolve("part-" + files.size() + ".rows");
-                    w = Files.newBufferedWriter(p, StandardCharsets.UTF_8);
-                    files.put(pv, w);
-                    paths.put(pv, p);
+            // a part per partition, cut every fileRows rows: (partition values, the part's number in it)
+            Map<List<Object>, BufferedWriter> files = new LinkedHashMap<>();
+            Map<List<Object>, Path> paths = new LinkedHashMap<>();
+            Map<List<Object>, Long> counts = new LinkedHashMap<>();
+            Map<List<Object>, Long> seen = new LinkedHashMap<>();
+            for (int g = 0; g < groups.size(); g++) {
+                for (TableUpkeep.Staged r : groups.get(g)) {
+                    Map<String, String> pv = r.partitionValues();
+                    long n = seen.merge(List.of(pv, g), 1L, Long::sum) - 1;
+                    List<Object> key = List.of(pv, g, n / fileRows);
+                    BufferedWriter w = files.get(key);
+                    if (w == null) {
+                        Path p = dir.resolve("part-" + files.size() + ".rows");
+                        w = Files.newBufferedWriter(p, StandardCharsets.UTF_8);
+                        files.put(key, w);
+                        paths.put(key, p);
+                    }
+                    w.write(r.line());
+                    w.write('\n');
+                    counts.merge(key, 1L, Long::sum);
                 }
-                w.write(r.line());
-                w.write('\n');
-                counts.merge(pv, 1L, Long::sum);
             }
             for (BufferedWriter w : files.values()) {
                 w.close();
@@ -490,9 +515,14 @@ public final class LakeUndo {
                 }
             }
             List<LakeManifest.Part> parts = new ArrayList<>();
-            paths.forEach((pv, p) -> parts.add(new LakeManifest.Part(p, counts.get(pv), pv)));
-            LakeManifest m = new LakeManifest(table, partitions, columns, promoted, "overwrite-dates", 50_000,
-                    List.of("id", "business_date", RowPlan.LOAD_ID), parts);
+            paths.forEach((key, p) -> parts.add(new LakeManifest.Part(p, counts.get(key), (Map<String, String>) key.get(0))));
+            List<String> stats = new ArrayList<>(List.of("id", "business_date", RowPlan.LOAD_ID));
+            for (LakeManifest.Column c : columns) {                   // the promoted columns keep their statistics, as the loader writes them
+                if (promoted.contains(c.name()) && !"vector".equals(c.type()) && !stats.contains(c.name())) {
+                    stats.add(c.name());
+                }
+            }
+            LakeManifest m = new LakeManifest(table, partitions, columns, promoted, "overwrite-dates", 50_000, stats, parts);
             return LakeWriter.forTable(runtime, table, Map.of()).write(m, n -> { }).version();
         } finally {
             try (Stream<Path> s2 = Files.walk(dir)) {

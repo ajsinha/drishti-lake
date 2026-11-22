@@ -5,7 +5,7 @@ Java one through the product's class path, never a host's jar). The class path i
 class path, or one runnable jar), the Java binary ``LAKE_JAVA`` (else ``$JAVA_HOME/bin/java``, else ``java``); JDK 21 or later.
 
 The tools: ``undo`` (LakeUndo), ``retention`` (LakeRetention: delete dates, keep days or rows),
-``check`` (LakeCheck), ``maintain`` (LakeMaintain: one table's upkeep on every store: keep-days under the drop guard, row retention,
+``check`` (LakeCheck), ``maintain`` (LakeMaintain: one table's upkeep on every store: keep-days under the drop guard, row retention, relayout,
 compaction, checkpoint, vacuum), ``lakes`` (LakesCli: a lake file's model).
 Each runs with the arguments given and prints what the Java tool prints; its exit code is the tool's."""
 from __future__ import annotations

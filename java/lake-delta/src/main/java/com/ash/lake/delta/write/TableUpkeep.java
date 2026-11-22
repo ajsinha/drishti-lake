@@ -78,17 +78,27 @@ public final class TableUpkeep {
      * or {@code list<float>} column is carried too (a JSON array), else such a table gives null.
      */
     public static List<Staged> rows(Engine engine, Snapshot s, Predicate<Map<String, String>> keep, boolean vectors) throws IOException {
+        List<Staged> out = new ArrayList<>();
+        return rows(engine, s, keep, vectors, (file, row) -> out.add(row)) ? out : null;
+    }
+
+    /**
+     * As {@link #rows(Engine, Snapshot, Predicate, boolean)}, each row handed with the path of the data file it is in (as the read API's
+     * {@code DataFile.path} names it), file by file and in each file's order; false (nothing handed) when the table has a column the
+     * lines cannot carry.
+     */
+    public static boolean rows(Engine engine, Snapshot s, Predicate<Map<String, String>> keep, boolean vectors,
+            java.util.function.BiConsumer<String, Staged> sink) throws IOException {
         StructType schema = s.getSchema();
         List<String> parts = s.getPartitionColumnNames();
         for (StructField f : schema.fields()) {
             if (!parts.contains(f.getName()) && !simple(f.getDataType()) && !(vectors && vector(f.getDataType()))) {
-                return null;
+                return false;
             }
         }
         Scan scan = s.getScanBuilder().build();
         Row state = scan.getScanState(engine);
         StructType physical = ScanStateRow.getPhysicalDataReadSchema(state);
-        List<Staged> out = new ArrayList<>();
         try (CloseableIterator<FilteredColumnarBatch> files = scan.getScanFiles(engine)) {
             while (files.hasNext()) {
                 try (CloseableIterator<Row> fileRows = files.next().getRows()) {
@@ -106,7 +116,7 @@ public final class TableUpkeep {
                             while (data.hasNext()) {
                                 try (CloseableIterator<Row> rows = data.next().getRows()) {
                                     while (rows.hasNext()) {
-                                        out.add(staged(rows.next(), parts, new LinkedHashMap<>(pv)));
+                                        sink.accept(fs.getPath(), staged(rows.next(), parts, new LinkedHashMap<>(pv)));
                                     }
                                 }
                             }
@@ -115,7 +125,7 @@ public final class TableUpkeep {
                 }
             }
         }
-        return out;
+        return true;
     }
 
     /**
