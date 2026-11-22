@@ -39,7 +39,7 @@ runnable jar); the Java binary is `LAKE_JAVA`, else `$JAVA_HOME/bin/java`, else 
 |---|---|
 | `filedate` | table and business date from a file name or a tar's folders; the business today (`LAKE_BUSINESS_ZONE`, default `America/New_York`); no date after today |
 | `rowrule` | one line to one row: the checks in their fixed order, the id, constants, flattened fields, vectors, the document text (the same bytes the Java loader writes), partition and promoted values |
-| `inputs`, `archives` | `source.files` resolved to files and lines: plain, gzip, zstd, zip, tar, with the archive guards and caps (local files only) |
+| `inputs`, `archives` | `source.files` resolved to files and lines: plain, gzip, zstd, JSON arrays, zip, tar (`.tar.zip` too), with the archive guards and caps (local files only). `archives` is the one archive rule for every Python tool: `plan(path, dataset=None, configured=None, limits=None, layout="feed"\|"rows", today=None)` (a loader's feed, or a host's rows files whose folders are datasets), `Archive(plan)` (`.open(member)`, `.lines(member)`), `read_lines`, `row_counts`, `Limits.defaults(env)` / `Limits.from_env(env, max_mb=, max_ratio=, max_members=)`, `Member` (`archive`, `name`, `dataset`, `size`, `raw`, `day`, `label`), `Plan` (`archive`, `archive_name`, `datasets`, `folders`, `notes`, `size`, `kind`, `members()`, `require()`), `is_archive`, `stem`, `valid_name`, `safe_parts`, `ArchiveError` (a `ValueError`) |
 | `config` | the loader's configuration file, read and checked as the Java loader does |
 | `delta` | the writer: one commit per business date; the table has `id`, `doc`, `business_date`, the partition and promoted columns, vectors, `_load_id`, `_source_file` |
 | `load` | the load itself |

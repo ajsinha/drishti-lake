@@ -100,3 +100,17 @@ def test_no_host_word_in_the_package():
     found = [str(p.relative_to(PYTHON)) for p in PYTHON.rglob("*.py") if host.search(p.read_text(encoding="utf-8"))
              and p.name != "test_load.py"]
     assert found == []
+
+
+def test_a_json_array_streams_its_elements_as_lines():
+    """JSON-array input (Java: JsonArrays): read in small chunks, each element one compact line; broken or trailing text refused."""
+    import io
+    import pytest
+    from drishti_lake import inputs
+    text = '[ {"a": 1.0e7, "b": [1, 2]},\n 5, "x" , {"c": "é"} ]  \n'
+    assert list(inputs.json_array(io.StringIO(text), "f.json", chunk=3)) == ['{"a":10000000.0,"b":[1,2]}', "5", '"x"', '{"c":"é"}']
+    with pytest.raises(inputs.InputError, match="element 2 of the JSON array is not JSON"):
+        list(inputs.json_array(io.StringIO('[{"a":1},{"b":'), "f.json", chunk=4))
+    with pytest.raises(inputs.InputError, match="text after the JSON array's closing"):
+        list(inputs.json_array(io.StringIO('[{"a":1}] {"b":2}'), "f.json"))
+    assert inputs.is_json_named("x.json.gz") and not inputs.is_json_named("x.jsonl")

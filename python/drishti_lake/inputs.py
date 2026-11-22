@@ -6,15 +6,15 @@ as lines whatever its container.
 A pattern is a file, a folder (its data files; ``recursive`` for subfolders) or a glob (``*``, ``?``, ``**``). Plain JSON Lines
 (``.jsonl``, ``.ndjson``, ``.json``), gzip (every member), zstd, a zip (its JSON Lines files loose, in name order, dated by the
 archive's name) and a tar (``<table>/<YYYY-MM-DD>/<file>.jsonl``, every member dated by its folder); both under the archive rule and
-its guards and caps (``archives``). Local files only: an object store's input is the Java loader's."""
+its guards and caps (``archives``). A ``.json`` file or member whose text starts with ``[`` is a JSON array: its elements are the rows
+(``json_array``). Local files only: an object store's input is the Java loader's."""
 from __future__ import annotations
 
-import gzip
 import io
+import json
 import os
 import pathlib
 import re
-import tarfile
 import zipfile
 from dataclasses import dataclass, field
 from datetime import date
@@ -113,7 +113,7 @@ def resolve(patterns: list[str], recursive: bool, today: date, limits: archives.
     for p in sorted(paths):
         name = os.path.basename(p)
         if archives.is_archive(name):
-            plan = archives.plan(p, dataset, limits, today)
+            plan = archives.plan(p, dataset=dataset, limits=limits, today=today)
             if notes is not None:
                 notes += [f"{plan.archive_name}: {n}" for n in plan.notes]
             plans.append(plan)
@@ -124,57 +124,123 @@ def resolve(patterns: list[str], recursive: bool, today: date, limits: archives.
             raise archives.ArchiveError(f"{plan.archive_name}: a .tar archive names its own tables and dates (its <table>/<YYYY-MM-DD>/ "
                                         "folders): source.as-of is refused for it")
     for plan in plans:
-        tally = archives.Tally(plan.archive_name, limits.cap(plan.size))
         if plan.folders and dataset and dataset.strip():                 # a tar's one table this load is for (the others: other loads)
             members = plan.datasets.get(dataset, [])
         else:
             if plan.folders and table is not None:
                 plan.require([table])
             members = plan.members()
-        out += [InputFile(plan.archive, m.name.rsplit("/", 1)[-1], plan.archive, m.raw, m.day, m.dataset if plan.folders else None, tally)
-                for m in members]
+        out += [InputFile(str(plan.archive), m.name.rsplit("/", 1)[-1], str(plan.archive), m.raw, m.day, m.dataset if plan.folders else None,
+                          m.tally) for m in members]
     return sorted(out, key=lambda f: f.path)
 
 
-def _decompress(raw: io.BufferedIOBase, name: str):
-    low = name.lower()
-    if low.endswith(".gz"):
-        return gzip.GzipFile(fileobj=raw)
-    if low.endswith(".zst"):
-        try:
-            from compression import zstd              # Python 3.14
-            return zstd.ZstdFile(raw)
-        except ImportError:
-            import zstandard                           # earlier Pythons: the zstandard package
-            return zstandard.ZstdDecompressor().stream_reader(raw, read_across_frames=True)
-    return raw
-
-
 def _member(raw, f: InputFile):
-    """A member's JSON Lines held to the archive's caps: the bytes it expands to, and apart the text of a compressed member."""
+    """A member's JSON Lines held to the archive's caps (``archives.capped``)."""
     if f.tally is None:
-        return _decompress(raw, f.member)
-    entry = io.BufferedReader(archives.Capped(raw, f.tally, "expanded", f.tally.archive_name))
-    low = f.member.lower()
-    if low.endswith((".gz", ".zst")):
-        what = f"{f.tally.archive_name}!/{archives.safe_parts(f.member) and '/'.join(archives.safe_parts(f.member))}'s JSON Lines"
-        return io.BufferedReader(archives.Capped(_decompress(entry, f.member), f.tally, "text", what))
-    return entry
+        return archives.decompressed(raw, f.member)
+    m = archives.Member(pathlib.Path(f.archive), "/".join(archives.safe_parts(f.member)), f.folder_table or "", 0, f.member)
+    return archives.capped(raw, m, f.tally)
 
 
 def lines(f: InputFile):
     """The lines of one data file, decoded as UTF-8 (a bad byte replaced, as the Java reader does), without their line ends; blank
-    lines skipped. An archive's member is held to its caps while it is read (``archives.ArchiveError``)."""
-    if f.archive and f.archive.lower().endswith(".zip"):
+    lines skipped. An archive's member is held to its caps while it is read (``archives.ArchiveError``). A JSON array (``json_array``)
+    gives its elements as the lines."""
+    if f.archive and archives.kind_of(f.archive) == "zip":
         with zipfile.ZipFile(f.archive) as z, z.open(f.member) as raw:
-            yield from _text(_member(raw, f))
+            yield from _rows(_member(raw, f), f.member)
     elif f.archive:
-        with tarfile.open(f.archive, "r:*") as t:
-            raw = t.extractfile(f.member)
-            yield from _text(_member(raw, f))
+        t, outer = archives.open_tar(f.archive, archives.kind_of(f.archive))
+        try:
+            yield from _rows(_member(t.extractfile(f.member), f), f.member)
+        finally:
+            t.close()
+            if outer is not None:
+                outer.close()
     else:
         with open(f.path, "rb") as raw:
-            yield from _text(_decompress(raw, f.name))
+            yield from _rows(archives.decompressed(raw, f.name), f.name)
+
+
+def is_json_named(name: str) -> bool:
+    """Whether a file or member may be a JSON array: ``.json``, plain or ``.gz`` / ``.zst`` (Java: JsonArrays.named)."""
+    return name.lower().endswith((".json", ".json.gz", ".json.zst"))
+
+
+def _rows(stream, name: str):
+    """JSON Lines, or a JSON array's elements (``json_array``) when ``name`` may be one and the text starts with ``[``."""
+    if not is_json_named(name):
+        yield from _text(stream)
+        return
+    buffered = stream if isinstance(stream, io.BufferedReader) else io.BufferedReader(stream, 1 << 16)
+    head = buffered.peek(4096)[:4096]
+    if head.startswith(b"\xef\xbb\xbf"):
+        head = head[3:]
+    if head.lstrip(b" \t\r\n")[:1] == b"[":
+        yield from json_array(io.TextIOWrapper(buffered, encoding="utf-8-sig", errors="replace", newline=""), os.path.basename(name))
+    else:
+        yield from _text(buffered)
+
+
+def json_array(text, name: str, chunk: int = 1 << 16):
+    """A JSON array's elements as JSON Lines lines (each compact, one line), read in chunks (never the whole file in memory): the Java
+    loader's ``JsonArrays``. An array that breaks off, or text after its closing ``]``, fails the load naming the file and the element."""
+    dec = json.JSONDecoder()
+    buf, at, n, started, eof = "", 0, 0, False, False
+
+    def more():
+        nonlocal buf, at, eof
+        got = text.read(chunk)
+        if not got:
+            eof = True
+        buf = buf[at:] + got
+        at = 0
+
+    def skip():
+        nonlocal at
+        while True:
+            while at < len(buf) and buf[at] in " \t\r\n":
+                at += 1
+            if at < len(buf) or eof:
+                return
+            more()
+
+    more()
+    skip()
+    if buf[at:at + 1] != "[":
+        raise InputError(f"{name}: not a JSON array")
+    at += 1
+    while True:
+        skip()
+        if at >= len(buf):
+            raise InputError(f"{name}: the JSON array ends without its closing ] after element {n}: nothing was loaded")
+        if buf[at] == "]":
+            at += 1
+            skip()
+            if at < len(buf):
+                raise InputError(f"{name}: text after the JSON array's closing ]: nothing was loaded")
+            return
+        if started:
+            if buf[at] != ",":
+                raise InputError(f"{name}: element {n + 1} of the JSON array is not JSON (a ',' or ']' expected): nothing was loaded")
+            at += 1
+            skip()
+        while True:
+            try:
+                value, end = dec.raw_decode(buf, at)
+                if end >= len(buf) and not eof:           # a number may go on in the next chunk
+                    raise ValueError("more")
+                break
+            except ValueError as e:
+                if eof:
+                    raise InputError(f"{name}: element {n + 1} of the JSON array is not JSON ({e}): nothing was loaded") from None
+                more()
+                skip()
+        at = end
+        n += 1
+        started = True
+        yield json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
 def _text(stream):

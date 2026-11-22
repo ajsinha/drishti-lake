@@ -40,13 +40,16 @@ def pv_lines(n, scenarios, dates, seed, start="2026-10-27"):
 
 
 def content(spec):
-    """An input file's lines: literal text, or {pv: {n, scenarios, dates, seed, date?}} (only lines of that date when given)."""
+    """An input file's lines: literal text, or {pv: {n, scenarios, dates, seed, date?}} (only lines of that date when given); with
+    ``array: true`` the same rows as one JSON array, an element a line (the loader's JSON-array input)."""
     if isinstance(spec, str):
         return spec if spec.endswith("\n") else spec + "\n"
     g = spec["pv"]
     lines = pv_lines(g["n"], g.get("scenarios", 4), g.get("dates", 1), g.get("seed", 1), g.get("start", "2026-10-27"))
     if "date" in g:
         lines = [l for l in lines if f'"BUSINESS_DATE":"{g["date"]}"' in l]
+    if spec.get("array"):
+        return "[\n  " + ",\n  ".join(lines) + "\n]\n"
     return "".join(l + "\n" for l in lines)
 
 

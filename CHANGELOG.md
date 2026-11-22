@@ -5,6 +5,16 @@ Entries are written per release; unreleased work is listed first.
 
 ## 0.9.0 (2026-11-21): the move from Drishti
 
+- **JSON arrays as loader input (G4 lake gap c)**: a `.json` file or archive member (plain, `.gz`, `.zst`) whose text starts with `[` is
+  a JSON array whose elements are the rows, read as a stream (`JsonArrays` in the Java loader, `inputs.json_array` on the Python path),
+  each element the line a JSON Lines file would hold (the same rows, rejects and numbering); a broken array or text after its `]` fails the
+  load naming the element. Kit case `inputs/json-array` (`tck.py`'s `array: true` input).
+- **One archive rule in Python (G4 lake gap d)**: `drishti_lake.archives` is complete, so a host keeps no copy: both layouts (`feed`, the
+  default, and `rows`, a host's rows files whose folders are datasets, `--dataset`, `configured`), `.tar.zip`, the reader (`Archive`,
+  `read_lines`, `row_counts`, `capped`, `decompressed`), `Limits.from_env` with overrides, `Member.label` / `stat()` / `date`,
+  `Plan.archive_name`, `archive_stem`; `ArchiveError` is a `ValueError`. `plan`'s arguments after the path are keywords
+  (`plan(path, dataset=None, configured=None, limits=None, layout="feed", today=None)`); `inputs` reads members through it. The shared
+  fixtures run in both layouts (`test_the_shared_cases_as_rows`).
 - **The loader's accuracy guards (G4 lake gap b)**: the old Iceberg loader's date guard and drop guard are the one loader's, on every
   store and on the Python path: `guard.future-days` / `--future-days` (a business date up to today plus N; 0 by default, the rule as
   before) and `guard.zone` / `--zone` (the business zone whose today it is), and `guard.max-drop-share` / `--max-drop-share` with

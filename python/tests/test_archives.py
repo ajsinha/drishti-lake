@@ -23,7 +23,7 @@ def limits(c) -> archives.Limits:
 
 
 def plan(c):
-    p = archives.plan(str(FIX / c["file"]), c.get("dataset"), limits(c), TODAY)
+    p = archives.plan(str(FIX / c["file"]), c.get("dataset"), limits=limits(c), today=TODAY)
     if "configured" in c:
         p.require(c["configured"])
     return p
@@ -34,7 +34,7 @@ def rows(p, lim):
     out = {d: 0 for d in p.datasets}
     tally = archives.Tally(p.archive_name, lim.cap(p.size))
     for m in p.members():
-        f = inputs.InputFile(p.archive, m.name.rsplit("/", 1)[-1], p.archive, m.raw, m.day, None, tally)
+        f = inputs.InputFile(str(p.archive), m.name.rsplit("/", 1)[-1], str(p.archive), m.raw, m.day, None, tally)
         out[m.dataset] += sum(1 for _ in inputs.lines(f))
     return out
 
@@ -73,14 +73,53 @@ def test_the_defaults_are_the_shared_ones():
 def test_the_refusals_are_the_java_loaders_words():
     lim = archives.Limits(1024, 200, 100000)
     with pytest.raises(archives.ArchiveError) as e:
-        archives.plan(str(FIX / "bomb.zip"), None, lim, TODAY)
+        archives.plan(str(FIX / "bomb.zip"), limits=lim, today=TODAY)
     assert str(e.value).startswith("bomb.zip: its entries expand to ") and str(e.value).endswith(
         " bytes, more than max-mb 9.765625E-4 (a zip bomb?); nothing was read")
     with pytest.raises(archives.ArchiveError) as e:
-        archives.plan(str(FIX / "bundle.zip"), None, archives.Limits(max_members=3), TODAY)
+        archives.plan(str(FIX / "bundle.zip"), limits=archives.Limits(max_members=3), today=TODAY)
     assert str(e.value) == "bundle.zip: 9 entries, more than the cap of 3 (max-members)"
     with pytest.raises(archives.ArchiveError, match=r"^member '\.\./"):
-        archives.plan(str(FIX / "slip.zip"), None, archives.Limits(), TODAY)
+        archives.plan(str(FIX / "slip.zip"), limits=archives.Limits(), today=TODAY)
     assert archives.safe_parts("./a/./b.jsonl") == ["a", "b.jsonl"]
     with pytest.raises(archives.ArchiveError, match="an absolute path"):
         archives.safe_parts("C:/x.jsonl")
+
+
+@pytest.mark.parametrize("c", DOC["cases"], ids=lambda c: c["case"])
+def test_the_shared_cases_as_rows(c):
+    """The ``rows`` layout (a host's own rows files: folders are datasets) gives every shared case's expected answer, read through
+    ``Archive`` / ``row_counts`` (one reader for both layouts)."""
+    lim = limits(c)
+    want = c.get("expect")
+
+    def go():
+        p = archives.plan(FIX / c["file"], c.get("dataset"), c.get("configured"), lim, layout="rows")
+        return p, archives.row_counts(p, lim)
+    if "refused" in c:
+        with pytest.raises(archives.ArchiveError) as e:
+            go()
+        assert c["refused"] in str(e.value)
+        return
+    p, counts = go()
+    assert sorted(p.datasets) == sorted(want["datasets"])
+    for d, w in want["datasets"].items():
+        assert [m.name for m in p.datasets[d]] == w["members"]
+    assert counts == {d: w["rows"] for d, w in want["datasets"].items()}
+    assert len(p.notes) == want["notes"], p.notes
+
+
+def test_the_api_a_host_reads_through():
+    """What a host's tools use (a lake build, a convert, a feed reader): the caps from the environment with overrides, the stem, a
+    member's label and its date, a feed's tar dated by its folders and the read helpers."""
+    lim = archives.Limits.from_env({"LAKE_ARCHIVE_MAX_MB": "5"}, max_ratio=9)
+    assert (lim.max_mb, lim.max_ratio, lim.max_members) == (5.0, 9.0, archives.DEFAULT_MAX_MEMBERS)
+    with pytest.raises(ValueError, match="more than 0"):
+        archives.Limits.from_env({}, max_members=0)
+    assert archives.archive_stem("trade.tar.gz") == archives.stem("trade.tgz") == "trade"
+    p = archives.plan(FIX / "trade.zip", layout="rows")
+    m = p.members()[0]
+    assert m.label == "trade.zip!/a.jsonl" and m.stat().st_size == m.size and str(m).endswith("trade.zip!/a.jsonl")
+    with archives.Archive(p) as a:
+        assert sum(1 for line in a.lines(m) if line.strip()) > 0
+    assert sum(1 for _ in archives.read_lines(p)) >= sum(archives.row_counts(p).values())

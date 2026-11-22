@@ -180,7 +180,7 @@ final class ChildLoads {
             for (Map.Entry<Archives.Plan, List<Archives.Member>> e : byArchive.entrySet()) {
                 Archives.read(io, e.getKey(), e.getValue(), cfg.archive().limits(), meter, 1 << 20, (m, in) -> {
                     LocalDate day = ParseWorker.decide(plan, members.get(m), plan.today).date();
-                    lines(in, kids, day, scratch, writers, rows);
+                    lines(JsonArrays.lines(m.name(), in), kids, day, scratch, writers, rows);
                 });
             }
         } finally {
@@ -192,11 +192,11 @@ final class ChildLoads {
     }
 
     private static InputStream decompress(InputFile f, InputStream raw) throws IOException {
-        return switch (f.compression()) {
+        return JsonArrays.lines(f.name(), switch (f.compression()) {
             case NONE -> raw;
             case GZIP -> new GzipMembers(raw, 1 << 20);
             case ZSTD -> new com.github.luben.zstd.ZstdInputStream(raw);
-        };
+        });
     }
 
     private static void lines(InputStream in, List<ChildKinds> kids, LocalDate day, Path scratch, Map<String, BufferedWriter> writers,

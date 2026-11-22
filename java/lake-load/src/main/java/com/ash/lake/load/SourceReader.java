@@ -70,11 +70,11 @@ final class SourceReader {
             boolean plain = s.file().compression() == Compression.NONE;
             long from = plain && s.start() > 0 ? s.start() - 1 : 0;
             RangeStream raw = new RangeStream(r, from, r.length(), read);
-            InputStream in = switch (s.file().compression()) {
+            InputStream in = JsonArrays.lines(s.file().name(), switch (s.file().compression()) {
                 case NONE -> raw;
                 case GZIP -> new GzipMembers(raw, blockBytes);
                 case ZSTD -> new com.github.luben.zstd.ZstdInputStream(raw);
-            };
+            });
             try (in) {
                 return chunks(s, in, raw, plain ? s.end() : Long.MAX_VALUE, plain && s.start() > 0, from);
             } finally {
@@ -96,7 +96,7 @@ final class SourceReader {
             of.put(s.file().member(), s);
             members.add(s.file().member());
         }
-        Archives.read(io, plan, members, limits, read, blockBytes, (m, in) -> chunks(of.get(m), in, null, Long.MAX_VALUE, false, 0));
+        Archives.read(io, plan, members, limits, read, blockBytes, (m, in) -> chunks(of.get(m), JsonArrays.lines(m.name(), in), null, Long.MAX_VALUE, false, 0));
     }
 
     /**

@@ -1,0 +1,42 @@
+# Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
+# JSON arrays as input (JsonArrays; Python: inputs.json_array): a .json file, plain, gzip or a tar's member, whose text starts with [
+# holds its rows as the array's elements, loaded as the same rows as JSON Lines would be (the second table, from JSON Lines, holds the
+# same rows); an element that is not an object, or lacks the id, is rejected as such a line is; a .json file of JSON Lines stays JSON
+# Lines; an array that breaks off fails the load, nothing written
+inputs:
+  arr/pv.2026-10-27.json: {pv: {n: 9, scenarios: 2, seed: 1}, array: true}
+  arr/pv.2026-10-28.json.gz: {pv: {n: 6, scenarios: 2, seed: 2, start: '2026-10-28'}, array: true}
+  lines/pv.2026-10-27.jsonl: {pv: {n: 9, scenarios: 2, seed: 1}}
+  lines/pv.2026-10-28.json: {pv: {n: 6, scenarios: 2, seed: 2, start: '2026-10-28'}}
+  feed.tar: {tar: {scenario-pv/2026-10-29/rows.json: {pv: {n: 4, scenarios: 2, seed: 3, start: '2026-10-29'}, array: true}}}
+  odd/pv.2026-10-30.json: |-
+    [
+      {"POSITION_ID": "P-9000001", "DESK": "DESK-FX", "BASE_PV": 1.5e3, "SCENARIO_PV": [1, 2]},
+      7,
+      {"DESK": "DESK-FX", "SCENARIO_PV": [3, 4]},
+      {"POSITION_ID": "P-9000002", "DESK": "DESK-FX", "BASE_PV": -2.0, "SCENARIO_PV": [5, 6]}
+    ]
+  broken/pv.2026-10-30.json: '[{"POSITION_ID": "P-1", "SCENARIO_PV": [1, 2]}, {"POSITION_ID": '
+configs:
+  arr: |
+    source: {files: '${in}/arr/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+  lines: |
+    source: {files: '${in}/lines/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: from-lines, mode: replace-date}
+  feed: |
+    source: {files: '${in}/feed.tar', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+  odd: |
+    source: {files: '${in}/odd/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+  broken: |
+    source: {files: '${in}/broken/*', id: POSITION_ID, promote: [DESK, BASE_PV], vectors: [SCENARIO_PV]}
+    target: {format: ${store}, lake: '${lake}', domain: risk, kind: scenario-pv, mode: replace-date}
+steps:
+  - load: {config: arr}
+  - load: {config: lines}
+  - load: {config: feed}
+  - load: {config: odd}
+  - load: {config: broken}
+tables: [risk/scenario-pv, risk/from-lines]

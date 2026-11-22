@@ -2,8 +2,8 @@
 # The loader, the inbox and the upkeep tools
 
 JSON Lines in, tables out. **One** Java loader (concurrent: the default) and **one** Python path ([PYTHON.md](PYTHON.md)) take the same
-configuration file, apply the same rules and write the same summary; the parity kit holds them equal. Rows arrive as JSON Lines, plain or
-`gz` / `zst`, or inside a `zip` / `tar` archive; nothing else is a row format.
+configuration file, apply the same rules and write the same summary; the parity kit holds them equal. Rows arrive as JSON Lines, or as a
+JSON array (below), plain or `gz` / `zst`, or inside a `zip` / `tar` archive; nothing else is a row format.
 
 ## Run a load
 
@@ -60,6 +60,11 @@ values named; a kind the lake file lacks is refused.
   `guard.force-drop` (or `--force-drop`) lets it through. An append, and a date the table does not hold yet, drop nothing. Off unless a
   share is set: set it for a feed whose dates must not shrink by accident (0.5: half a date). Retention's own guard is
   `lake maintain --keep-days` (below). Kit cases: `load/date-guard-future-days-and-zone`, `load/drop-guard-replace`.
+- **JSON arrays.** A `.json` file or archive member (plain, `.gz`, `.zst`) whose text starts with `[` (after a byte-order mark and white
+  space) is a JSON array whose elements are the rows: read as a stream, each element taken as the line a JSON Lines file would hold, so
+  the same rows load alike either way (an element that is not an object, or lacks its id, is rejected as such a line is, numbered by
+  element). A `.json` file that does not start with `[` is JSON Lines. An array that breaks off, or text after its closing `]`, fails the
+  load naming the file and the element. Kit case `inputs/json-array`.
 - **Archives.** A `zip` is one table and one business date, its JSON Lines files loose, dated by the archive's name. A tar
   (`.tar`, `.tar.gz`, `.tgz`) is `<table>/<YYYY-MM-DD>/<file>.jsonl[.gz|.zst]`: every member dated by its folder, each table loaded, and any
   other layout refuses the whole archive listing every problem. Absolute or `..` names, links, devices, encrypted members and nested archives

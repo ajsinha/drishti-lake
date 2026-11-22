@@ -126,7 +126,7 @@ def main(argv: list[str], out=None) -> int:
         Loader(cfg, files, report).run()
     except Locked as e:
         report.status, error = "locked", str(e)
-    except (LoadError, delta.TableError, ValueError, archives.ArchiveError) as e:
+    except (LoadError, delta.TableError, ValueError, archives.ArchiveError, inputs.InputError) as e:
         error = str(e)
     except Exception as e:  # noqa: BLE001 - one line, as the Java loader's
         error = f"{type(e).__name__}: {str(e).splitlines()[0] if str(e) else ''}"

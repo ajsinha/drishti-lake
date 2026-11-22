@@ -95,7 +95,7 @@ final class Inputs {
     static List<Split> splits(List<InputFile> files, long splitBytes) {
         List<Split> out = new ArrayList<>();
         for (InputFile f : files) {
-            int parts = f.compression() != Compression.NONE || f.member() != null || f.size() <= splitBytes ? 1 : (int) Math.min(Integer.MAX_VALUE, (f.size() + splitBytes - 1) / splitBytes);
+            int parts = f.compression() != Compression.NONE || f.member() != null || f.size() <= splitBytes || JsonArrays.named(f.name()) ? 1 : (int) Math.min(Integer.MAX_VALUE, (f.size() + splitBytes - 1) / splitBytes);
             long step = parts == 1 ? f.size() : (f.size() + parts - 1) / parts;
             for (int i = 0; i < parts; i++) {
                 long start = i * step;
