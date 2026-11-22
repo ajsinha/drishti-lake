@@ -116,6 +116,10 @@ public final class LakeRetention {
      * (before), {@code dropped}, {@code dates} (a line per business date changed: {@code date}, {@code rows}, {@code dropped}).
      */
     public static Map<String, Object> apply(com.ash.lake.LakeRuntime runtime, String root, String format, String table, RowRetention r, Instant now, boolean dryRun) throws Exception {
+        if (!dryRun && appendOnly(runtime, root, format, table)
+                && ((Number) apply(runtime, root, format, table, r, now, true).get("dropped")).longValue() > 0) {
+            com.ash.lake.spi.TableProperties.refuseRewrite(Map.of(com.ash.lake.spi.TableProperties.APPEND_ONLY, "true"), table, "row retention");
+        }
         List<Map<String, Object>> dates = switch (format) {
             case "delta" -> delta(runtime, root, table, r, now, dryRun);
             case "files" -> files(runtime, root, table, r, now, dryRun);
@@ -167,6 +171,9 @@ public final class LakeRetention {
      */
     public static Map<String, Object> dropDates(com.ash.lake.LakeRuntime runtime, String root, String format, String table, java.util.function.Predicate<String> wanted, boolean dryRun)
             throws Exception {
+        if (!dryRun && appendOnly(runtime, root, format, table) && !((List<?>) dropDates(runtime, root, format, table, wanted, true).get("dates")).isEmpty()) {
+            com.ash.lake.spi.TableProperties.refuseRewrite(Map.of(com.ash.lake.spi.TableProperties.APPEND_ONLY, "true"), table, "a delete of dates");
+        }
         Map<String, Object> got = switch (format) {
             case "delta" -> deltaDates(runtime, root, table, wanted, dryRun);
             case "files" -> filesDates(runtime, root, table, wanted, dryRun);
@@ -186,6 +193,24 @@ public final class LakeRetention {
             m.put("version", got.get("version"));
         }
         return m;
+    }
+
+    /** Whether {@code domain/table} of the lake at {@code root} is append-only (TableProperties): rows never leave it. */
+    static boolean appendOnly(com.ash.lake.LakeRuntime runtime, String root, String format, String table) throws IOException {
+        com.ash.lake.spi.TableRef ref;
+        try {
+            ref = ref(runtime, root, table);
+        } catch (IllegalArgumentException notOne) {
+            return false;                                        // not <domain>/<table>: the step names the problem itself
+        }
+        return com.ash.lake.spi.TableProperties.effective(Stores.of(runtime, format).properties(runtime, ref)).appendOnly();
+    }
+
+    /** The table {@code domain/table} of the lake at {@code root} (a relative local root made absolute). */
+    static com.ash.lake.spi.TableRef ref(com.ash.lake.LakeRuntime runtime, String root, String table) {
+        int slash = table.indexOf('/');
+        String at = runtime.supports(root) || !com.ash.lake.io.LocalPaths.isLocal(root) ? root : Path.of(root).toAbsolutePath().toString();
+        return new com.ash.lake.spi.TableRef(at, slash < 0 ? "" : table.substring(0, slash), table.substring(slash + 1));
     }
 
     /** {@code <root>/<table>}: a local folder, or a URI's path joined with one slash ({@code mem://}, {@code s3://}). */

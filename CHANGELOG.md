@@ -50,6 +50,33 @@ Entries are written per release; unreleased work is listed first.
   `target.mode: append`, `target.properties`, the version from `--summary`); `S3Storage`, `S3Settings`, `LocalPaths`: `LakeStorage`;
   `PageDecodeException`, `UnsupportedCodec`: every read wraps them as `LakeException` with `LakeError.UNREADABLE`, its message the
   words. `java/api-surface.txt` updated; the design's section 3.1 lists them. The dead Delta `TableProblems` is removed.
+- **target.properties on every store (storage-parity defect found by Drishti's 0.9.1 adoption)**: the Iceberg target ignored
+  `target.properties` (a new table got neither its retention nor its append-only mark; Delta applied them), and the files store had no
+  table properties. Now `TableProperties` maps them on every store, set when the load creates the table: `lake.append-only` is Delta's
+  `delta.appendOnly`, Iceberg's and the files store's `lake.append-only`; `lake.retention-hours` is Delta's
+  `delta.deletedFileRetentionDuration` and `delta.logRetentionDuration`, Iceberg's `history.expire.max-snapshot-age-ms`, the files
+  store's `lake.retention-hours` (in `_log/<table>/properties.json`); a format's native name of the two is taken on any store, other keys
+  are written as given, disagreeing names and keys of the prefix before Drishti Lake are refused. What they do is the same everywhere: an
+  append-only table takes appends only (a replace, a delete of dates, row retention, keep-days and an undo that would remove rows are
+  refused in one sentence; compaction, relayout, checkpoints and vacuum run, a Delta compaction's removes now `dataChange: false` as
+  OPTIMIZE's, so an append-only Delta table compacts), and `lake maintain --vacuum-hours` never goes below the table's retention.
+  `TableStore.properties` (new, default empty) and `TableProperties.effective` read them back. The Python path writes them on a new Delta
+  table and refuses a replace of an append-only one in the same words. Kit case `properties/retention-and-append-only` (kit verb
+  `store properties`; a load step's `error: true` records a failed load's reason), `TablePropertiesTest`.
+- **overwrite-partitions on every store (storage-parity gap)**: `target.mode: overwrite-partitions` replaces, of each business date, only
+  the partitions the input brings (its `partition-by` values, an empty value as null); the date's other partitions stay. Drishti's
+  documented flows use it (`load-day.sh`/`backfill.sh --mode overwrite-partitions` for a restated source, `lake build`, systems that each
+  write their partition of one table), which until now needed the Python deltalake engine. Delta, Iceberg, files and the Python path
+  alike (`WriteSpec.partitionsOnly`, kept compatible by the old constructor); with `guard.max-drop-share` (which counts whole dates) it is
+  refused. Kit case `load/overwrite-partitions`.
+- **One meaning of a load's version (storage-parity defect)**: the summary's `commit.dates.<date>.version` was Delta's table version but
+  an Iceberg snapshot id (a random number, so a second commit's could be smaller). It is now a number that grows with every commit of the
+  table on every store (Delta's version, the Iceberg snapshot's sequence number, the files store's log number), and `nativeVersion` beside
+  it is the store's own id (Iceberg: the snapshot id, the one `TableStore.versions` and a read at a version take). `TableWriter.commit`
+  answers the version, `TableWriter.nativeVersion` the id. `LoadVersionTest`.
+- **A Delta day with the null partition reads (defect)**: the read API's day listing of a Delta date holding a file of a null
+  partition value (an empty `partition-by` value) failed with `LK-1006 ... NullPointerException`; the null partition is now left out of the
+  file's partition values, as the Iceberg store does. Kit case `load/overwrite-partitions`.
 - **lake maintain's report**: `before` and `after` give `files`, `mb`, `latestDate` and `latestRows` as well, on every store.
 - **A caller's refusal is its own (G4 triage)**: an exception thrown by the caller's sink inside a read (a vector, document or row sink:
   a host refusing a duplicate trade, say) leaves the read as it was thrown, unchanged, and records no read problem; before, every store

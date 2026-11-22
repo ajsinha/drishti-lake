@@ -15,6 +15,8 @@ from datetime import date
 
 import yaml
 
+from . import props
+
 KEYS = {
     "": {"source", "target", "parallel", "memory", "rejects", "report", "lock", "datasets", "guard"},
     "guard": {"future-days", "zone", "max-drop-share", "force-drop"},
@@ -33,6 +35,7 @@ KEYS = {
 DEFAULT_LATEST_BY = "COMPUTED_AT"
 DEFAULT_SORT = ["LEGAL_ENTITY", "DESK", "id"]
 JAVA = "load it with the Java loader (lake-cli load)"
+OVERWRITE_PARTITIONS = "overwrite-partitions"
 _REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_.]*)\}")
 
 
@@ -58,7 +61,7 @@ class LoadConfig:
     lake_root: str
     domain: str
     table: str
-    mode: str                  # append | replace-date
+    mode: str                  # append | replace-date | overwrite-partitions
     mode_from: str
     batch_id: str | None
     max_pct: float
@@ -76,6 +79,7 @@ class LoadConfig:
     dataset: str | None = None
     future_days: int = 0       # guard.future-days: a business date up to today plus this many days (the date guard)
     zone: str | None = None    # guard.zone: the business zone whose today it is (default lake.business.zone)
+    properties: dict = field(default_factory=dict)   # target.properties, Delta's names (props.for_delta): set on a new table
     max_drop_share: float | None = None   # guard.max-drop-share: the drop guard (off when None)
     force_drop: bool = False   # guard.force-drop
 
@@ -226,9 +230,18 @@ def of(tree: dict) -> LoadConfig:
     lake_mode = None if e is None else "append" if str(e.get("load-mode") or "").lower() == "append" else "replace-date"
     mode = (given or lake_mode or fallback or "append").lower()
     mode = "replace-date" if mode in ("overwrite-dates", "replace") else mode
-    if mode not in ("replace-date", "append"):
-        raise ConfigError(f"target.mode {mode}: append (the default: each business date's rows are added, one commit per date) or "
-                          "replace-date (each business date of the input replaced by one commit; also replace, overwrite-dates)")
+    if mode not in ("replace-date", "append", OVERWRITE_PARTITIONS):
+        raise ConfigError(f"target.mode {mode}: append (the default: each business date's rows are added, one commit per date), "
+                          "replace-date (each business date of the input replaced by one commit; also replace, overwrite-dates) or "
+                          "overwrite-partitions (of each date, only the partitions the input brings replaced)")
+    try:
+        properties = props.for_delta({k: _env(v) for k, v in (t.get("properties") or {}).items()})
+    except ValueError as e:
+        raise ConfigError(str(e)) from None
+    guard = _guard(tree.get("guard") or {})
+    if mode == OVERWRITE_PARTITIONS and guard["max_drop_share"] is not None and not guard["force_drop"]:
+        raise ConfigError("guard.max-drop-share counts whole dates; target.mode overwrite-partitions replaces some partitions of a date: "
+                          "give one of them")
     rj, rp, lay = tree.get("rejects") or {}, tree.get("report") or {}, t.get("layout") or {}
     return LoadConfig(
         files=files, recursive=_bool(s, "recursive", False), key=key or "id", date=day, as_of=as_of,
@@ -238,7 +251,8 @@ def of(tree: dict) -> LoadConfig:
         summary=_text(rp, "summary"), progress=_text(rp, "progress"), run_log=_bool(rp, "run-log", True), dry_run=_bool(rp, "dry-run", False),
         lock=_bool(tree, "lock", True), sort_by=sort_by or list(DEFAULT_SORT),
         loader_rows_of=loader_rows_of, float32=_vector_type(_text(lay, "vector-type", "double")), contract=_contract(_text(t, "contract")),
-        limits=_limits(s.get("archive") or {}), dataset=_dataset(_text(s, "dataset")), **_guard(tree.get("guard") or {}))
+        limits=_limits(s.get("archive") or {}), dataset=_dataset(_text(s, "dataset")), properties=properties,
+        **guard)
 
 
 def _guard(g: dict) -> dict:

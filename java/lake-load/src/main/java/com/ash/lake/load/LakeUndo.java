@@ -235,6 +235,10 @@ public final class LakeUndo {
         if (s.getSchema().indexOf(RowPlan.LOAD_ID) < 0) {
             return List.of();                                   // a table from before load ids: no load can be found in it
         }
+        if (!dryRun && com.ash.lake.spi.TableProperties.effective(((io.delta.kernel.internal.SnapshotImpl) s).getMetadata().getConfiguration()).appendOnly()
+                && !undoTable(runtime, table, name, id, true).isEmpty()) {
+            com.ash.lake.spi.TableProperties.refuseRewrite(((io.delta.kernel.internal.SnapshotImpl) s).getMetadata().getConfiguration(), name, "an undo");
+        }
         List<Done> out = new ArrayList<>();
         for (String date : candidateDates(engine, s, id)) {
             List<TableUpkeep.Staged> now = TableUpkeep.rows(engine, s, pv -> date.equals(pv.get("business_date")), true);
@@ -457,7 +461,7 @@ public final class LakeUndo {
 
     /** The date rewritten with {@code rows} (one commit: its files replaced); with none, the date's files removed. Returns the version. */
     static long rewrite(com.ash.lake.LakeRuntime runtime, Engine engine, String table, Snapshot s, String date, List<TableUpkeep.Staged> rows) throws IOException {
-        return rewriteSorted(runtime, engine, table, s, date, rows, Integer.MAX_VALUE);
+        return rewriteGroups(runtime, engine, table, s, date, List.of(rows), Integer.MAX_VALUE, false);
     }
 
     /**
@@ -466,16 +470,17 @@ public final class LakeUndo {
      */
     static long rewriteSorted(com.ash.lake.LakeRuntime runtime, Engine engine, String table, Snapshot s, String date, List<TableUpkeep.Staged> rows,
             int fileRows) throws IOException {
-        return rewriteGroups(runtime, engine, table, s, date, List.of(rows), fileRows);
+        return rewriteGroups(runtime, engine, table, s, date, List.of(rows), fileRows, true);
     }
 
     /**
      * As {@link #rewrite}, each group's rows written in their order into files of their own (never two groups in one file: compaction keeps
-     * each load's older copies apart from the newest ones), a partition's rows of a group cut every {@code fileRows} rows.
+     * each load's older copies apart from the newest ones), a partition's rows of a group cut every {@code fileRows} rows. {@code same}: the
+     * date keeps its rows (compaction, relayout: LakeManifest's rearrange-dates, which an append-only table takes).
      */
     @SuppressWarnings("unchecked")
     static long rewriteGroups(com.ash.lake.LakeRuntime runtime, Engine engine, String table, Snapshot s, String date,
-            List<List<TableUpkeep.Staged>> groups, int fileRows) throws IOException {
+            List<List<TableUpkeep.Staged>> groups, int fileRows, boolean same) throws IOException {
         List<String> partitions = s.getPartitionColumnNames();
         if (groups.stream().allMatch(List::isEmpty)) {
             return removeDates(engine, table, s, date::equals);
@@ -522,7 +527,7 @@ public final class LakeUndo {
                     stats.add(c.name());
                 }
             }
-            LakeManifest m = new LakeManifest(table, partitions, columns, promoted, "overwrite-dates", 50_000, stats, parts);
+            LakeManifest m = new LakeManifest(table, partitions, columns, promoted, same ? "rearrange-dates" : "overwrite-dates", 50_000, stats, parts);
             return LakeWriter.forTable(runtime, table, Map.of()).write(m, n -> { }).version();
         } finally {
             try (Stream<Path> s2 = Files.walk(dir)) {

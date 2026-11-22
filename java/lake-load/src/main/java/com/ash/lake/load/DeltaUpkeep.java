@@ -136,7 +136,7 @@ final class DeltaUpkeep {
                     }
                     throw new IOException(path + " " + date + ": other writers committed while compaction read the date, 3 times; run it again");
                 }
-                LakeUndo.rewriteGroups(runtime, engine, path, s, date, groups, Integer.MAX_VALUE);
+                LakeUndo.rewriteGroups(runtime, engine, path, s, date, groups, Integer.MAX_VALUE, true);
                 done.add(date);
                 break;
             }

@@ -48,8 +48,36 @@ public interface TableWriter extends AutoCloseable {
     /** A new data file for rows of {@code date} with the given partition values. */
     FileOut newFile(LocalDate date, String[] partitionValues, String name) throws IOException;
 
-    /** Commits the date in one commit (replace or append, {@link WriteSpec#appends()}); returns the table's version or snapshot id. */
+    /**
+     * Commits the date in one commit (replace or append, {@link WriteSpec#appends()}); returns the table's version after it: a number that
+     * grows with every commit of the table, on every store (Delta's version, the Iceberg snapshot's sequence number, the files store's log
+     * number), {@code -1} when nothing was committed. {@link #nativeVersion} gives the store's own id of that commit.
+     */
     long commit(LocalDate date, List<WrittenFile> files) throws IOException;
+
+    /**
+     * The store's own id of the commit {@link #commit} answered {@code version} for: what a read at a version takes ({@link TableVersion},
+     * {@link AsOf}). Delta's and the files store's are the version itself; Iceberg's is the snapshot's id.
+     */
+    default long nativeVersion(long version) {
+        return version;
+    }
+
+    /**
+     * The partitions a replace of {@link WriteSpec#partitionsOnly} takes out of a date: the partition values (after the date) of the files
+     * written for it, an empty value as null (as every store keeps it).
+     */
+    static java.util.Set<List<String>> partitionsOf(List<WrittenFile> files) {
+        java.util.Set<List<String>> out = new java.util.HashSet<>();
+        for (WrittenFile f : files) {
+            List<String> k = new java.util.ArrayList<>(f.partition().length);
+            for (String v : f.partition()) {
+                k.add(v == null || v.isEmpty() ? null : v);
+            }
+            out.add(k);
+        }
+        return out;
+    }
 
     /** Whether an append of this load's batch was committed for {@code date} already: the loader then skips the date. */
     boolean appended(LocalDate date) throws IOException;

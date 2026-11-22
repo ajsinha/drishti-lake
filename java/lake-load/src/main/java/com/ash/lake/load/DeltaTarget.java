@@ -153,6 +153,7 @@ final class DeltaTarget implements TableWriter {
                 throw new IllegalStateException(path + " is partitioned by " + before.getPartitionColumnNames() + ", this load by " + parts
                         + " (give the table's partition-by, or write a new table)");
             }
+            com.ash.lake.spi.TableProperties.refuseReplace(((io.delta.kernel.internal.SnapshotImpl) before).getMetadata().getConfiguration(), spec);
             if (spec.loadColumns()) {
                 before = withLoadColumns(before);
             }
@@ -352,7 +353,9 @@ final class DeltaTarget implements TableWriter {
         if (before != null && !spec.appends()) {   // replace: the date's earlier files go in the same commit; append keeps them
             String day = date.toString();
             Map<String, String> slice = spec.slice();      // a shared table: only this load's slice of the date
-            actions.addAll(LakeWriter.removals(engine, before, pv -> day.equals(pv.get("business_date")) && TargetRules.inSlice(pv, slice)));
+            java.util.Set<List<String>> parts = spec.partitionsOnly() ? TableWriter.partitionsOf(files) : null;   // overwrite-partitions: those only
+            actions.addAll(LakeWriter.removals(engine, before, pv -> day.equals(pv.get("business_date")) && TargetRules.inSlice(pv, slice)
+                    && (parts == null || parts.contains(partitionOf(pv)))));
         }
         Map<List<String>, List<DataFileStatus>> byPartition = new LinkedHashMap<>();
         for (WrittenFile f : files) {
@@ -384,6 +387,16 @@ final class DeltaTarget implements TableWriter {
         }
         before = snapshot();
         return result.getVersion();
+    }
+
+    /** A file's partition values after the date, in the table's order, an empty value as null (TableWriter.partitionsOf). */
+    private List<String> partitionOf(Map<String, String> pv) {
+        List<String> out = new ArrayList<>(partitionColumns.size() - 1);
+        for (int i = 1; i < partitionColumns.size(); i++) {
+            String v = pv.get(partitionColumns.get(i));
+            out.add(v == null || v.isEmpty() ? null : v);
+        }
+        return out;
     }
 
     @Override

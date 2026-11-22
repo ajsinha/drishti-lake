@@ -56,7 +56,8 @@ import java.util.SortedMap;
  *   <li>{@code --vacuum-hours H}: the files no version of the last H hours references are deleted, so time travel reaches back H hours
  *       (Delta: VACUUM; Iceberg: snapshots older than H expired, then orphan files; files: the log's content files of older versions). A
  *       file no commit names goes only when older than 72 hours too (it may belong to a load still running). {@code --floor-days D} raises
- *       H to D days.</li>
+ *       H to D days, and the table's own retention ({@code lake.retention-hours}, or the format's native property: TableProperties)
+ *       raises it to that.</li>
  * </ol>
  *
  * <pre>LakeMaintain --lake ROOT --format delta|iceberg|files --table domain/table [--keep-days N [--as-of D] [--zone Z] [--max-drop-share F]
@@ -220,6 +221,11 @@ public final class LakeMaintain {
         Long vacuum = steps.vacuumHours();
         if (vacuum != null && steps.floorDays() > 0 && vacuum < steps.floorDays() * 24L) {
             vacuum = steps.floorDays() * 24L;                    // time travel is kept as long as the dates are
+        }
+        Long retention = vacuum == null ? null : com.ash.lake.spi.TableProperties.effective(store.properties(runtime, ref)).retentionHours();
+        if (retention != null && vacuum < retention) {
+            vacuum = retention;                                  // the table's own retention (TableProperties): time travel reaches that far
+            m.put("retentionHours", retention);
         }
         if (steps.keepDays() > 0) {
             m.put("keepDays", keepDays(runtime, root, format, table, store.dates(runtime, ref), steps, dryRun));
@@ -391,7 +397,8 @@ public final class LakeMaintain {
             steps.add("checkpoint");
         }
         if (m.containsKey("vacuum")) {
-            steps.add("vacuum " + ((Map<String, Object>) m.get("vacuum")).get("hours") + "h");
+            steps.add("vacuum " + ((Map<String, Object>) m.get("vacuum")).get("hours") + "h"
+                    + (m.containsKey("retentionHours") ? " (the table's " + com.ash.lake.spi.TableProperties.RETENTION_HOURS + ")" : ""));
         }
         if (!steps.isEmpty()) {
             b.append("; ").append(String.join("; ", steps));

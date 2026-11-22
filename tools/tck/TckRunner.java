@@ -148,7 +148,9 @@ public final class TckRunner {
         }
         if (summary != null) {
             if (Files.size(summary) > 0) {
-                s.set("summary", stable(JSON.readTree(summary.toFile())));
+                JsonNode full = JSON.readTree(summary.toFile());
+                s.set("summary", stable(full));
+                if (step.path("error").asBoolean(false) && full.hasNonNull("error")) s.put("said", full.get("error").asText());   // lake-only: a case that asks for a failed load's reason
             }
             Files.deleteIfExists(summary);
         }
@@ -475,6 +477,7 @@ public final class TckRunner {
                 case "delete" -> store.deleteDates(RT, t, java.util.Set.of(LocalDate.parse(a[5])), false);   // lake-only
                 case "dates" -> store.dates(RT, t);   // lake-only
                 case "versions" -> store.versions(RT, t).size() + " versions";   // lake-only
+                case "properties" -> com.ash.lake.spi.TableProperties.effective(store.properties(RT, t)).named();   // lake-only: the product's two, as the store holds them
                 case "scan-at" -> scanAt(store, t, a[5], a.length > 6 && a[6].equals("time"));   // lake-only
                 case "raw-digest" -> labelled(rawDigest(a[1], a[2], a[3], a[4], a.length > 6 ? a[6] : null), a.length > 5 ? a[5] : null);   // lake-only: every row, by date
                 case "hold" -> {   // lake-only: a reader's snapshot taken now, read later by read-held
@@ -496,7 +499,7 @@ public final class TckRunner {
             if (done == null) throw new IllegalArgumentException("unknown store op " + a[0]);   // lake-only
             out.println(done);   // lake-only
             return 0;   // lake-only
-        } catch (UnsupportedOperationException | com.ash.lake.LakeException | java.io.IOException e) {   // lake-only
+        } catch (UnsupportedOperationException | IllegalStateException | com.ash.lake.LakeException | java.io.IOException e) {   // lake-only
             out.println(e.getMessage());   // lake-only
             return 1;   // lake-only
         }   // lake-only
