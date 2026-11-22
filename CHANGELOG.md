@@ -5,6 +5,8 @@ Entries are written per release; unreleased work is listed first.
 
 ## 0.9.0 (2026-11-21): the move from Drishti
 
+- **Drishti Tools 1.1.0**: `drishti.tools.version` moves from 1.0.0 to the 1.1.0 tag (its jars name an `Automatic-Module-Name`), the
+  version every product of the family pins.
 - **The files store on S3 and in memory (G3 F4, decision O3: built, not declared)**: the files store reads and writes through the
   `Storage` interface (`Place`), so a files lake lives on local disk, S3 or a memory store as Delta and Iceberg do; the parity kit's
   memory and S3 rows run the files store too (`<case>@files~mem`, `@files~s3`). The log needs no lock on any storage: a commit is the
