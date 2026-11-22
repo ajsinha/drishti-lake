@@ -120,10 +120,12 @@ def step(s, work, env, loader="java"):
         return {"op": op, "steps": [step(x, work, env, loader) for x in arg]}
     arg = arg or []
     if op == "load":
-        cfg = "main"
+        cfg, error = "main", False
         if isinstance(arg, dict):
-            cfg, arg = arg.get("config", "main"), arg.get("args", [])
+            cfg, arg, error = arg.get("config", "main"), arg.get("args", []), arg.get("error", False)
         out = {"op": op, "args": ["--config", str(work / f"{cfg}.yaml")] + subst(arg, env)}
+        if error:
+            out["error"] = True                                  # the failed load's reason (its summary's error) in the result
         if loader != "java":
             out["loader"] = loader
         return out

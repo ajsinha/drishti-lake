@@ -65,6 +65,14 @@ public interface TableStore {
      */
     com.ash.lake.read.LakeReader open(LakeRuntime runtime, com.ash.lake.read.LakeAddress address) throws IOException;
 
+    /**
+     * The table's properties as its store holds them (Delta's configuration, Iceberg's table properties, the files store's
+     * {@code properties.json}); empty for an absent table. {@link TableProperties#effective} reads the product's two from them.
+     */
+    default java.util.Map<String, String> properties(LakeRuntime runtime, TableRef table) throws IOException {
+        return java.util.Map.of();
+    }
+
     /** The loader's writer for one load. */
     TableWriter writer(WriteSpec spec) throws IOException;
 

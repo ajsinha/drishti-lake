@@ -22,6 +22,7 @@ load/future-date-refused
 load/lake-folder-refused
 load/loader-rows
 load/loader-rows-stored-vectors
+load/overwrite-partitions
 load/rerun-replaces-the-date
 load/two-dates
 load/vector-nulls-and-text
@@ -37,6 +38,7 @@ modes/dry-run-date-from-and-mode
 modes/key-override
 names/ready-file-business-date
 names/special-characters
+properties/retention-and-append-only
 read/all-rows-in-file-order
 read/as-of-before-first-commit
 read/as-of-version-and-time

@@ -18,7 +18,7 @@ from datetime import date
 
 import pyarrow as pa
 
-from . import rowrule
+from . import props, rowrule
 
 LOAD_ID, SOURCE_FILE = "_load_id", "_source_file"
 
@@ -71,9 +71,11 @@ class Writer:
     """The table of one load (module doc)."""
 
     def __init__(self, path: str, plan: rowrule.Plan, kinds: list[str], vectors: list[str], batch_id: str | None, appends: bool,
-                 float32: bool = False):
+                 float32: bool = False, properties: dict | None = None, partitions_only: bool = False, name: str = ""):
         from deltalake import DeltaTable
         self.path = path
+        self.properties = dict(properties or {})       # a new table's (props.for_delta)
+        self.partitions_only = partitions_only and not appends
         self.plan = plan
         self.batch_id = batch_id
         self.appends = appends
@@ -88,6 +90,11 @@ class Writer:
         if self.table is None:
             self.columns = wanted
         else:
+            if not appends:
+                try:
+                    props.refuse_replace(self.table.metadata().configuration, name, partitions_only)
+                except ValueError as e:
+                    raise TableError(str(e)) from None
             have = list(self.table.metadata().partition_columns)
             if have != self.parts:
                 raise TableError(f"{path} is partitioned by [{', '.join(have)}], this load by [{', '.join(self.parts)}] (give the table's "
@@ -154,15 +161,36 @@ class Writer:
         if self.appends and self.batch_id:
             props = CommitProperties(app_transactions=[Transaction(app_id=self._app(day), version=1)])
         if self.table is None:
-            write_deltalake(self.path, table, partition_by=self.parts, mode="append", commit_properties=props)
+            write_deltalake(self.path, table, partition_by=self.parts, mode="append", commit_properties=props,
+                            configuration=self.properties or None)
             self.table = DeltaTable(self.path)
         elif self.appends:
             write_deltalake(self.table, table, partition_by=self.parts, mode="append", commit_properties=props)
         else:
-            write_deltalake(self.table, table, partition_by=self.parts, mode="overwrite", predicate=f"business_date = '{day.isoformat()}'",
+            write_deltalake(self.table, table, partition_by=self.parts, mode="overwrite", predicate=self._replaced(day, table),
                             commit_properties=props)
         self.table.update_incremental()
         return self.table.version()
+
+    def _replaced(self, day: date, table: pa.Table) -> str:
+        """What a replace of ``day`` takes out: the date; with overwrite-partitions only the partition values the rows bring (the Java
+        loader's partitionsOnly), an empty value as null."""
+        where = f"business_date = '{day.isoformat()}'"
+        cols = self.parts[1:]
+        if not self.partitions_only or not cols:
+            return where
+        tuples = sorted({tuple(None if v in (None, "") else v for v in t) for t in zip(*[table.column(c).to_pylist() for c in cols])},
+                        key=lambda t: [(x is not None, x or "") for x in t])
+        each = [" AND ".join(f"{_ident(c)} IS NULL" if v is None else f"{_ident(c)} = {_quote(v)}" for c, v in zip(cols, t)) for t in tuples]
+        return where + " AND (" + " OR ".join(f"({e})" for e in each) + ")"
+
+
+def _quote(v: str) -> str:
+    return "'" + v.replace("'", "''") + "'"
+
+
+def _ident(c: str) -> str:
+    return '"' + c.replace('"', '""') + '"'
 
 
 def order(rows: list, sort: list, plan: rowrule.Plan) -> list:

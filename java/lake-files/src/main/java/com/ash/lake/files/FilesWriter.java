@@ -50,6 +50,8 @@ final class FilesWriter implements TableWriter {
     private final List<String> leftOut = new ArrayList<>();
     private Columns columns;
     private boolean columnsChanged;
+    /** Whether this load creates the table: its properties are written with its columns. */
+    private boolean created;
     /** Per column after the first three: 'p' partition, 'c' promoted, 'v' vector, 'l' load id, 's' source file, 0 none; and its index. */
     private char[] kind;
     private int[] index;
@@ -83,7 +85,9 @@ final class FilesWriter implements TableWriter {
         if (before == null) {
             columns = Columns.of(wanted);
             columnsChanged = true;
+            created = true;
         } else {
+            com.ash.lake.spi.TableProperties.refuseReplace(log.properties(), spec);
             List<Column> cols = new ArrayList<>(before.all());
             if (spec.loadColumns()) {
                 for (String l : List.of(LOAD_ID, SOURCE_FILE)) {
@@ -205,29 +209,35 @@ final class FilesWriter implements TableWriter {
     @Override
     public long commit(LocalDate date, List<WrittenFile> files) throws IOException {
         if (columnsChanged) {
+            if (created) {
+                log.properties(spec.properties());               // the table's properties, as a new Delta or Iceberg table's
+                created = false;
+            }
             log.columns(columns);
             columnsChanged = false;
         }
         boolean append = spec.appends();
         Map<String, String> slice = spec.slice();
+        java.util.Set<List<String>> parts = !append && spec.partitionsOnly() ? TableWriter.partitionsOf(files) : null;   // overwrite-partitions
+        boolean keepOthers = !slice.isEmpty() || parts != null;    // a replace that leaves some of the date's lines
         if (files.isEmpty() && (append || !log.day(date).isFile())) {
             return -1;                                             // nothing to add, or nothing to remove
         }
         FilesLog.Commit c;
         while (true) {                                             // an append is built on the date's newest version, again if another writer moved it
-            FilesLog.Commit latest = append || !slice.isEmpty() ? log.latest(date) : null;
+            FilesLog.Commit latest = append || keepOthers ? log.latest(date) : null;
             Place before = latest != null ? log.content(latest)                   // a day file without a log (written before it): its lines
-                    : (append || !slice.isEmpty()) && log.day(date).isFile() ? log.day(date) : null;
+                    : (append || keepOthers) && log.day(date).isFile() ? log.day(date) : null;
             Place content = null;
             long rows = 0;
-            if (!files.isEmpty() || before != null && !slice.isEmpty()) {
+            if (!files.isEmpty() || before != null && keepOthers) {
                 content = log.newContent();
                 try (OutputStream out = new BufferedOutputStream(content.out(), 1 << 16)) {
                     if (before != null && append) {
                         rows += before.countLines();
                         before.copyTo(out);
                     } else if (before != null) {
-                        rows += otherSlices(before, slice, out);  // a shared table: the other loads' slices of the date stay
+                        rows += others(before, slice, parts, out); // the other loads' slices, the partitions this load does not bring
                     }
                     for (WrittenFile f : files) {
                         Files.copy((Path) f.handle(), out);
@@ -261,12 +271,19 @@ final class FilesWriter implements TableWriter {
         return c.version();
     }
 
-    /** Copies the lines of {@code day} outside the slice (a line whose columns hold every value of the slice is in it); their count. */
-    private static long otherSlices(Place day, Map<String, String> slice, OutputStream out) throws IOException {
+    /**
+     * Copies the lines of {@code day} this replace does not take out: outside the slice (a line whose columns hold every value of the slice
+     * is in it), or, for overwrite-partitions ({@code parts} not null), of a partition the load does not bring; their count.
+     */
+    private long others(Place day, Map<String, String> slice, java.util.Set<List<String>> parts, OutputStream out) throws IOException {
         long n = 0;
         try (java.io.BufferedReader r = day.reader()) {
             for (String line = r.readLine(); line != null; line = r.readLine()) {
-                if (line.isBlank() || inSlice(FilesLog.JSON.readTree(line).path("columns"), slice)) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                com.fasterxml.jackson.databind.JsonNode cols = FilesLog.JSON.readTree(line).path("columns");
+                if (inSlice(cols, slice) && (parts == null || parts.contains(partitionOf(cols)))) {
                     continue;
                 }
                 out.write(line.getBytes(StandardCharsets.UTF_8));
@@ -275,6 +292,16 @@ final class FilesWriter implements TableWriter {
             }
         }
         return n;
+    }
+
+    /** A line's partition values (the load's partition-by columns), an empty value as null (TableWriter.partitionsOf). */
+    private List<String> partitionOf(com.fasterxml.jackson.databind.JsonNode cols) {
+        List<String> out = new ArrayList<>(spec.partition().size());
+        for (String p : spec.partition()) {
+            com.fasterxml.jackson.databind.JsonNode v = cols.get(p);
+            out.add(v == null || v.isNull() || v.asText().isEmpty() ? null : v.asText());
+        }
+        return out;
     }
 
     private static boolean inSlice(com.fasterxml.jackson.databind.JsonNode columns, Map<String, String> slice) {

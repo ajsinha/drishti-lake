@@ -160,8 +160,8 @@ final class DeltaSnapshot implements TableSnapshot {
         Map<String, String> partition = new LinkedHashMap<>();
         InternalScanFileUtils.getPartitionValues(r).forEach((k, v) -> {
             String logical = logicalOf.getOrDefault(k, k);
-            if (!logical.equals(lake.dateColumn)) {
-                partition.put(logical, v);
+            if (!logical.equals(lake.dateColumn) && v != null) {
+                partition.put(logical, v);                  // the null partition is left out, as the Iceberg store's
             }
         });
         Map<String, Bounds> bounds = new LinkedHashMap<>();

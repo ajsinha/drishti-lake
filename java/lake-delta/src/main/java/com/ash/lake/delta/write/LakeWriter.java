@@ -297,7 +297,8 @@ public final class LakeWriter {
             dates.add(p.values().get("business_date"));
             partitions.add(p.values());
         }
-        boolean byDate = m.mode().equals("overwrite-dates");
+        boolean same = m.mode().equals("rearrange-dates");        // the same rows: no data change (LakeManifest.MODES)
+        boolean byDate = m.mode().equals("overwrite-dates") || same;
         if (m.mode().equals("replace")) {
             return removals(engine, s, pv -> true);             // the whole table: every file of the version before goes
         }
@@ -305,7 +306,7 @@ public final class LakeWriter {
             Map<String, String> mine = new HashMap<>();
             m.partitionColumns().forEach(c -> mine.put(c, pv.get(c)));
             return byDate ? dates.contains(pv.get("business_date")) : partitions.contains(mine);
-        });
+        }, !same);
     }
 
     /**
@@ -313,6 +314,12 @@ public final class LakeWriter {
      * {@code replaced} accepts: what a commit that replaces those dates or partitions adds beside its new files.
      */
     public static List<Row> removals(Engine engine, Snapshot s, java.util.function.Predicate<Map<String, String>> replaced) throws IOException {
+        return removals(engine, s, replaced, true);
+    }
+
+    /** As {@link #removals(Engine, Snapshot, java.util.function.Predicate)}; {@code dataChange} false for a commit of the same rows. */
+    public static List<Row> removals(Engine engine, Snapshot s, java.util.function.Predicate<Map<String, String>> replaced, boolean dataChange)
+            throws IOException {
         long now = System.currentTimeMillis();
         List<Row> out = new ArrayList<>();
         Scan scan = s.getScanBuilder().build();
@@ -323,7 +330,7 @@ public final class LakeWriter {
                         Row r = rows.next();
                         if (replaced.test(InternalScanFileUtils.getPartitionValues(r))) {
                             Row add = r.getStruct(r.getSchema().indexOf("add"));
-                            out.add(SingleAction.createRemoveFileSingleAction(new AddFile(add).toRemoveFileRow(true, Optional.of(now))));
+                            out.add(SingleAction.createRemoveFileSingleAction(new AddFile(add).toRemoveFileRow(dataChange, Optional.of(now))));
                         }
                     }
                 }

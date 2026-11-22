@@ -72,12 +72,38 @@ otherwise is refused with both values named; a kind the lake file lacks is refus
   other layout refuses the whole archive listing every problem. Absolute or `..` names, links, devices, encrypted members and nested archives
   are refused; the caps are checked from the listing before a byte is decompressed.
 - **Modes.** `replace` (also `replace-date`, `overwrite-dates`): each business date of the input replaces that date's rows in one commit;
-  `append`: rows are added, and with `target.batch-id` each batch is committed once per date (a retry is skipped). Where the mode came from
-  (given, the lake file, the inbox default, the rules' default) is in the summary's `modeFrom`.
+  `overwrite-partitions`: of each business date only the partitions the input brings (its `partition-by` values after the date, an empty
+  value as null) are replaced, in one commit, and the date's other partitions stay (a feed re-sending one legal entity's day, systems that
+  each write their own partition of a shared table); without `partition-by` it replaces the date; with the drop guard (`guard.max-drop-share`,
+  which counts whole dates) it is refused, so give one of the two; `append`: rows are added, and with `target.batch-id` each batch is
+  committed once per date (a retry is skipped). The same on Delta, Iceberg, files and the Python path (kit case
+  `load/overwrite-partitions`). Where the mode came from (given, the lake file, the inbox default, the rules' default) is in the summary's
+  `modeFrom`, the mode in `mode`.
+- **Table properties.** `target.properties` are set when the load creates the table (an existing table keeps its own). Two mean the same
+  on every store and are written as the format's own property:
+
+  | Product name | Delta | Iceberg | files |
+  |---|---|---|---|
+  | `lake.append-only: true` | `delta.appendOnly` | `lake.append-only` (Iceberg has none) | `lake.append-only` |
+  | `lake.retention-hours: H` | `delta.deletedFileRetentionDuration` and `delta.logRetentionDuration` (`interval N days`, or hours) | `history.expire.max-snapshot-age-ms` | `lake.retention-hours` |
+
+  Any format's native name of the two is taken too (Delta's on an Iceberg table, say) and written as the target's; two names of one
+  property with different values, a value that is not one, and a key with the prefix of tables written before Drishti Lake are refused.
+  Every other key is the format's own and is written as given (the files store keeps them in `_log/<table>/properties.json`). An
+  **append-only** table takes appends only: a replace (`overwrite-dates`, `overwrite-partitions`), a delete of dates, row retention or
+  keep-days that would remove rows, and an undo that would remove rows are refused with `<domain>/<table> is append-only (lake.append-only):
+  ... is refused; the table takes appends only`; compaction, relayout, checkpoints and vacuum change no row and run (on Delta their removes
+  carry `dataChange: false`, as OPTIMIZE's). The **retention** is a floor for `lake maintain --vacuum-hours` (below): time travel always
+  reaches back that far. Kit case `properties/retention-and-append-only`; `TableStore.properties` and `TableProperties.effective` read
+  them back.
 - **Rows.** One line, one row: JSON, an object, the id, the date, the vectors, then `target.contract` ([CONTRACTS.md](CONTRACTS.md)); a line
   with two faults is rejected for the first. Rejects are counted by reason; over `rejects.max-pct` nothing commits. Several rows of one id on
   one date: `latest-by` decides, else the last read.
-- **Commits.** One commit per business date. A load never leaves a date half written.
+- **Commits.** One commit per business date. A load never leaves a date half written. The summary's `commit.dates.<date>` gives
+  `version`, one meaning on every store: a number that grows with every commit of the table (Delta's table version, the Iceberg
+  snapshot's sequence number, the files store's log number), so a later commit always has a larger version; and `nativeVersion`, the
+  store's own id of that commit, the one a read at a version takes (`TableStore.versions`, `AsOf`): Delta's and the files store's version
+  itself, Iceberg's snapshot id. The manifest's dates carry both.
 - **Loads at once.** A load's base is the table as it found it when it started. A replace is optimistic on every store (Delta, Iceberg,
   files; local disk, S3, memory): when another writer changed the date (this load's slice of it) after that, the load commits nothing for
   the date, says `<domain>/<table>: <date> was replaced or changed by another load while this one ran ... run it again` and exits 1; the
@@ -128,7 +154,8 @@ LakeMaintain --lake ROOT --format delta|iceberg|files --table domain/table
 
 Vacuum keeps every version committed in the last H hours and the version current at the cut, so time travel reaches back H hours; an older
 version is then refused by name. A file no commit names (a load still running, or one that died) goes only when it is older than 72 hours
-as well. `--floor-days D` raises H to D days. A dry run changes nothing and says what would change. The printed line is the same on every
+as well. `--floor-days D` raises H to D days, and the table's own retention (`lake.retention-hours` or its native name, above) raises it
+to that (the line says `vacuum Nh (the table's lake.retention-hours)`). A dry run changes nothing and says what would change. The printed line is the same on every
 store (the table's dates and rows before and after, the steps run); `--json` gives each step's detail (dates compacted, files and bytes
 vacuumed). The run fails (exit 1) for an absent table, a negative `--vacuum-hours`, or the drop guard; a Delta vacuum that cannot match
 every file of the latest version to the table's folder deletes nothing. The parity kit's cases: `maintain/compact-checkpoint-vacuum`,

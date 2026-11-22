@@ -119,6 +119,11 @@ public final class FilesStore implements TableStore {
     }
 
     @Override
+    public Map<String, String> properties(LakeRuntime runtime, TableRef table) throws IOException {
+        return new FilesLog(domainDir(runtime, table), table.table()).properties();
+    }
+
+    @Override
     public Columns columns(LakeRuntime runtime, TableRef table) throws IOException {
         if (!exists(runtime, table)) {
             throw new IOException("no files table at " + domainDir(runtime, table) + "/<date>/" + table.table() + ".jsonl");
@@ -328,6 +333,10 @@ public final class FilesStore implements TableStore {
     public List<DateChange> deleteDates(LakeRuntime runtime, TableRef table, Set<LocalDate> dates, boolean dryRun) throws IOException {
         Set<String> wanted = new java.util.HashSet<>();
         dates.forEach(d -> wanted.add(d.toString()));
+        if (!dryRun && com.ash.lake.spi.TableProperties.effective(properties(runtime, table)).appendOnly()
+                && !lines(dropDates(runtime, table.root(), table.domain(), table.table(), wanted::contains, true)).isEmpty()) {
+            com.ash.lake.spi.TableProperties.refuseRewrite(properties(runtime, table), table.name(), "a delete of dates");
+        }
         List<DateChange> out = new ArrayList<>();
         for (Map<String, Object> line : lines(dropDates(runtime, table.root(), table.domain(), table.table(), wanted::contains, dryRun))) {
             out.add(new DateChange(LocalDate.parse((String) line.get("date")), ((Number) line.get("dropped")).longValue(), 0, -1));
@@ -346,6 +355,9 @@ public final class FilesStore implements TableStore {
      */
     @Override
     public List<DateChange> undo(LakeRuntime runtime, TableRef table, String loadId, boolean dryRun) throws IOException {
+        if (!dryRun && com.ash.lake.spi.TableProperties.effective(properties(runtime, table)).appendOnly() && !undo(runtime, table, loadId, true).isEmpty()) {
+            com.ash.lake.spi.TableProperties.refuseRewrite(properties(runtime, table), table.name(), "an undo");
+        }
         FilesLog log = new FilesLog(domainDir(runtime, table), table.table());
         List<DateChange> out = new ArrayList<>();
         if (!log.exists()) {
