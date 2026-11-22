@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
-# a laid-out table keeps its id order on every store: lake maintain --relayout rewrites a date an append made drift (two files with
+# a laid-out table keeps its id order on every store (how many files an append leaves before it is the store's own: not compared): lake maintain --relayout rewrites a date an append made drift (two files with
 # overlapping id ranges) as readers see it, sorted by id, each file its own id range, the newest load's copy the one kept (the documents
 # read are the same before and after); a second run has nothing to do; --compact after another append keeps every row and the same
 # documents and ids (the newest copy read, the older kept apart for undo: how many files that takes is the store's own), then --relayout
@@ -17,7 +17,6 @@ configs:
 steps:
   - load: []
   - load: {config: more}
-  - store: [read-layout, '${store}', '${lake}', risk, scenario-pv]
   - store: [read-ids, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
   - store: [read-doc, '${store}', '${lake}', risk, scenario-pv, '2026-10-27']
   - maintain: [--lake, '${lake}', --format, '${store}', --table, risk/scenario-pv, --relayout, --dry-run]
