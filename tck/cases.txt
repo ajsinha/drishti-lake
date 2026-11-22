@@ -27,6 +27,7 @@ load/two-dates
 load/vector-nulls-and-text
 maintain/compact-checkpoint-vacuum
 maintain/keep-days-and-drop-guard
+maintain/relayout-several-dates
 maintain/safety-compact
 maintain/safety-keep-days
 maintain/safety-race
