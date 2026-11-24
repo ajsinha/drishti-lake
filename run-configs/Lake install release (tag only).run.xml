@@ -7,7 +7,7 @@
   Shared, so it is in git: copy the configuration (Ctrl+D) to change it; a pull overwrites this file.
 -->
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Lake: install release (tag only)" type="MavenRunConfiguration" factoryName="Maven" folderName="Lake">
+  <configuration default="false" name="Lake: install release (tag only)" type="MavenRunConfiguration" factoryName="Maven" folderName="IntelliJ-lake-install">
     <MavenSettings>
       <option name="myGeneralSettings" />
       <option name="myRunnerSettings">
