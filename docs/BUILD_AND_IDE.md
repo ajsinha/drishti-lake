@@ -8,7 +8,7 @@ The one build guide of this repository.
 | Need | Version | Used for |
 |---|---|---|
 | JDK | 21 or later | the Java build (`java/mvnw` downloads Maven) |
-| Python | 3.11 or later | the Python package, the parity kit, the checks |
+| Python | 3.13 (3.11 is the minimum) | the Python package, the parity kit, the checks; no virtual environment: use the Python you choose |
 | [uv](https://docs.astral.sh/uv/) | any recent | the Delta interop tests (delta-rs at pinned versions), the wheel build; **required, never skipped** |
 | Drishti Tools | an installed tag | a build dependency (`com.ash.tools`, version `drishti.tools.version` in `java/lake-bom/pom.xml`) |
 
@@ -17,7 +17,7 @@ in-process, so the tests run on Windows too).
 
 ## Install order
 
-The Drishti family installs in this order: **Rachana (tag) -> Drishti Tools (tag) -> Drishti Lake (tag) -> Drishti**. Each is installed from
+The Drishti family installs in this order: **Drishti Tools -> Drishti Rachana -> Drishti Lake -> Drishti** (the order of the platform's `build_all.py` and its IntelliJ launcher `platform-clean-install`; each from its release tag). Each is installed from
 its release tag, never from a branch, into `~/.m2/repository/com/ash/<product>/` (Windows `C:\Users\<user>\.m2\repository\com\ash\<product>\`):
 
 ```text
@@ -67,7 +67,7 @@ IntelliJ Community has no Node support; nothing here needs Node.
 
 Open the repository root; the same `run-configs/` holds the Python launchers: **Lake: test TCK (this repository)** (the parity kit over the built
 modules) and **Lake: check all (build, TCK twice, reference)** (also **Lake: test Python**, **Lake: maintain release plan (dry run)**) (`tools/ci/check.py`). The Python package is in `python/`: mark `python/` as sources,
-use a Python 3.11+ interpreter with the package's dependencies, and run `python/tests` with pytest. One root, one `run-configs/`: IntelliJ and PyCharm read the same launchers.
+use a Python 3.13 interpreter (3.11 is the minimum) with the package's dependencies, and run `python/tests` with pytest. One root, one `run-configs/`: IntelliJ and PyCharm read the same launchers.
 
 ## VS Code
 
