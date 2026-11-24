@@ -51,7 +51,7 @@ gates and the comparison with the reference results): `python3 tools/ci/check.py
 ## IntelliJ IDEA
 
 Open `java/pom.xml` as a project; project SDK JDK 21; **Settings, Build Tools, Maven, Runner, JRE: Use Project JDK**. Run configurations are in
-`run-configs/` at the repository root, folder **Lake** (open the repository root as the project and link `java/pom.xml` in the Maven tool window):
+`run-configs/` at the repository root, folders **IntelliJ-lake-...** and **PyCharm-lake-...** (open the repository root as the project and link `java/pom.xml` in the Maven tool window):
 
 | Configuration | Runs |
 |---|---|
