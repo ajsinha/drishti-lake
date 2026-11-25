@@ -73,7 +73,7 @@ public final class IcebergLayout {
 
     /**
      * The index of the {@code business_date} identity field in {@code spec}. The layout's spec is that field, then an identity field per
-     * {@code partition-by} field on a text column (READ_API.md section 5); a table another engine re-partitioned otherwise (another
+     * {@code partition-by} field on a text column (docs/GUIDE.md, the read API); a table another engine re-partitioned otherwise (another
      * transform, no date) is refused: a file's partition tuple must hold every field's value, and only these are known to the writers.
      */
     public static int dateIndex(com.ash.lake.iceberg.meta.PartitionSpec spec, com.ash.lake.iceberg.types.Schema schema, String table) {

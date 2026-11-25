@@ -55,7 +55,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
 /**
- * One version of a foreign table read through its shape (READ_API.md, RA-S8): every read written once over a store's {@link ForeignSource}.
+ * One version of a foreign table read through its shape (docs/DESIGN.md, shaped reads): every read written once over a store's {@link ForeignSource}.
  * A date's files are the files that may hold rows of it, in path order; an inexact file's rows of other dates are skipped. An id held by
  * two files of a date is the first file's.
  */

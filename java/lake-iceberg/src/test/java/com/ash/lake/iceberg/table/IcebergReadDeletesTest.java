@@ -44,7 +44,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The read API leaves an Iceberg row deleted by a position delete file (iceberg-core's writer, as Spark or another engine deletes) out
- * of every read: ids, documents, promoted columns, file scans (READ_API.md defect I1; the kit's case read/deleted-rows-not-read for
+ * of every read: ids, documents, promoted columns, file scans (docs/GUIDE.md, the read API; the kit's case read/deleted-rows-not-read for
  * Delta and files).
  */
 class IcebergReadDeletesTest {

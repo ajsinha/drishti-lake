@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
- * The read problems of one lake reader (READ_API.md 2.8), written once for every store: a read that fails records its classified reason
+ * The read problems of one lake reader (docs/GUIDE.md, the read API), written once for every store: a read that fails records its classified reason
  * for its table and place (a date, the log, the listing), and the next good read of the same place clears it; a table's new version
  * forgets what older versions failed. Thread-safe: reads on many threads record and clear at once. The reason words are the store's
  * ({@code reason}): what is wrong in words a reader can act on.

@@ -34,7 +34,7 @@ import java.util.TreeMap;
 import java.util.UUID;
 
 /**
- * A shape resolved against one version's columns: the one rule of RA-S8 (READ_API.md) for every store. Which columns make the id, the
+ * A shape resolved against one version's columns: the one rule of shaped reads (docs/DESIGN.md) for every store. Which columns make the id, the
  * date, the document and the searchable paths; a file's dates (its partition's day when that is the business day, else its date column's
  * bounds: one day exact, a span under 400 days every day inexact, else the column read); a row's id and document; an id parsed back into
  * the id columns' values for pruning. A shape the table cannot answer is refused in words ({@code LK-1001}).

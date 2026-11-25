@@ -189,7 +189,7 @@ class TwoRuntimesTest {
         assertThat(ParquetFooters.of(a).weightBytes()).as("a's read filled a's cache").isPositive();
         assertThat(ParquetFooters.of(b).weightBytes()).as("and not b's").isEqualTo(before);
 
-        // the read API: two readers of one lake, one in each runtime, share no snapshot and no footer cache (READ_API.md section 6)
+        // the read API: two readers of one lake, one in each runtime, share no snapshot and no footer cache (docs/GUIDE.md, the read API)
         for (String format : List.of("delta", "iceberg")) {
             Path lake = tmp.resolve("lake-api-" + format);
             Path cfg = Files.writeString(tmp.resolve("load-api-" + format + ".yaml"), PvData.config(in + "/*", lake.toString(), format));

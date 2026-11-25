@@ -32,7 +32,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The read API over a Delta lake (READ_API.md section 4): one domain of a lake through the runtime's native engine, the Kernel's types
+ * The read API over a Delta lake (docs/GUIDE.md, the read API): one domain of a lake through the runtime's native engine, the Kernel's types
  * kept inside ({@link DeltaSnapshot}). Opened by the Delta store's {@code open}.
  */
 public final class DeltaLakeReader implements LakeReader {

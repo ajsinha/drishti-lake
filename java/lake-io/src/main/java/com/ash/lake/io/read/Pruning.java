@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * The one pushdown rule of the stores' scans (READ_API.md 2.7): whether a date, or a file of a date, may hold a row a scan's
+ * The one pushdown rule of the stores' scans (docs/GUIDE.md, the read API): whether a date, or a file of a date, may hold a row a scan's
  * {@code where} accepts, from what is known before it is read: the business date, the file's partition values and its text columns'
  * statistics. False only when no row can match; anything not understood may match (the per-row test stays the last word, so a store
  * that prunes nothing is still right).

@@ -118,7 +118,7 @@ final class IcebergTarget implements TableWriter {
                 fields.add(NestedField.optional(id, v, new Type.ListType(next++, false,
                         this.spec.layout().float32Vectors() ? Type.Primitive.FLOAT : Type.Primitive.DOUBLE)));
             }
-            // the business date, then an identity field per partition-by field in the order given (READ_API.md section 5)
+            // the business date, then an identity field per partition-by field in the order given (docs/GUIDE.md, the read API)
             List<PartitionSpec.Field> parts = new ArrayList<>(List.of(new PartitionSpec.Field(3, 1000, "business_date", Transform.Identity.INSTANCE)));
             for (String p : this.spec.partition()) {
                 NestedField src = fields.stream().filter(f -> f.name().equals(p)).findFirst().orElseThrow();

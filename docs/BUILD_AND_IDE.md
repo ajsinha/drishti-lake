@@ -46,7 +46,7 @@ folder). The Python package's tests: `cd python && python -m pytest` (needs `del
 in `python/` installs the pinned versions).
 
 The whole check, as a release runs it (build with every test and guard, delta-rs interop, the Python tests, the parity kit twice, its
-gates and the comparison with the reference results): `python3 tools/ci/check.py` ([TCK.md](guides/TCK.md)). There is no hosted CI.
+gates and the comparison with the reference results): `python3 tools/ci/check.py` ([TCK.md](TCK.md)). There is no hosted CI.
 
 ## IntelliJ IDEA
 
@@ -58,7 +58,7 @@ Open `java/pom.xml` as a project; project SDK JDK 21; **Settings, Build Tools, M
 | **Lake: build all** | the build without tests |
 | **Lake: test** | the full build with every test and guard |
 | **Lake: install release (tag only)** | `install`; on a release tag only |
-| **Lake: run loader (CLI)** | `com.ash.lake.load.LakeLoad`; give it `--config` of your own (see [LOADER.md](guides/LOADER.md)) |
+| **Lake: run loader (CLI)** | `com.ash.lake.load.LakeLoad`; give it `--config` of your own (see the loader section of [GUIDE.md](GUIDE.md)) |
 | **Lake: run check (CLI)** | `com.ash.lake.load.LakeCheck` |
 
 IntelliJ Community has no Node support; nothing here needs Node.

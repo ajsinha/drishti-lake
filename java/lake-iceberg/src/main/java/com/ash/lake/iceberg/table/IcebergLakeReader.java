@@ -34,7 +34,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * The read API over an Iceberg lake (READ_API.md section 4): one domain through the product's own Iceberg reader (catalog, S3 Tables,
+ * The read API over an Iceberg lake (docs/GUIDE.md, the read API): one domain through the product's own Iceberg reader (catalog, S3 Tables,
  * {@code relocate} as the address's settings say), the table library's objects kept inside ({@link IcebergSnapshot}).
  */
 public final class IcebergLakeReader implements LakeReader {

@@ -493,9 +493,9 @@ public final class TckRunner {
                                 a.length > 5 ? a[5] : null);   // lake-only
                     }   // lake-only
                 }   // lake-only
-                case "scan-stats" -> scanStats(store, t, LocalDate.parse(a[5]), a[6], a[7]);   // lake-only: pushdown (READ_API.md 2.7)
-                case "delete-row" -> DeleteRow.run(a);   // lake-only: a row deleted as other writers do (READ_API.md 6)
-                default -> a[0].startsWith("read-") ? ReadVerbs.run(store, a) : null;   // lake-only: the read API (READ_API.md section 6)
+                case "scan-stats" -> scanStats(store, t, LocalDate.parse(a[5]), a[6], a[7]);   // lake-only: pushdown (docs/GUIDE.md, the read API)
+                case "delete-row" -> DeleteRow.run(a);   // lake-only: a row deleted as other writers do (docs/GUIDE.md, the read API)
+                default -> a[0].startsWith("read-") ? ReadVerbs.run(store, a) : null;   // lake-only: the read API (docs/GUIDE.md, the read API)
             };   // lake-only
             if (done == null) throw new IllegalArgumentException("unknown store op " + a[0]);   // lake-only
             out.println(done);   // lake-only
@@ -588,7 +588,7 @@ public final class TckRunner {
 }
 
 /**   // lake-only
- * The read API's verbs for the parity kit (READ_API.md section 6): each opens the lake through {@code TableStore.open} and prints what it   // lake-only
+ * The read API's verbs for the parity kit (docs/GUIDE.md, the read API): each opens the lake through {@code TableStore.open} and prints what it   // lake-only
  * read in a form that does not depend on the store (counts, and digests of sorted text), so the lines of every store compare.   // lake-only
  */   // lake-only
 final class ReadVerbs {   // lake-only
@@ -613,7 +613,7 @@ final class ReadVerbs {   // lake-only
                 case "read-at" -> readAt(store, lake, a, Integer.parseInt(args.get(0)), args.size() > 1 && !args.get(1).equals("version"), args.size() > 1 && args.get(1).equals("before"));   // lake-only
                 case "read-keep" -> keep(snap(lake, a[4]), LocalDate.parse(args.get(0)), args.get(1), args.get(2), args.get(3));   // lake-only
                 case "read-vectors-of" -> vectorsOf(snap(lake, a[4]), LocalDate.parse(args.get(0)), args.get(1));   // lake-only
-                case "read-foreign" -> foreign(lake, a[4], args);   // lake-only: a foreign table through a shape (READ_API.md RA-S8)
+                case "read-foreign" -> foreign(lake, a[4], args);   // lake-only: a foreign table through a shape (docs/DESIGN.md, shaped reads)
                 default -> null;   // lake-only
             };   // lake-only
         }   // lake-only
@@ -982,7 +982,7 @@ final class ReadVerbs {   // lake-only
 }   // lake-only
 
 /**   // lake-only
- * Deletes one row of a date the way each format's other writers do (READ_API.md 6, read/deletes): a Delta deletion vector (a Spark-style   // lake-only
+ * Deletes one row of a date the way each format's other writers do (docs/GUIDE.md, the read API/deletes): a Delta deletion vector (a Spark-style   // lake-only
  * DELETE: the file kept, its row index in a vector), a files commit without the line. The loader never writes either.   // lake-only
  */   // lake-only
 final class DeleteRow {   // lake-only

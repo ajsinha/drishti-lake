@@ -39,7 +39,7 @@ import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The read API over a files lake (READ_API.md section 4): a table's log ({@code <root>/<domain>/_log/<table>/}) gives its versions,
+ * The read API over a files lake (docs/GUIDE.md, the read API): a table's log ({@code <root>/<domain>/_log/<table>/}) gives its versions,
  * each date's content file at a version, the rows and the text columns' bounds of each commit (F1) and the table's id (F2).
  */
 final class FilesLakeReader implements LakeReader {

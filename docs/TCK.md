@@ -33,7 +33,7 @@ size guards), `layout`, `load` (modes, batches, vectors, loader rows, contracts)
 | store | delta, iceberg, files | `<case>@<store>` |
 | memory | the case's lake on `mem://` (Delta and Iceberg) | `<case>@<store>~mem` |
 | S3 | the lake on `s3://` against an in-process S3 simulator (`lake-tck`), reached through the runtime's `lake.s3.*` options | `<case>@<store>~s3` |
-| Python | the case's loads by the Python path ([PYTHON.md](PYTHON.md)), Delta | `<case>@delta^python` |
+| Python | the case's loads by the Python path ([the Python section of GUIDE.md](GUIDE.md#the-python-package-drishti_lake)), Delta | `<case>@delta^python` |
 
 ## Run it
 

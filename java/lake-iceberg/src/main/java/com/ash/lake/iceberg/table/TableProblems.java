@@ -23,7 +23,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * How the Iceberg reader words a failed read (READ_API.md 2.8; QA2-22, QA3B-03): a table moved or copied after it was written (its
+ * How the Iceberg reader words a failed read (docs/GUIDE.md, the read API; QA2-22, QA3B-03): a table moved or copied after it was written (its
  * metadata still names the old folder) is said plainly with what to do, for Admin → Health the folders and the {@code relocate} pair to
  * copy, for the reader the failure is thrown to the same in words without a folder (a host's error detail shows no path); any other
  * failure is {@link Problems#describe}. {@link Problems} keeps one problem per table and place and logs one line when it appears or

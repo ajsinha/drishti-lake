@@ -173,7 +173,7 @@ abstract class KindTable {
 
     /**
      * The uncompressed bytes of each row group of one file of the day (its footer), so a vector read cuts a few large files into pieces
-     * for its decoding threads (READ_API.md defect I2); empty when the engine cannot say: the file is read whole.
+     * for its decoding threads (the read API, docs/GUIDE.md); empty when the engine cannot say: the file is read whole.
      */
     long[] rowGroups(Layout l, Day day, int file) {
         return new long[0];

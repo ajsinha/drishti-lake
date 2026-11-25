@@ -44,7 +44,7 @@ import java.util.zip.GZIPInputStream;
 
 /**
  * A folder of JSON Lines other systems wrote ({@code <root>/<domain>/<table>/}: {@code *.jsonl}, {@code *.jsonl.gz}), as the shape rule
- * reads it (READ_API.md, RA-S8). A file's date is the one its name carries ({@code <table>.<YYYY-MM-DD>.jsonl}, the loader's name rule),
+ * reads it (docs/DESIGN.md, shaped reads). A file's date is the one its name carries ({@code <table>.<YYYY-MM-DD>.jsonl}, the loader's name rule),
  * else each line's date field. The columns are the lines' top-level fields, their kinds from the first values seen (text that is a date
  * or an instant with a zone reads as one, so a date field answers as it does in Delta and Iceberg). A plain folder keeps no versions:
  * only its present state is read.

@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
-# pushdown in TableStore.scan (READ_API.md 2.7, RA-S7): a where on the business date and a promoted text column skips the other date's
+# pushdown in TableStore.scan (docs/GUIDE.md, the read API): a where on the business date and a promoted text column skips the other date's
 # files (and, partitioned, the other values' files) before reading them; its rows equal the whole scan filtered by hand; ScanStats counts
 # the files skipped, the rows read and returned
 inputs:

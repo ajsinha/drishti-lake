@@ -16,7 +16,7 @@
 package com.ash.lake.spi;
 
 /**
- * What a scan read and what it skipped (READ_API.md 2.7): files read and skipped by dates and statistics, rows read and rows the
+ * What a scan read and what it skipped (docs/GUIDE.md, the read API): files read and skipped by dates and statistics, rows read and rows the
  * request's {@code where} accepted. {@code -1}: not counted by the store.
  */
 public record ScanStats(long filesRead, long filesSkipped, long rowsRead, long rowsReturned) {
