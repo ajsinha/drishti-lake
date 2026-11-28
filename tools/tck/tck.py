@@ -78,7 +78,7 @@ def write_input(work, name, spec):
 
 
 def write_foreign(store, lake, domain, spec):
-    """Tables other engines wrote (a case's `foreign:` list, READ_API.md RA-S8): tools/ci/foreign_tables.py writes the spec's tables by the
+    """Tables other engines wrote (a case's `foreign:` list, docs/DESIGN.md, shaped reads): tools/ci/foreign_tables.py writes the spec's tables by the
     store's own other writer (delta-rs, pyiceberg, plain JSON Lines) under uv with the pins of interop-pins.txt and foreign-pins.txt,
     offline first. Never skipped: without uv the case fails, naming it."""
     uv = shutil.which("uv") or str(Path.home() / ".local" / "bin" / "uv")

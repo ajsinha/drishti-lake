@@ -27,7 +27,7 @@ import java.util.Random;
 import java.util.Set;
 
 /**
- * The read API's performance proof (READ_API.md section 7): the hot reads of one table timed and their allocation counted, the same
+ * The read API's performance proof (docs/BENCHMARK.md): the hot reads of one table timed and their allocation counted, the same
  * body over two sides: the reference (Drishti's jars at the freeze, through the same-package shims of tools/split/bench) and this
  * build (the shims over this build's table classes, or the read API). Run by tools/bench/bench.py; prints one JSON line per measure.
  *

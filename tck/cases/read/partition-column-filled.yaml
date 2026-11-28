@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
 # a partition-by field (Delta's partition column, Iceberg's identity field, the files store's typed column) is filled in the read API's
-# columns and in its vectors' texts, as any promoted field is (READ_API.md 2.4, 2.5; P1 on Iceberg)
+# columns and in its vectors' texts, as any promoted field is (docs/GUIDE.md, the read API; Iceberg too)
 inputs:
   pv.2026-10-27.jsonl: {pv: {n: 30, scenarios: 2, seed: 41}}
 config: |

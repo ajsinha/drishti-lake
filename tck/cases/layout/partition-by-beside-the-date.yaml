@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
-# source.partition-by beside the business date (READ_API.md section 5, P1): Delta's partition columns, Iceberg's identity fields after
+# source.partition-by beside the business date (docs/GUIDE.md, the read API): Delta's partition columns, Iceberg's identity fields after
 # the date, the files store's typed columns; the field is filled in the rows, the read API's columns and its vectors' texts; a replace
 # of one date takes out that date's files of every value and leaves the other date; every store gives the same rows
 inputs:

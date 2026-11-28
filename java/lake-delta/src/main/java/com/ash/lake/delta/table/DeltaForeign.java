@@ -71,7 +71,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * A Delta table other engines wrote (Spark, delta-rs), in its own layout, as the shape rule reads it (READ_API.md, RA-S8): through the
+ * A Delta table other engines wrote (Spark, delta-rs), in its own layout, as the shape rule reads it (docs/DESIGN.md, shaped reads): through the
  * Kernel, partition values and the add actions' statistics as each file's days and bounds, deletion vectors applied.
  */
 final class DeltaForeign implements ForeignSource {

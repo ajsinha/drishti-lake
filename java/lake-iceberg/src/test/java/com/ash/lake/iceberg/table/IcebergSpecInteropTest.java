@@ -284,7 +284,7 @@ class IcebergSpecInteropTest {
     }
 
     /**
-     * A layout table partitioned by the business date and then a partition-by field (READ_API.md section 5): the layout's writer fans a
+     * A layout table partitioned by the business date and then a partition-by field (docs/GUIDE.md, the read API): the layout's writer fans a
      * day's sorted rows out by the field's value (an empty or missing value is the null partition); the Apache library reads every row
      * with its partition values, and the files' tuples are the rows' values.
      */

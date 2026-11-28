@@ -43,7 +43,7 @@ import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 
 /**
- * A table other engines wrote (Spark, Flink, Trino, pyiceberg), in its own layout, as the shape rule reads it (READ_API.md, RA-S8): the
+ * A table other engines wrote (Spark, Flink, Trino, pyiceberg), in its own layout, as the shape rule reads it (docs/DESIGN.md, shaped reads): the
  * product's Iceberg planning (partitions, bounds and delete files), its reader for the columns asked (deletes applied, row groups pruned
  * by an id's values).
  */

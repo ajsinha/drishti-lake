@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
-# the read API as of a version (READ_API.md section 6): the cases of time-travel/versions-and-earlier-rows through snapshots, by the
+# the read API as of a version (docs/GUIDE.md, the read API): the cases of time-travel/versions-and-earlier-rows through snapshots, by the
 # version and by its commit time; each date's ids and documents as they were
 inputs:
   pv.2026-10-27.jsonl: {pv: {n: 12, scenarios: 2, seed: 1}}

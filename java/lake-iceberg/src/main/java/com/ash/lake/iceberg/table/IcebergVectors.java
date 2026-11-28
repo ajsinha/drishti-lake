@@ -76,8 +76,8 @@ final class IcebergVectors {
     }
 
     /**
-     * The files cut into pieces {file, from group, to group} for {@code sink}'s decoding threads, as Delta's read cuts them (READ_API.md
-     * defect I2): whole files on one thread; else each file's row groups in runs of about {@link VectorReads#partBytes} uncompressed
+     * The files cut into pieces {file, from group, to group} for {@code sink}'s decoding threads, as Delta's read cuts them (docs/GUIDE.md, the read API
+     * ): whole files on one thread; else each file's row groups in runs of about {@link VectorReads#partBytes} uncompressed
      * bytes (at least one group), so a date of a few large files still decodes on every thread. A file whose footer cannot be read is
      * one piece: its read says what is wrong.
      */

@@ -244,7 +244,7 @@ Entries are written per release; unreleased work is listed first.
   `of-ids-in-one-file`, `partition-column-filled` (every store and row). `TwoRuntimesTest` (two readers of one lake in two runtimes:
   no shared snapshot or footer cache) and `StartOnFewCoresTest` (eight read-API vector reads with four decoders each on one carrier)
   extended. `docs/BENCHMARK.md`: the interleaved A/B run (Iceberg: the API at or below Drishti's jars, same allocation per row).
-- **Read API, accuracy and speed first, then RA-S6 and RA-S7** ([READ_API](docs/design/READ_API.md)):
+- **Read API, accuracy and speed first, then RA-S6 and RA-S7** (READ_API):
   - *Newest load wins, made deterministic (Delta)*: a date's files were ordered by their largest `_load_id` from the log's statistics,
     and a value of 32 characters or more was "not stated", so it sorted first (oldest). A load id is `<time>-<pid>-<n>.<file>`: with a
     7-digit process id the tenth run in one process makes it 32 characters, and the older load's copy won (the kit's one-off
@@ -262,7 +262,7 @@ Entries are written per release; unreleased work is listed first.
     tested. `RowScan.stats()` reports files read and skipped, rows read and returned. Case `read/scan-skips-files`.
   - `tools/bench/bench.py --repeat N`: interleaved rounds (one JVM per side and round, order reversed every other round), a summary
     of medians, spread and the ratio to the first side.
-- **The read API, built through RA-S5** ([READ_API](docs/design/READ_API.md)): `com.ash.lake.read` (`lake-api`) entered through
+- **The read API, built through RA-S5** (READ_API): `com.ash.lake.read` (`lake-api`) entered through
   `TableStore.open`, own types only (in `api-surface.txt`), on Delta, Iceberg and files (and the memory rows): snapshots, days and files
   with rows, bounds and one stamp rule, id maps and one mapped id-map format, documents, promoted columns as arrays, vectors into a
   reused buffer (1 or more decoders, file order), a page of vectors, file scans, identity, health, problems (`LK-1006`), purges.
@@ -270,7 +270,7 @@ Entries are written per release; unreleased work is listed first.
   commits carry rows and text bounds), F2 (files table id); I1 proven (`IcebergReadDeletesTest`). Kit: 11 `read/*` cases equal on every
   store. `tools/bench` (`ReadBench` over Drishti's jars at the freeze and over the API): `tck/bench/`. Not yet: I2, P1 (Iceberg
   `partition-by`), pushdown and `ScanStats` (RA-S7), foreign-table shapes (RA-S8), the rest of RA-S9.
-- **The read API, designed** ([docs/design/READ_API.md](docs/design/READ_API.md); nothing built): `com.ash.lake.read` entered through
+- **The read API, designed** (docs/design/READ_API.md; nothing built): `com.ash.lake.read` entered through
   `TableStore.open`, own types only, the same on Delta, Iceberg, files and `mem://`; every call of the host's source adapters mapped;
   the stores' defects to close (deletes in column and vector reads, files statistics and identity, Iceberg `partition-by`); 20 parity
   cases; the performance proof; steps RA-S0 to RA-S10; decisions RA-1 to RA-12 open.

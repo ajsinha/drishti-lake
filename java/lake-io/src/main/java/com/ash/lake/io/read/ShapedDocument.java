@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A foreign row's values as JSON, one rule for every store (READ_API.md, RA-S8): structs as objects, lists as arrays, a map with text keys
+ * A foreign row's values as JSON, one rule for every store (docs/DESIGN.md, shaped reads): structs as objects, lists as arrays, a map with text keys
  * as an object (else an array of {@code {key, value}}), dates and times ISO ({@code 2026-09-30T18:30:00}, a fraction only when there is
  * one; a timestamp with a zone ends in {@code Z}, UTC), decimals as numbers or text, binary as base64 or left out, a null as JSON null.
  */

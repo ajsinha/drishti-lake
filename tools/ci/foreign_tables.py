@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved.
 # Drishti Lake. Proprietary: see the LICENSE file at the root of this repository.
-"""Foreign tables for the shaped-read case (READ_API.md, RA-S8): tables other engines write, in their own layout, by each format's own
+"""Foreign tables for the shaped-read case (docs/DESIGN.md, shaped reads): tables other engines write, in their own layout, by each format's own
 writer (com.ash.lake.tck.DeltaRs.foreign runs it under uv with tools/ci/interop-pins.txt and foreign-pins.txt):
 
     foreign_tables.py FORMAT LAKE DOMAIN SPEC.json     # FORMAT delta (delta-rs), iceberg (pyiceberg), files (plain JSON Lines)

@@ -3,7 +3,7 @@
 
 The one benchmark document. Each run names its command, the machine's load while it ran, and where its raw lines are.
 
-## The read API against Drishti's jars at the freeze (READ_API.md section 7)
+## The read API against Drishti's jars at the freeze
 
 **Method.** `python3 tools/bench/bench.py --ref-cp REFCP --stores iceberg,delta,files --repeat 10`: one table of 10,000 positions x
 509 scenarios (13 files, one date) loaded once per store; `tools/bench/ReadBench.java` run in one JVM per side and round (`-Xms4g

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved.
 # Drishti Lake. Proprietary: see the LICENSE file at the root of this repository.
-"""The read API's performance proof (READ_API.md section 7): one scenario-P&L table (10,000 positions x 509 scenarios, about 4 files,
+"""The read API's performance proof (docs/BENCHMARK.md): one scenario-P&L table (10,000 positions x 509 scenarios, about 4 files,
 6 promoted columns, one date) loaded once by this build's loader into Delta and Iceberg, then read by tools/bench/ReadBench.java over
 each side: `ref` (Drishti's jars at the freeze, through the same-package shims of tools/split/bench mapped to the host's packages),
 `internal` (the same shims over this build's table classes) and `api` (the read API, tools/bench/ApiReads.java, once it exists).

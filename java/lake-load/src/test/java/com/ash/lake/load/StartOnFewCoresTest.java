@@ -35,7 +35,7 @@ import org.junit.jupiter.api.io.TempDir;
  * Iceberg alternately, the first touch of every holder (the storage providers, the codecs, the catalogs) among them. A wait that pins
  * the one carrier (a class initialisation another caller holds, a monitor held across a park) hangs the JVM; the test then fails
  * with the hung JVM's threads in its message. Then eight readers at once read each table's vectors through the read API with four
- * decoders each (READ_API.md section 6: the ordered parallel decode must not hang either).
+ * decoders each (docs/GUIDE.md, the read API: the ordered parallel decode must not hang either).
  */
 class StartOnFewCoresTest {
 

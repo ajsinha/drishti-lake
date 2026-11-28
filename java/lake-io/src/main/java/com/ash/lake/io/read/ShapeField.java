@@ -18,7 +18,7 @@ package com.ash.lake.io.read;
 import java.util.List;
 
 /**
- * A foreign table's field as the shape rule sees it, the same for every store (READ_API.md, RA-S8). Values arrive in one form:
+ * A foreign table's field as the shape rule sees it, the same for every store (docs/DESIGN.md, shaped reads). Values arrive in one form:
  * {@code BOOLEAN} Boolean, {@code INT} Integer, {@code LONG} Long, {@code FLOAT} Float, {@code DOUBLE} Double, {@code DECIMAL} BigDecimal,
  * {@code DATE} Integer (days from the epoch), {@code TIME} Long (micros of the day), {@code TIMESTAMP} and {@code TIMESTAMPTZ} Long (micros
  * from the epoch, UTC), {@code STRING} String, {@code UUID} java.util.UUID, {@code BINARY} byte[], {@code STRUCT} Object[] (by

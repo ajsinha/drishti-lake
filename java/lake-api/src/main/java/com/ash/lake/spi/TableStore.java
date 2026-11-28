@@ -60,7 +60,7 @@ public interface TableStore {
     RowScan scan(LakeRuntime runtime, TableRef table, ScanRequest request) throws IOException;
 
     /**
-     * The tables of one domain of a lake, open for reading (READ_API.md): snapshots, days and files, ids, documents, promoted columns,
+     * The tables of one domain of a lake, open for reading (docs/GUIDE.md, the read API): snapshots, days and files, ids, documents, promoted columns,
      * vectors, file scans, identity, health, problems and purges, in the product's types. The same calls answer the same on every store.
      */
     com.ash.lake.read.LakeReader open(LakeRuntime runtime, com.ash.lake.read.LakeAddress address) throws IOException;

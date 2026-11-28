@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Ashutosh Sinha <ajsinha@gmail.com>. All rights reserved. Drishti Lake. Proprietary: see LICENSE.
-# RA-S8 (READ_API.md): tables other engines wrote, in their own layout (delta-rs, pyiceberg, a folder of plain JSON Lines), read through a
+# shaped reads (docs/DESIGN.md): tables other engines wrote, in their own layout (delta-rs, pyiceberg, a folder of plain JSON Lines), read through a
 # shape: a date partition (the files store: the date in each file's name), a timestamptz's day in a zone from an unpartitioned file that
 # spans two days (inexact), a composite id, a renamed and an excluded column, a nested struct at depth 2, a deleted row, a vector; the
 # answer is the same JSON on every store. Then the three refusals (no id, a date column that is not a date, a timestamp without date-from).

@@ -29,7 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * A commit's statistics (READ_API.md defect F1): for the id and each text column, the least and greatest value and the nulls, read once
+ * A commit's statistics (docs/GUIDE.md, the read API): for the id and each text column, the least and greatest value and the nulls, read once
  * as the commit is made, so a reader prunes a date's file from the log alone. A column with a value of 32 characters or more states no
  * bounds (as Delta's writer cuts such values), only its nulls.
  */

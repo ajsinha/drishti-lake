@@ -7,11 +7,11 @@ summary: >-
   parity kit that holds every store to the same behaviour.
 coordinates: {groupId: com.ash.lake, package: com.ash.lake, python: drishti_lake}
 java: 21
-python: 3.11
+python: 3.13 (minimum 3.11)
 modules: [lake-bom, lake-api, lake-io, lake-config, lake-delta, lake-iceberg, lake-files, lake-load, lake-memory, lake-contracts, lake-tck, lake-guards]
 depends-on: [Drishti Tools (com.ash.tools), delta-kernel, iceberg-core, parquet, AWS SDK 2; Python: deltalake, pyarrow, pyyaml, jsonschema]
 commands: {build: "cd java && ./mvnw clean verify", check: "python3 tools/ci/check.py", tck: "python3 tools/tck/tck.py --out results.jsonl"}
-docs: [docs/BUILD_AND_IDE.md, docs/guides/, docs/design/]
+docs: [docs/GUIDE.md, docs/DESIGN.md, docs/TCK.md, docs/BUILD_AND_IDE.md, docs/BENCHMARK.md, docs/ROADMAP.md]
 licence: proprietary (LICENSE)
 ---
 
@@ -47,34 +47,62 @@ Author: Ashutosh Sinha. Proprietary. All rights reserved (see [LICENSE](LICENSE)
 | `python/drishti_lake` | the Python path: the loader for Delta on the same configuration, contracts, a front for the Java tools |
 | `tck/`, `tools/` | the parity kit (cases as data, reference results), its runner, the checks, the release and benchmark scripts |
 
-## Install and build
+## Where it fits the Drishti platform
 
-The Drishti family installs in this order: **Rachana (tag) -> Drishti Tools (tag) -> Drishti Lake (tag) -> Drishti**; each from its release tag into
-`~/.m2/repository/com/ash/<product>/` (Windows `C:\Users\<user>\.m2\repository\com\ash\<product>\`), never from a branch.
+Lake is the third product of the platform build. The platform's `build_all.py` (and its IntelliJ launcher `platform-clean-install`) builds
+**Drishti Tools -> Drishti Rachana -> Drishti Lake -> Drishti** in order and installs each product's jars into the local Maven repository
+(`~/.m2/repository/com/ash/lake/`, Windows `C:\Users\<user>\.m2\repository\com\ash\lake\`) before the next one builds. Lake builds against Drishti Tools
+(`com.ash.tools`) and Drishti builds against Lake, each from its **release tag**, never a branch. The Python package `drishti_lake` runs the
+loader for Delta on the same lake file and holds the data contracts.
 
-```text
-cd java && ./mvnw clean verify       # JDK 21 or later; every module, test and guard
-python3 tools/ci/check.py            # the whole check: build, delta-rs interop, Python tests, the parity kit twice and its gates
-```
+## Requirements
+
+| Need | Version | For |
+|---|---|---|
+| JDK | 21 or later | the Java build (`java/mvnw` downloads Maven) |
+| Python | 3.13 (3.11 is the package's minimum) | the Python package, the parity kit, the checks |
+
+Python needs `deltalake`, `pyarrow`, `pyyaml` and `jsonschema`. Drishti never makes a virtual environment: install them into the Python you choose
+(`python3 -m pip install -e "python[test]"`; Windows `py -3.13 -m pip install -e "python[test]"`).
+
+## Build and test on its own
+
+| | Linux / macOS | Windows |
+|---|---|---|
+| every module, test and guard | `cd java && ./mvnw clean verify` | `cd java` then `mvnw.cmd clean verify` |
+| compile and package only | `./mvnw clean verify -DskipTests` | `mvnw.cmd clean verify -DskipTests` |
+| one module and what it needs | `./mvnw clean verify -pl lake-load -am` | `mvnw.cmd clean verify -pl lake-load -am` |
+| the Python tests | `python3 -m pytest -q python/tests` (build first: they run the Java loader) | `py -3.13 -m pytest -q python\tests` |
+| the parity kit (TCK) | `python3 tools/tck/tck.py --out results.jsonl` | `py -3.13 tools\tck\tck.py --out results.jsonl` |
+| the whole check: build, delta-rs interop, Python tests, the parity kit twice and its gates | `python3 tools/ci/check.py` | `py -3.13 tools\ci\check.py` |
+| install a release (on its tag only) | `git checkout vX.Y.Z && cd java && ./mvnw clean install -DskipTests` | `mvnw.cmd clean install -DskipTests` |
+
+Never `install` from a working tree into `~/.m2`.
 
 ## Build and run in the IDE
 
-Every launcher is in `run-configs/` (folder **Lake**, names `Lake: <verb> <what>`: build all, test, test Python, test TCK, check all, run loader, run check, install release (tag only), maintain release plan). **IntelliJ IDEA** or **PyCharm**: open the repository root and link `java/pom.xml`; the Python package is `python/`. **VS Code**: open `drishti-lake.code-workspace`. JDK 21 as the project SDK in every case. Steps,
-the Windows `PKIX` fix and the install order: [docs/BUILD_AND_IDE.md](docs/BUILD_AND_IDE.md).
+Every launcher is checked in under `run-configs/` at the repository root (`*.run.xml`, named `Lake: <verb> <what>`). Open the **repository root** in
+IntelliJ IDEA or PyCharm (in IntelliJ link `java/pom.xml`; `python/` is the Python package); both read the same files. JDK 21 is the project SDK.
+
+| IDE | Opens | Launcher groups |
+|---|---|---|
+| **IntelliJ IDEA** | the repository root, `java/pom.xml` linked | **IntelliJ-lake-build** (build all), **IntelliJ-lake-test** (test), **IntelliJ-lake-check** (run check, CLI), **IntelliJ-lake-run** (run loader, CLI; give it your own `--config`), **IntelliJ-lake-install** (install release, tag only) |
+| **PyCharm** | the repository root; mark `python/` as sources, choose a Python 3.13 interpreter with the package's dependencies | **PyCharm-lake-test** (test Python, test TCK), **PyCharm-lake-check** (check all, maintain release plan (dry run)) |
+| **VS Code** | `drishti-lake.code-workspace` | Maven tasks, the TCK and the check; Run and Debug for `LakeLoad`, `LakeCheck` and the TCK |
+
+Steps, the Windows `PKIX path building failed` fix and the install order: [docs/BUILD_AND_IDE.md](docs/BUILD_AND_IDE.md).
 
 ## Documents
 
 | Document | What |
 |---|---|
+| [docs/GUIDE.md](docs/GUIDE.md) | how to use it: the three stores and the lake file, the loader and the inbox, the read API, data contracts, the Python package; tutorials that were run |
+| [docs/DESIGN.md](docs/DESIGN.md) | why it is shaped so: positioning, the rules of the design, shaped reads of foreign tables |
+| [docs/TCK.md](docs/TCK.md) | the parity kit: cases, matrix, gates, and what a backend author implements |
 | [docs/BUILD_AND_IDE.md](docs/BUILD_AND_IDE.md) | prepare, build, install from a tag, IntelliJ, PyCharm, VS Code, Windows |
-| [docs/guides/STORAGE.md](docs/guides/STORAGE.md) | the three stores and their parity, storage, the lake file, the runtime's options |
-| [docs/guides/LOADER.md](docs/guides/LOADER.md) | the loader's configuration and rules, undo, retention, check, the inbox; a tutorial that was run |
-| [docs/guides/READ.md](docs/guides/READ.md) | the read API, with a tutorial reading the same data from the three stores |
-| [docs/guides/CONTRACTS.md](docs/guides/CONTRACTS.md) | data contracts: format, checks, pages ([generated samples](docs/contracts/README.md)) |
-| [docs/guides/PYTHON.md](docs/guides/PYTHON.md) | the Python package and its commands |
-| [docs/guides/TCK.md](docs/guides/TCK.md) | the parity kit: cases, matrix, gates, and what a backend author implements |
 | [docs/BENCHMARK.md](docs/BENCHMARK.md) | the benchmark runs |
-| [docs/design/](docs/design/) | design records: [the product](docs/design/DRISHTI_LAKE_DESIGN.md), [the read API](docs/design/READ_API.md) |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | wanted, not built |
 | [java/README.md](java/README.md), [java/SPLIT_EXEMPTIONS.md](java/SPLIT_EXEMPTIONS.md) | the reactor and what the code still owes its first host (the guards read it) |
 | [tools/split/README.md](tools/split/README.md) | the reference-comparison tools |
+| [docs/contracts/](docs/contracts/README.md) | generated sample contract pages |
 | [CHANGELOG.md](CHANGELOG.md) | what changed when |

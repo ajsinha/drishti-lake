@@ -2,7 +2,7 @@
 # Reference comparison tools
 
 The parity kit's results over the product are compared with **reference results**: the kit run over the lake code as it was before it moved here
-(`tck/results/reference-9ce7c3170.jsonl.gz`). These scripts make and use them; [docs/guides/TCK.md](../../docs/guides/TCK.md) says where they sit in the check.
+(`tck/results/reference-9ce7c3170.jsonl.gz`). These scripts make and use them; [docs/TCK.md](../../docs/TCK.md) says where they sit in the check.
 
 | File | What |
 |---|---|

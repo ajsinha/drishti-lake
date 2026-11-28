@@ -7,7 +7,7 @@
   Shared, so it is in git: copy the configuration (Ctrl+D) to change it; a pull overwrites this file.
 -->
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Lake: run loader (CLI)" type="Application" factoryName="Application" folderName="Lake">
+  <configuration default="false" name="Lake: run loader (CLI)" type="Application" factoryName="Application" folderName="IntelliJ-lake-run">
     <option name="MAIN_CLASS_NAME" value="com.ash.lake.load.LakeLoad" />
     <module name="lake-load" />
     <option name="VM_PARAMETERS" value="" />

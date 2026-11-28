@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * What a store gives the shape rule for a foreign table (READ_API.md, RA-S8): its versions, and per version its columns, its files with their
+ * What a store gives the shape rule for a foreign table (docs/DESIGN.md, shaped reads): its versions, and per version its columns, its files with their
  * partition days and bounds, and a read of some top-level columns of one file with its deletes applied. Everything else (dates, ids,
  * documents, columns, vectors) is {@link ShapedSnapshot}'s, written once.
  */
