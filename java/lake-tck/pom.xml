@@ -19,7 +19,7 @@
   <parent>
     <groupId>com.ash.lake</groupId>
     <artifactId>lake-parent</artifactId>
-    <version>0.9.1</version>
+    <version>0.9.2</version>
   </parent>
   <artifactId>lake-tck</artifactId>
   <name>Drishti Lake: test support (S3 mock and simulators, TLS and proxy fixtures, rows); the conformance kit grows here (L2, L9)</name>

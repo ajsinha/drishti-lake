@@ -47,10 +47,22 @@ import java.util.Map;
  * @param maintenance compaction, vacuum or expire-snapshots age, checkpoint interval, statistics columns, as written
  * @param timeTravel  how long old versions stay readable; null: the format's default
  * @param properties  Delta or Iceberg table properties passed through as they are
+ * @param uri         the table's own location, an absolute URI or path ({@code s3://fo-data/mx/trades_v7}), nothing joined to it; null: the
+ *                    lake's root and {@link #path()} (the convention of a lake Drishti lays out itself)
+ * @param contract    the schema the table is read by: a kind's contract name ({@code trade@1}) or null (the kind's own)
  */
 public record LakeTable(String domain, String table, String kind, String path, String format, List<String> partitionBy, List<String> promote,
         List<String> vectors, Map<String, String> flatten, String id, String date, String latestBy, String loadMode, List<String> sortBy,
-        Map<String, String> layout, String retention, Map<String, String> rowRetention, Map<String, String> maintenance, String timeTravel, Map<String, String> properties) {
+        Map<String, String> layout, String retention, Map<String, String> rowRetention, Map<String, String> maintenance, String timeTravel, Map<String, String> properties, String uri, String contract) {
+
+    /** A table with no location of its own and no named contract (the lake's root and path; the kind's contract). */
+    public LakeTable(String domain, String table, String kind, String path, String format, List<String> partitionBy, List<String> promote,
+            List<String> vectors, Map<String, String> flatten, String id, String date, String latestBy, String loadMode, List<String> sortBy,
+            Map<String, String> layout, String retention, Map<String, String> rowRetention, Map<String, String> maintenance, String timeTravel,
+            Map<String, String> properties) {
+        this(domain, table, kind, path, format, partitionBy, promote, vectors, flatten, id, date, latestBy, loadMode, sortBy, layout, retention,
+                rowRetention, maintenance, timeTravel, properties, null, null);
+    }
 
     /** The partition column every table has, first. */
     public static final String BUSINESS_DATE = "business_date";
@@ -74,7 +86,7 @@ public record LakeTable(String domain, String table, String kind, String path, S
     /** This table with its id field {@code id} (a table created by its first load takes its kind's key: DATA_LAKE_GUIDE.md section 5.6). */
     public LakeTable withId(String id) {
         return new LakeTable(domain, table, kind, path, format, partitionBy, promote, vectors, flatten, id, date, latestBy, loadMode, sortBy, layout,
-                retention, rowRetention, maintenance, timeTravel, properties);
+                retention, rowRetention, maintenance, timeTravel, properties, uri, contract);
     }
 
     /** {@code <domain>.<table>}, the table's name in its lake file. */
@@ -138,6 +150,8 @@ public record LakeTable(String domain, String table, String kind, String path, S
         m.put("maintenance", maintenance);
         m.put("time-travel", timeTravel);
         m.put("properties", properties);
+        m.put("uri", uri);
+        m.put("contract", contract);
         return m;
     }
 }

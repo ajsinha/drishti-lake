@@ -19,12 +19,12 @@
   <parent>
     <groupId>com.ash.lake</groupId>
     <artifactId>lake-bom</artifactId>
-    <version>0.9.1</version>
+    <version>0.9.2</version>
     <relativePath>lake-bom/pom.xml</relativePath>
   </parent>
   <groupId>com.ash.lake</groupId>
   <artifactId>lake-parent</artifactId>
-  <version>0.9.1</version>
+  <version>0.9.2</version>
   <packaging>pom</packaging>
   <name>Drishti Lake (reactor)</name>
 

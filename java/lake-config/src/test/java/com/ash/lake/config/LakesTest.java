@@ -344,4 +344,37 @@ class LakesTest {
             }
         }
     }
+
+    @Test
+    void aTableCarriesItsOwnLocationAndContract() {
+        Lake l = Lakes.parse("""
+                lake: bank
+                format: delta
+                root: s3://bank-lake/curated
+                tables:
+                  trading.trade_murex:
+                    kind: trade
+                    uri: s3://fo-data/mx/trades_v7
+                    contract: trade@1
+                  risk.scenario-pv:
+                    path: /mnt/mart/risk/scenario_pv
+                  trading.trade: {}
+                """, "bank", ENV);
+        LakeTable mx = l.require("trading", "trade", "trade_murex");
+        assertEquals("s3://fo-data/mx/trades_v7", l.location(mx));
+        assertEquals("trade@1", mx.contract());
+        assertEquals("/mnt/mart/risk/scenario_pv", l.location(l.require("risk", "scenario-pv")));
+        assertEquals("s3://bank-lake/curated/trading/trade", l.location(l.require("trading", "trade")));
+        Map<String, String> out = ConnectorLake.expand("c", "delta", List.of("trade"), Map.of("lake", "bank", "lake-tables", "trading.trade_murex"),
+                () -> Lakes.of(l), w -> { });
+        assertEquals("s3://fo-data", out.get("root"));
+        assertEquals("mx", out.get("domain"));
+        assertEquals("trades_v7", out.get("table.trade"));
+        assertEquals("s3://fo-data/mx/trades_v7", l.describe().get("tables") instanceof List<?> ts ? ((Map<?, ?>) ts.get(0)).get("location") : null);
+    }
+
+    @Test
+    void aRelativeUriIsRefused() {
+        assertThrows(IllegalArgumentException.class, () -> Lakes.parse("lake: x\nformat: delta\nroot: /r\ntables:\n  a.b:\n    uri: rel/path\n", "x", ENV));
+    }
 }

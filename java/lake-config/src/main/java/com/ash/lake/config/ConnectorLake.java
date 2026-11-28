@@ -113,7 +113,7 @@ public final class ConnectorLake {
             }
         }
         Set<String> parents = new LinkedHashSet<>();
-        tables.forEach(t -> parents.add(t.parent()));
+        tables.forEach(t -> parents.add(split(lake, t)[0] + "|" + split(lake, t)[1]));
         if (parents.size() > 1) {
             throw new IllegalArgumentException("connector " + connector + ": its kinds sit in more than one folder of lake " + name + " ("
                     + parents + "); a connector reads one domain: split it into one connector per domain");
@@ -122,14 +122,17 @@ public final class ConnectorLake {
         out.remove(LAKE);
         out.remove(TABLES);
         out.put(LAKE_NAME, lake.name());
-        // the plugins read <root>/<domain>/<folder>: the table's parent folder's last segment is the domain, the rest goes to the root
-        String parent = parents.isEmpty() ? "" : parents.iterator().next();
-        int cut = parent.lastIndexOf('/');
-        if (!lake.root().isEmpty()) {                          // a catalog lake (rest, glue, s3tables) has no root: the catalog says
-            out.put("root", cut < 0 ? lake.root() : trim(lake.root()) + "/" + parent.substring(0, cut));
-        }
-        if (!parent.isEmpty()) {
-            out.put("domain", parent.substring(cut + 1));
+        // the plugins read <root>/<domain>/<folder>: a table's location split into those three (its own uri, or the lake's root and path)
+        if (!tables.isEmpty()) {
+            String[] at = split(lake, tables.get(0));
+            if (!at[0].isEmpty()) {                            // a catalog lake (rest, glue, s3tables) has no root: the catalog says
+                out.put("root", at[0]);
+            }
+            if (!at[1].isEmpty()) {
+                out.put("domain", at[1]);
+            }
+        } else if (!lake.root().isEmpty()) {
+            out.put("root", lake.root());
         }
         // storage keys are the object store's: s3.<key> for an S3 root or a catalog's warehouse; another scheme's keys as written
         boolean s3 = lake.root().isEmpty() || lake.root().startsWith("s3://") || lake.root().startsWith("s3a://");
@@ -146,8 +149,9 @@ public final class ConnectorLake {
             }
         });
         for (LakeTable t : tables) {
-            if (!t.folder().equals(t.kind())) {
-                out.put("table." + t.kind(), t.folder());
+            String folder = split(lake, t)[2];
+            if (!folder.equals(t.kind())) {
+                out.put("table." + t.kind(), folder);
             }
             if (!t.promote().isEmpty()) {
                 out.put("layout." + t.kind() + ".columns", String.join(",", t.promote()));
@@ -158,6 +162,26 @@ public final class ConnectorLake {
         }
         own.forEach(k -> out.put(k, settings.get(k)));         // the connector's explicit path, domain, tables or layout win
         return out;
+    }
+
+    /**
+     * A table's location as the plugins read it, {root, domain, folder}: the table's own {@code uri} cut at its last two segments, else the
+     * lake's root and the table's path (root + the path's parent up to its last segment, that segment as the domain, the folder).
+     */
+    static String[] split(Lake lake, LakeTable t) {
+        if (t.uri() != null) {
+            String u = trim(t.uri());
+            int c = u.lastIndexOf('/');
+            int d = c <= 0 ? -1 : u.lastIndexOf('/', c - 1);
+            if (c < 0 || d < 0 || u.endsWith("://") || u.substring(0, d).endsWith(":/") || u.substring(0, d).endsWith("//")) {
+                throw new IllegalArgumentException("table " + t.name() + ": uri " + t.uri() + " needs a folder and a parent folder (s3://bucket/area/table)");
+            }
+            return new String[] {u.substring(0, d), u.substring(d + 1, c), u.substring(c + 1)};
+        }
+        String parent = t.parent();
+        int cut = parent.lastIndexOf('/');
+        String root = lake.root().isEmpty() ? "" : cut < 0 ? lake.root() : trim(lake.root()) + "/" + parent.substring(0, cut);
+        return new String[] {root, parent.isEmpty() ? "" : parent.substring(cut + 1), t.folder()};
     }
 
     private static String trim(String root) {

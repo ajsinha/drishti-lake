@@ -66,7 +66,7 @@ public final class Lakes {
     private static final Set<String> TOP = Set.of("lake", "format", "root", "storage", "catalog", "defaults", "tables", "memory", "description");
     static final Set<String> TABLE = Set.of("kind", "path", "format", "partition-by", "promote", "vectors", "flatten", "id", "date", "latest-by",
             "load-mode", "sort-by", "file-rows", "row-group-rows", "file-size-mb", "row-group-mb", "compression", "vector-compression",
-            "retention", "maintenance", "time-travel", "properties");
+            "retention", "maintenance", "time-travel", "properties", "uri", "contract");
     static final Set<String> ROW_RETENTION = Set.of("ttl", "on", "max-rows", "dates");
     static final Set<String> LAYOUT = Set.of("file-rows", "row-group-rows", "file-size-mb", "row-group-mb", "compression", "vector-compression");
     private static final Set<String> MEMORY = Set.of("max-mb", "chunk-kb", "contract", "owner", "idle-trim-minutes");
@@ -389,6 +389,15 @@ public final class Lakes {
         String name = key.substring(dot + 1);
         String kind = v.text(t.path("kind"), name);
         String path = v.text(t.path("path"), domain + "/" + name);
+        // the table's own location: uri: (or an absolute path: / a URI), an absolute URI or path with nothing joined to it
+        String uri = v.text(t.path("uri"), null);
+        if (uri == null && (path.startsWith("/") || path.contains("://"))) {
+            uri = path;
+            path = domain + "/" + name;
+        }
+        if (uri != null && !(uri.startsWith("/") || uri.contains("://") || uri.matches("[A-Za-z]:[\\\\/].*"))) {
+            throw new IllegalArgumentException(at + ".uri " + uri + ": an absolute location (s3://bucket/folder, /data/folder, C:/data/folder)");
+        }
         if (path.startsWith("/") || path.contains("..") || path.contains("\\")) {
             throw new IllegalArgumentException(at + ".path " + path + ": a folder under the lake's root (trading/trade_endur)");
         }
@@ -443,7 +452,8 @@ public final class Lakes {
         return new LakeTable(domain, name, kind, path, format, partition, promote, v.list(pick.apply("vectors")),
                 v.map(pick.apply("flatten"), "flatten"), v.text(pick.apply("id"), null), v.text(pick.apply("date"), null),
                 v.text(pick.apply("latest-by"), null), mode, v.list(pick.apply("sort-by")), layout, retention, rowRetention,
-                v.map(pick.apply("maintenance"), "maintenance"), v.text(pick.apply("time-travel"), null), v.map(pick.apply("properties"), "properties"));
+                v.map(pick.apply("maintenance"), "maintenance"), v.text(pick.apply("time-travel"), null), v.map(pick.apply("properties"), "properties"),
+                uri, v.text(t.path("contract"), null));
     }
 
     /** Every lake by name. */
