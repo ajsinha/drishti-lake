@@ -366,7 +366,7 @@ public final class Lakes {
         }
         for (var it = ts.fields(); it.hasNext(); ) {
             var e = it.next();
-            tables.put(e.getKey(), table(v, where, format, e.getKey(), e.getValue(), defaults));
+            tables.put(e.getKey(), table(v.anchored("lake.root", rootPath), where, format, e.getKey(), e.getValue(), defaults));
         }
         return new Lake(name, format, rootPath, storage, catalog, memory, tables, file);
     }
@@ -526,6 +526,11 @@ public final class Lakes {
         Values(String where, Function<String, String> env) {
             this.where = where;
             this.env = env == null ? k -> null : env;
+        }
+
+        /** The same reader, also answering {@code name} (an anchor such as {@code ${lake.root}} in a table's {@code uri:}). */
+        Values anchored(String name, String value) {
+            return new Values(where, k -> name.equals(k) ? value : env.apply(k));
         }
 
         String resolve(String key, String raw) {

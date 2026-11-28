@@ -377,4 +377,12 @@ class LakesTest {
     void aRelativeUriIsRefused() {
         assertThrows(IllegalArgumentException.class, () -> Lakes.parse("lake: x\nformat: delta\nroot: /r\ntables:\n  a.b:\n    uri: rel/path\n", "x", ENV));
     }
+
+    @Test
+    void aUriCanBeAnchoredToTheLakeRoot() {
+        Lake l = Lakes.parse("lake: x\nformat: delta\nroot: /data/x\ntables:\n  a.b:\n    uri: ${lake.root}/a/b\n", "x", ENV);
+        LakeTable t = l.require("a", "b");
+        assertEquals("/data/x/a/b", l.location(t));
+        assertEquals("configured", t.describe().get("how"));
+    }
 }
