@@ -171,10 +171,11 @@ public final class ConnectorLake {
     static String[] split(Lake lake, LakeTable t) {
         if (t.uri() != null) {
             String u = trim(t.uri());
-            int c = u.lastIndexOf('/');
-            int d = c <= 0 ? -1 : u.lastIndexOf('/', c - 1);
-            if (c < 0 || d < 0 || u.endsWith("://") || u.substring(0, d).endsWith(":/") || u.substring(0, d).endsWith("//")) {
-                throw new IllegalArgumentException("table " + t.name() + ": uri " + t.uri() + " needs a folder and a parent folder (s3://bucket/area/table)");
+            int c = lastSeparator(u, u.length() - 1);
+            int d = c <= 0 ? -1 : lastSeparator(u, c - 1);
+            String head = d < 0 ? "" : u.substring(0, d);
+            if (c < 0 || d < 0 || u.endsWith("://") || head.endsWith(":/") || head.endsWith("//") || head.matches("[A-Za-z]:[\\\\/]?")) {
+                throw new IllegalArgumentException("table " + t.name() + ": uri " + t.uri() + " needs a folder and a parent folder (s3://bucket/area/table, D:\\data\\area\\table)");
             }
             return new String[] {u.substring(0, d), u.substring(d + 1, c), u.substring(c + 1)};
         }
@@ -184,7 +185,12 @@ public final class ConnectorLake {
         return new String[] {root, parent.isEmpty() ? "" : parent.substring(cut + 1), t.folder()};
     }
 
+    /** The last path separator at or before {@code from}: {@code /} or, in a Windows path, {@code \}; -1 when there is none. */
+    private static int lastSeparator(String s, int from) {
+        return Math.max(s.lastIndexOf('/', from), s.lastIndexOf('\\', from));
+    }
+
     private static String trim(String root) {
-        return root.endsWith("/") ? root.substring(0, root.length() - 1) : root;
+        return root.endsWith("/") || root.endsWith("\\") ? root.substring(0, root.length() - 1) : root;
     }
 }

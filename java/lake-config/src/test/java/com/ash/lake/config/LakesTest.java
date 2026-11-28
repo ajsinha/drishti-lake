@@ -346,6 +346,18 @@ class LakesTest {
     }
 
     @Test
+    void aWindowsUriIsCutAtItsBackslashes() {
+        Lake l = Lakes.parse("lake: w\nformat: delta\nroot: /r\ntables:\n  mx.trade_v7:\n    kind: trade\n    uri: 'D:\\a\\fo-archive\\2019\\mx_trades_v7\\'\n"
+                + "  mx.trade_c:\n    kind: trade\n    uri: 'C:/data/area/trade_c'\n  mx.trade_d:\n    kind: trade\n    uri: 'D:\\data\\trade_d'\n", "w", ENV);
+        String[] cut = ConnectorLake.split(l, l.require("mx", "trade", "trade_v7"));
+        assertEquals("D:\\a\\fo-archive", cut[0]);                      // the original separators are kept
+        assertEquals("2019", cut[1]);
+        assertEquals("mx_trades_v7", cut[2]);
+        assertEquals("C:/data", ConnectorLake.split(l, l.require("mx", "trade", "trade_c"))[0]);
+        assertThrows(IllegalArgumentException.class, () -> ConnectorLake.split(l, l.require("mx", "trade", "trade_d")));   // a drive is not a root
+    }
+
+    @Test
     void aTableCarriesItsOwnLocationAndContract() {
         Lake l = Lakes.parse("""
                 lake: bank

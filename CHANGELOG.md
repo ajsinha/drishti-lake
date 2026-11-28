@@ -3,6 +3,17 @@
 
 Entries are written per release; unreleased work is listed first.
 
+## 0.9.2 (2026-11-28): tables at their own location
+
+- **A table of a lake file can have its own location and contract.** Per-table `uri:` (an absolute path or URI, nothing joined to it; an
+  absolute `path:` means the same; a relative uri is refused) and `contract:` (a kind's contract name such as `trade@1`). The anchor
+  `${lake.root}` may start a `uri:` and follows the lake's root. The connector configuration derives root, domain and folder from a table's
+  uri (a uri needs a parent folder and a folder, `s3://bucket/area/table`). `describe` adds `uri`, `contract` and `how` (`configured` when
+  the table has a uri, `fallback` for the root-and-path convention). API: `LakeTable` gains the components `uri` and `contract` (the
+  former constructor stays, with both null), `Lake.location(table)` returns a table's own uri first. Documented in `docs/GUIDE.md` (the lake file).
+- A table `uri` that is a Windows path (`D:\data\area\table`) is cut at its backslashes too (the original separators are kept; a drive alone is not a root).
+- The Python package version is 0.9.2.
+
 ## 0.9.1 (2026-11-21): maintenance data safety
 
 - **The newest copy is the one committed last, after every rewrite (G4 F20, accuracy defect)**: when the load committed last had an

@@ -58,6 +58,9 @@ tables:
     vectors: [SCENARIO_PV]
     id: TRADE_ID
     retention: 520d             # business dates kept (520d, 7y); or a map for rows, below
+  risk.position:
+    uri: ${lake.root}/ext/position_v7    # the table's own location (see below)
+    contract: position@1                 # the contract the table is read by
   risk.quote:
     retention: {ttl: 8h, on: UPDATED_AT, max-rows: 100000}   # rows dropped for their age or count (keys: ttl, on, max-rows, dates)
 ```
@@ -65,8 +68,18 @@ tables:
 The top keys are `lake`, `format`, `root`, `storage`, `catalog`, `defaults`, `tables`, `memory` (for `mem://`: `max-mb`, `chunk-kb`, `contract`,
 `owner`, `idle-trim-minutes`), `description`. A table takes `kind`, `path`, `format`, `partition-by`, `promote`, `vectors`, `flatten`, `id`, `date`,
 `latest-by`, `load-mode` (`replace` or `append`), `sort-by`, the layout (`file-rows`, `row-group-rows`, `file-size-mb`, `row-group-mb`, `compression`,
-`vector-compression`), `retention` (a period, or the row map above), `maintenance`, `time-travel`, `properties`; an unknown key is refused. `LakesCli dump --dir D` prints every lake
+`vector-compression`), `retention` (a period, or the row map above), `maintenance`, `time-travel`, `properties`, `uri`, `contract`; an unknown key is refused. `LakesCli dump --dir D` prints every lake
 of a folder as the code reads it, and `LakeCheck` checks the files against the tables on disk.
+
+**A table at its own location (`uri:`).** By default a table lives at the lake's `root` plus its `path` (`<root>/<domain>/<folder>`, the layout a lake
+Drishti lays out itself). A table whose data was written elsewhere says so with `uri:`: an absolute location (`s3://fo-data/mx/trades_v7`,
+`/data/mx/trades_v7`, `C:/data/mx/trades_v7`) used as it is, with nothing joined to it. A `path:` that is itself absolute or a URI means the same.
+A relative `uri:` is refused. The `uri:` may start with the anchor **`${lake.root}`**, the lake file's own `root`, so a table can sit outside the
+`<domain>/<folder>` convention and still follow the lake when its root moves. A connector reads a table's `uri:` as three parts: root, domain
+(the parent folder's name) and folder (the last segment), so the uri needs both a parent folder and a folder (`s3://bucket/area/table`).
+**`contract:`** names the schema the table is read by, a kind's contract name such as `trade@1`; absent, the kind's own contract applies.
+`describe` reports both keys for a table and **`how`**: `configured` when the lake file gave the table a `uri`, `fallback` when its location is the
+lake's root and path by convention.
 
 ### Options of the runtime
 
