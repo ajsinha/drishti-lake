@@ -152,6 +152,7 @@ public record LakeTable(String domain, String table, String kind, String path, S
         m.put("properties", properties);
         m.put("uri", uri);
         m.put("contract", contract);
+        m.put("how", uri != null ? "configured" : "by convention");
         return m;
     }
 }
